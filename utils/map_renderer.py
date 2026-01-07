@@ -14,6 +14,56 @@ from .gaode_tiles import GaodeTileService
 class MapRenderer:
     """地图渲染工具，负责生成和显示地图"""
 
+    ZOOM_LEVELS = {
+        'country': 4,
+        'province': 7,
+        'city': 10,
+        'district': 12,
+        'street': 15,
+        'community': 17,
+        'building': 18,
+        'poi': 16
+    }
+
+    @staticmethod
+    def get_zoom_by_level(level_info: str = None, type_info: str = None) -> int:
+        """
+        根据地址类型获取合适的缩放级别
+
+        Args:
+            level_info: 高德返回的地址级别信息
+            type_info: POI类型信息
+
+        Returns:
+            int: 缩放级别
+        """
+        if not level_info and not type_info:
+            return 12
+
+        level_lower = (level_info or '').lower()
+        type_lower = (type_info or '').lower()
+
+        if any(kw in level_lower for kw in ['国家', 'country']):
+            return MapRenderer.ZOOM_LEVELS['country']
+        elif any(kw in level_lower for kw in ['省', 'province']):
+            return MapRenderer.ZOOM_LEVELS['province']
+        elif any(kw in level_lower for kw in ['市', 'city', '自治区']):
+            return MapRenderer.ZOOM_LEVELS['city']
+        elif any(kw in level_lower for kw in ['区', '县', 'district', 'county']):
+            return MapRenderer.ZOOM_LEVELS['district']
+        elif any(kw in level_lower for kw in ['街道', '路', 'street', 'road']):
+            return MapRenderer.ZOOM_LEVELS['street']
+        elif any(kw in level_lower for kw in ['社区', '小区', 'community', 'residential']):
+            return MapRenderer.ZOOM_LEVELS['community']
+        elif any(kw in level_lower for kw in ['楼', '建筑', 'building']):
+            return MapRenderer.ZOOM_LEVELS['building']
+        elif any(kw in type_lower for kw in ['兴趣点', 'poi', '餐饮', '购物', '酒店', '医院', '学校']):
+            return MapRenderer.ZOOM_LEVELS['poi']
+        elif any(kw in type_lower for kw in ['住宅', '住宅区', 'community']):
+            return MapRenderer.ZOOM_LEVELS['community']
+
+        return 14
+
     @staticmethod
     def create_base_map(center, zoom_start=10, map_type='roadmap'):
         """
@@ -45,23 +95,55 @@ class MapRenderer:
             control=False
         ).add_to(m)
 
-        scale_control = """
+        scroll_zoom_script = """
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
+            var checkCount = 0;
+            var maxChecks = 30;
+            var checkInterval = setInterval(function() {
+                checkCount++;
                 var mapElement = document.querySelector('.leaflet-container');
                 if (mapElement && mapElement._leaflet_map) {
-                    L.control.scale({
-                        position: 'bottomright',
-                        imperial: false,
-                        metric: true
-                    }).addTo(mapElement._leaflet_map);
+                    clearInterval(checkInterval);
+                    var map = mapElement._leaflet_map;
+                    map.scrollWheelZoom.enable();
+                    console.log('[地图] 滚轮缩放已启用');
+                } else if (checkCount >= maxChecks) {
+                    clearInterval(checkInterval);
+                    console.log('[地图] 滚轮缩放启用超时');
                 }
-            }, 500);
+            }, 100);
         });
         </script>
         """
-        m.get_root().html.add_child(folium.Element(scale_control))
+        m.get_root().html.add_child(folium.Element(scroll_zoom_script))
+
+        scale_script = """
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var checkCount = 0;
+            var maxChecks = 20;
+            var checkInterval = setInterval(function() {
+                checkCount++;
+                var mapElement = document.querySelector('.leaflet-container');
+                if (mapElement && mapElement._leaflet_map) {
+                    clearInterval(checkInterval);
+                    var map = mapElement._leaflet_map;
+                    if (!map.hasControl('scale')) {
+                        L.control.scale({
+                            position: 'bottomright',
+                            imperial: false,
+                            metric: true
+                        }).addTo(map);
+                    }
+                } else if (checkCount >= maxChecks) {
+                    clearInterval(checkInterval);
+                }
+            }, 100);
+        });
+        </script>
+        """
+        m.get_root().html.add_child(folium.Element(scale_script))
 
         return m
 
@@ -181,6 +263,93 @@ class MapRenderer:
             return 6
         else:
             return 4
+
+    @staticmethod
+    def fit_bounds(map_obj, points):
+        """
+        自动调整地图以显示所有点
+
+        Args:
+            map_obj: folium地图对象
+            points: 坐标点列表 [(lat, lon), ...]
+        """
+        valid_points = [p for p in points if p is not None]
+        if not valid_points:
+            return
+
+        min_lat = min(p[0] for p in valid_points)
+        max_lat = max(p[0] for p in valid_points)
+        min_lon = min(p[1] for p in valid_points)
+        max_lon = max(p[1] for p in valid_points)
+
+        lat_diff = max_lat - min_lat
+        lon_diff = max_lon - min_lon
+        max_diff = max(lat_diff, lon_diff)
+
+        if max_diff < 0.001:
+            max_zoom = 18
+            min_zoom = 17
+        elif max_diff < 0.005:
+            max_zoom = 18
+            min_zoom = 16
+        elif max_diff < 0.01:
+            max_zoom = 17
+            min_zoom = 15
+        elif max_diff < 0.02:
+            max_zoom = 17
+            min_zoom = 14
+        elif max_diff < 0.05:
+            max_zoom = 16
+            min_zoom = 13
+        elif max_diff < 0.1:
+            max_zoom = 15
+            min_zoom = 12
+        elif max_diff < 0.2:
+            max_zoom = 14
+            min_zoom = 11
+        elif max_diff < 0.5:
+            max_zoom = 13
+            min_zoom = 10
+        elif max_diff < 1:
+            max_zoom = 12
+            min_zoom = 9
+        elif max_diff < 2:
+            max_zoom = 10
+            min_zoom = 7
+        elif max_diff < 5:
+            max_zoom = 9
+            min_zoom = 6
+        elif max_diff < 10:
+            max_zoom = 8
+            min_zoom = 5
+        elif max_diff < 20:
+            max_zoom = 7
+            min_zoom = 4
+        else:
+            max_zoom = 5
+            min_zoom = 3
+
+        bounds = [[min_lat, min_lon], [max_lat, max_lon]]
+
+        fit_bounds_script = f"""
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            setTimeout(function() {{
+                var mapElement = document.querySelector('.leaflet-container');
+                if (mapElement && mapElement._leaflet_map) {{
+                    var bounds = {bounds};
+                    mapElement._leaflet_map.fitBounds(bounds, {{
+                        padding: [80, 80],
+                        maxZoom: {max_zoom},
+                        minZoom: {min_zoom}
+                    }});
+                    console.log('[地图] 缩放调整 - 范围: ' + {max_diff:.4f} + '度, maxZoom: {max_zoom}, minZoom: {min_zoom}');
+                }}
+            }}, 500);
+        }});
+        </script>
+        """
+        map_obj.get_root().html.add_child(folium.Element(fit_bounds_script))
 
     @staticmethod
     def add_geolocation_script(map_obj):

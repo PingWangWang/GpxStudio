@@ -79,7 +79,9 @@ class GaodeGeocodingService:
                             'name': poi.get('name', ''),
                             'address': poi.get('address', '') or poi.get('pname', '') + poi.get('city', ''),
                             'lat': float(location[1]),
-                            'lon': float(location[0])
+                            'lon': float(location[0]),
+                            'type': poi.get('type', ''),
+                            'level': poi.get('typecode', '')
                         })
 
                 log_cb("INFO", f"搜索成功，找到 {len(results)} 个结果")

@@ -6,8 +6,8 @@ GPX Studio 主应用窗口
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication, QDialog)
-from PyQt5.QtCore import Qt, QTimer
+                             QApplication, QDialog, QTimeEdit)
+from PyQt5.QtCore import Qt, QTimer, QTime
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
@@ -71,7 +71,11 @@ class GpxStudio(QMainWindow):
         self.current_location = None
         self.search_results = []
         self.searching_for = None
-        self.selected_search_result_coords = None  # 当前选中的搜索结果坐标
+        self.selected_search_result_coords = None
+        self.last_selected_coords = None
+        self.last_selected_level = None
+        self.last_selected_type = None
+        self.last_selected_from_search = False
 
         # 定位处理器
         self.geolocation_handler = GeolocationHandler()
@@ -356,11 +360,35 @@ class GpxStudio(QMainWindow):
 
             for i, location in enumerate(locations):
                 if isinstance(location, dict):
-                    item = QListWidgetItem(f"{i+1}. {location.get('address', '')}")
-                    item.setData(Qt.UserRole, (location.get('address', ''), location.get('lat'), location.get('lon')))
+                    name = location.get('name', '')
+                    address = location.get('address', '')
+                    level = location.get('level', '')
+                    type_info = location.get('type', '')
+
+                    display_text = f"{i+1}. {name}"
+                    if address and address != name:
+                        display_text += f"\n    地址: {address}"
+                    if level:
+                        display_text += f"\n    地点类型: {level}"
+                    if type_info:
+                        display_text += f"\n    POI分类: {type_info}"
+
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.UserRole, (
+                        name,
+                        location.get('lat'),
+                        location.get('lon'),
+                        level,
+                        type_info
+                    ))
                 else:
-                    item = QListWidgetItem(f"{i+1}. {location.address}")
-                    item.setData(Qt.UserRole, (location.address, location.latitude, location.longitude))
+                    name = getattr(location, 'name', location.address)
+                    address = location.address
+                    display_text = f"{i+1}. {name}"
+                    if address and address != name:
+                        display_text += f"\n    地址: {address}"
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.UserRole, (name, location.latitude, location.longitude, None, None))
                 self.search_results_list.addItem(item)
 
             self.show_search_results_on_map(locations, location_type)
@@ -377,49 +405,79 @@ class GpxStudio(QMainWindow):
             )
 
     def select_location(self, item, location_type):
-        """选择地点（起点/终点）"""
+        """选择地点（从下拉框或地图点击）"""
         data = item.data(Qt.UserRole)
-        coords = (data[1], data[2]) if len(data) == 3 else data
+        if not data:
+            return
+
+        name = data[0]
+        coords = (data[1], data[2])
+        level = data[3] if len(data) > 3 else None
+        type_info = data[4] if len(data) > 4 else None
+
+        self.last_selected_coords = coords
+        self.last_selected_level = level
+        self.last_selected_type = type_info
+        self.last_selected_from_search = False
 
         if location_type == "start":
             self.start_coords = coords
-            self.start_name = data[0] if len(data) == 3 else None
+            self.start_name = name
+            self.start_level = level
             self.start_list.clear()
-            display_text = self.start_name if self.start_name else f"{coords[0]:.4f}, {coords[1]:.4f}"
-            self.start_list.addItem(display_text)
+            self.start_list.addItem(name)
+            self.start_list.item(0).setData(Qt.UserRole, data)
         elif location_type == "end":
             self.end_coords = coords
-            self.end_name = data[0] if len(data) == 3 else None
+            self.end_name = name
+            self.end_level = level
             self.end_list.clear()
-            display_text = self.end_name if self.end_name else f"{coords[0]:.4f}, {coords[1]:.4f}"
-            self.end_list.addItem(display_text)
+            self.end_list.addItem(name)
+            self.end_list.item(0).setData(Qt.UserRole, data)
+        elif location_type == "waypoint":
+            waypoint_index = self.waypoint_list.row(item)
+            if waypoint_index >= 0 and waypoint_index < len(self.waypoints_coords):
+                self.waypoints_coords[waypoint_index] = coords
+                self.waypoints_names[waypoint_index] = name
 
         self.update_map_preview()
 
     def select_search_result(self, item):
         """从搜索结果中选择"""
         data = item.data(Qt.UserRole)
+        if not data:
+            return
         name = data[0]
         coords = (data[1], data[2])
-        self.selected_search_result_coords = coords
+        level = data[3] if len(data) > 3 else None
+        type_info = data[4] if len(data) > 4 else None
+
+        self.last_selected_coords = coords
+        self.last_selected_level = level
+        self.last_selected_type = type_info
+        self.last_selected_from_search = True
 
         if self.searching_for == "start":
             self.start_coords = coords
             self.start_name = name
+            self.start_level = level
             self.start_list.clear()
             self.start_list.addItem(name)
+            self.start_list.item(0).setData(Qt.UserRole, data)
         elif self.searching_for == "end":
             self.end_coords = coords
             self.end_name = name
+            self.end_level = level
             self.end_list.clear()
             self.end_list.addItem(name)
+            self.end_list.item(0).setData(Qt.UserRole, data)
         elif self.searching_for == "waypoint":
             self.waypoints_coords.append(coords)
             self.waypoints_names.append(name)
             waypoint_item = QListWidgetItem(
                 f"{len(self.waypoints_coords)}. {name}"
             )
-            waypoint_item.setData(Qt.UserRole, (name, coords[0], coords[1]))
+            waypoint_item.setData(Qt.UserRole, (name, coords[0], coords[1], level, None))
             self.waypoint_list.addItem(waypoint_item)
 
         self.update_map_preview()
@@ -493,19 +551,26 @@ class GpxStudio(QMainWindow):
 
     def update_map_preview(self):
         """更新地图预览"""
-        # 确定中心点
         center_lat, center_lon = 39.9042, 116.4074
+        center_level = None
+        center_type = None
 
-        if self.selected_search_result_coords:
-            center_lat, center_lon = self.selected_search_result_coords
+        if hasattr(self, 'last_selected_coords') and self.last_selected_coords:
+            center_lat, center_lon = self.last_selected_coords
+            center_level = getattr(self, 'last_selected_level', None)
+            center_type = getattr(self, 'last_selected_type', None)
         elif self.start_coords:
             center_lat, center_lon = self.start_coords
+            center_level = getattr(self, 'start_level', None)
         elif self.end_coords:
             center_lat, center_lon = self.end_coords
+            center_level = getattr(self, 'end_level', None)
         elif self.waypoints_coords:
             center_lat, center_lon = self.waypoints_coords[0]
 
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=10)
+        zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
+
+        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level)
 
         # 添加已选择的点
         self._add_selected_points_to_map(m)
@@ -590,7 +655,24 @@ class GpxStudio(QMainWindow):
 
             self.logger.debug("正在调用路线规划服务...")
             if gaode_config.is_configured and gaode_config.get_api_key():
-                self.route_points = self.gaode_routing_service.plan_route(points, transport_mode)
+                self.route_points, estimated_duration = self.gaode_routing_service.plan_route(points, transport_mode)
+
+                from datetime import datetime
+                current_time = datetime.now()
+                current_time_zero_sec = current_time.replace(second=0)
+                self.start_time_edit.setTime(QTime(current_time.hour, current_time.minute))
+
+                duration_hours = estimated_duration // 3600
+                duration_minutes = (estimated_duration % 3600) // 60
+                self.duration_time_edit.setTime(QTime(duration_hours, duration_minutes))
+
+                end_time = current_time_zero_sec.timestamp() + estimated_duration
+                end_datetime = datetime.fromtimestamp(end_time)
+                end_hour = end_datetime.hour
+                end_minute = end_datetime.minute
+                self.end_time_edit.setTime(QTime(end_hour, end_minute))
+
+                self.search_results_list.addItem(f"预估时间: {duration_hours}小时{duration_minutes}分钟")
             else:
                 self.route_points = []
                 self.logger.warning("高德地图API未配置，无法进行路线规划。请先配置高德地图API密钥。")
@@ -632,18 +714,54 @@ class GpxStudio(QMainWindow):
         if not valid_points:
             return
 
-        # 计算中心点和缩放级别
-        center_lat = sum(p[0] for p in valid_points) / len(valid_points)
-        center_lon = sum(p[1] for p in valid_points) / len(valid_points)
-        zoom_level = MapRenderer.calculate_zoom_level(self.route_points)
+        all_coords = []
+        if self.start_coords:
+            all_coords.append(self.start_coords)
+        all_coords.extend(valid_points)
+        if self.end_coords:
+            all_coords.append(self.end_coords)
+        for wp in self.waypoints_coords:
+            if wp:
+                all_coords.append(wp)
 
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level)
+        min_lat = min(p[0] for p in all_coords)
+        max_lat = max(p[0] for p in all_coords)
+        min_lon = min(p[1] for p in all_coords)
+        max_lon = max(p[1] for p in all_coords)
 
-        # 添加标记点
+        lat_diff = max_lat - min_lat
+        lon_diff = max_lon - min_lon
+        max_diff = max(lat_diff, lon_diff)
+
+        if max_diff < 0.01:
+            initial_zoom = 18
+        elif max_diff < 0.05:
+            initial_zoom = 17
+        elif max_diff < 0.1:
+            initial_zoom = 16
+        elif max_diff < 0.5:
+            initial_zoom = 15
+        elif max_diff < 1:
+            initial_zoom = 12
+        elif max_diff < 3:
+            initial_zoom = 10
+        elif max_diff < 5:
+            initial_zoom = 8
+        elif max_diff < 10:
+            initial_zoom = 6
+        else:
+            initial_zoom = 4
+
+        center_lat = sum(p[0] for p in all_coords) / len(all_coords)
+        center_lon = sum(p[1] for p in all_coords) / len(all_coords)
+
+        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=initial_zoom)
+
         self._add_selected_points_to_map(m)
 
-        # 添加路线
         MapRenderer.add_route(m, self.route_points)
+
+        MapRenderer.fit_bounds(m, all_coords)
 
         url = MapRenderer.save_and_get_url(m)
         self.map_view.setUrl(url)

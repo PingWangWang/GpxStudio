@@ -37,7 +37,7 @@ class GaodeRoutingService:
         sign_str = self.security_key + ''.join(f"{k}{v}" for k, v in sorted_params)
         return hashlib.md5(sign_str.encode()).hexdigest()
 
-    def plan_route(self, points: List[tuple], transport_mode: str = "驾车") -> List[tuple]:
+    def plan_route(self, points: List[tuple], transport_mode: str = "驾车") -> tuple:
         """
         规划路线
 
@@ -46,7 +46,9 @@ class GaodeRoutingService:
             transport_mode: 交通方式（步行/骑行/驾车）
 
         Returns:
-            list: 路线点列表，段之间用None分隔
+            tuple: (路线点列表， estimated_duration_seconds)
+                  路线点列表段之间用None分隔
+                  estimated_duration_seconds为预估时间（秒）
         """
         def log_cb(level, message):
             if self.logger:
@@ -54,10 +56,11 @@ class GaodeRoutingService:
 
         if not self.api_key:
             log_cb("WARNING", "高德地图API Key未配置")
-            return []
+            return [], 0
 
         mode = self.TRANSPORT_MODES.get(transport_mode, "driving")
         route_points = []
+        total_duration = 0
 
         log_cb("INFO", f"开始规划路线，交通方式: {transport_mode} ({mode})")
 
@@ -97,6 +100,8 @@ class GaodeRoutingService:
                         if paths:
                             path = paths[0]
                             steps = path.get('steps', [])
+                            segment_duration = int(path.get('duration', 0))
+                            total_duration += segment_duration
                             for step in steps:
                                 polyline = step.get('polyline', '')
                                 if polyline:
@@ -108,6 +113,8 @@ class GaodeRoutingService:
                     else:
                         route_data = data.get('route', {})
                         if route_data:
+                            segment_duration = int(route_data.get('duration', 0))
+                            total_duration += segment_duration
                             steps = route_data.get('steps', [])
                             for step in steps:
                                 polyline = step.get('polyline', '')
@@ -126,12 +133,12 @@ class GaodeRoutingService:
                 if i < len(points) - 2:
                     route_points.append(None)
 
-            log_cb("INFO", f"路线规划完成，共 {len([p for p in route_points if p is not None])} 个坐标点")
-            return route_points
+            log_cb("INFO", f"路线规划完成，共 {len([p for p in route_points if p is not None])} 个坐标点，预估时间: {total_duration} 秒")
+            return route_points, total_duration
 
         except Exception as e:
             log_cb("ERROR", f"路线规划异常: {str(e)}")
-            return []
+            return [], 0
 
     def calculate_distance(self, route_points: List[tuple]) -> float:
         """
