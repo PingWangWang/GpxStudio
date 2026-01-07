@@ -1,0 +1,6 @@
+PyQt5>=5.15.0
+PyQtWebEngine>=5.15.0
+folium>=0.14.0
+gpxpy>=1.6.0
+requests>=2.31.0
+geopy>=2.3.0

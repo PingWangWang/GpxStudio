@@ -1,0 +1,57 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: GPX Studio",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Python: GPX Studio (External Terminal)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "externalTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Python: Debug Core Module",
+            "type": "python",
+            "request": "launch",
+            "module": "core.app",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Python: Debug Services",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_services.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "python": "${command:python.interpreterPath}"
+        }
+    ]
+}
