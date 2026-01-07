@@ -17,8 +17,8 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 from handlers.geolocation import GeolocationHandler
 from handlers.webengine import ConsoleWebEnginePage
-from services.geocoding import GeocodingService
-from services.routing import RoutingService
+from services.gaode_geocoding import GaodeGeocodingService
+from services.gaode_routing import GaodeRoutingService
 from services.gpx_export import GpxExportService
 from utils.map_renderer import MapRenderer
 from utils.location_helper import LocationHelper
@@ -43,8 +43,8 @@ class GpxStudio(QMainWindow):
         self.move(window_geometry.topLeft())
 
         # 初始化服务（简化）
-        self.geocoding_service = GeocodingService()
-        self.routing_service = RoutingService()
+        self.gaode_geocoding_service = GaodeGeocodingService()
+        self.gaode_routing_service = GaodeRoutingService()
         self.gpx_service = GpxExportService()
 
         # 初始化处理器

@@ -4,28 +4,47 @@
 """
 
 import folium
+from folium.plugins import FloatImage
 import tempfile
 from PyQt5.QtCore import QUrl
+
+from .gaode_tiles import GaodeTileService
 
 
 class MapRenderer:
     """地图渲染工具，负责生成和显示地图"""
 
     @staticmethod
-    def create_base_map(center, zoom_start=10):
+    def create_base_map(center, zoom_start=10, map_type='roadmap'):
         """
         创建基础地图
 
         Args:
             center: 中心点 [lat, lon]
             zoom_start: 初始缩放级别
+            map_type: 地图类型 ('roadmap', 'satellite', 'hybrid')
 
         Returns:
             folium.Map: 地图对象
         """
-        m = folium.Map(location=center, zoom_start=zoom_start)
+        m = folium.Map(location=center, zoom_start=zoom_start, tiles=None)
 
-        # 添加比例尺
+        tile_urls = {
+            'roadmap': 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+            'satellite': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
+            'hybrid': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+        }
+
+        tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
+
+        folium.TileLayer(
+            tiles=tile_url,
+            attr='© 高德地图',
+            name='高德地图',
+            overlay=False,
+            control=False
+        ).add_to(m)
+
         scale_control = """
         <script>
         document.addEventListener('DOMContentLoaded', function() {

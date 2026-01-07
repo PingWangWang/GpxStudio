@@ -6,7 +6,7 @@ GPX Studio 主应用窗口
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication)
+                             QApplication, QDialog)
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
@@ -17,15 +17,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from handlers.geolocation import GeolocationHandler
 from handlers.webengine import ConsoleWebEnginePage
-from services.geocoding import GeocodingService
-from services.routing import RoutingService
+from services.gaode_geocoding import GaodeGeocodingService
+from services.gaode_routing import GaodeRoutingService
 from services.gpx_export import GpxExportService
 from services.windows_location import WindowsLocationService
+from services.gaode_config import gaode_config
 from utils.map_renderer import MapRenderer
 from utils.location_helper import LocationHelper
 from ui.styles import UIStyles
 from ui.panels import PanelFactory
 from ui.log_panel import LogPanel, setup_logger
+from ui.gaode_config_dialog import GaodeConfigDialog
 
 
 class GpxStudio(QMainWindow):
@@ -45,8 +47,16 @@ class GpxStudio(QMainWindow):
         self.move(window_geometry.topLeft())
 
         # 初始化服务
-        self.geocoding_service = GeocodingService(logger=self._log_to_geocoding)
-        self.routing_service = RoutingService(logger=self._log_to_routing)
+        self.gaode_geocoding_service = GaodeGeocodingService(
+            api_key=gaode_config.get_api_key(),
+            security_key=gaode_config.get_security_key(),
+            logger=self._log_to_geocoding
+        )
+        self.gaode_routing_service = GaodeRoutingService(
+            api_key=gaode_config.get_api_key(),
+            security_key=gaode_config.get_security_key(),
+            logger=self._log_to_routing
+        )
         self.gpx_service = GpxExportService(logger=self._log_to_gpx)
 
         # 数据状态
@@ -76,6 +86,18 @@ class GpxStudio(QMainWindow):
         self.windows_location_service = WindowsLocationService(logger=self._log_to_service)
 
         self.logger.info("程序启动完成")
+
+    def show_gaode_config(self):
+        """显示高德地图配置对话框"""
+        dialog = GaodeConfigDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            api_key = gaode_config.get_api_key()
+            security_key = gaode_config.get_security_key()
+            self.gaode_geocoding_service.api_key = api_key
+            self.gaode_geocoding_service.security_key = security_key
+            self.gaode_routing_service.api_key = api_key
+            self.gaode_routing_service.security_key = security_key
+            self.logger.info("高德地图配置已更新")
 
     def _log_to_service(self, level: str, message: str):
         """将日志转发到WindowsLocationService"""
@@ -160,11 +182,20 @@ class GpxStudio(QMainWindow):
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
 
-        # 定位按钮
-        locate_button = QPushButton("📍 定位我的位置")
+        # 顶部按钮布局
+        top_button_layout = QHBoxLayout()
+
+        locate_button = QPushButton("📍 定位")
         locate_button.clicked.connect(self.get_current_location)
         locate_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
-        left_layout.addWidget(locate_button)
+        top_button_layout.addWidget(locate_button)
+
+        config_button = QPushButton("⚙️ 地图配置")
+        config_button.clicked.connect(self.show_gaode_config)
+        config_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
+        top_button_layout.addWidget(config_button)
+
+        left_layout.addLayout(top_button_layout)
 
         # 滚动区域
         scroll = QScrollArea()
@@ -300,7 +331,11 @@ class GpxStudio(QMainWindow):
 
     def _perform_search(self, search_text, location_type):
         """执行搜索"""
-        locations = self.geocoding_service.search_location(search_text)
+        if gaode_config.is_configured and gaode_config.get_api_key():
+            locations = self.gaode_geocoding_service.search_location(search_text)
+        else:
+            locations = []
+            self.logger.warning("高德地图API未配置，无法进行地点搜索。请先配置高德地图API密钥。")
 
         self.progress_bar.setMaximum(100)
         self.progress_bar.setMinimum(0)
@@ -320,8 +355,12 @@ class GpxStudio(QMainWindow):
             self.search_results_title.setText(titles.get(location_type, "搜索结果"))
 
             for i, location in enumerate(locations):
-                item = QListWidgetItem(f"{i+1}. {location.address}")
-                item.setData(Qt.UserRole, (location.address, location.latitude, location.longitude))
+                if isinstance(location, dict):
+                    item = QListWidgetItem(f"{i+1}. {location.get('address', '')}")
+                    item.setData(Qt.UserRole, (location.get('address', ''), location.get('lat'), location.get('lon')))
+                else:
+                    item = QListWidgetItem(f"{i+1}. {location.address}")
+                    item.setData(Qt.UserRole, (location.address, location.latitude, location.longitude))
                 self.search_results_list.addItem(item)
 
             self.show_search_results_on_map(locations, location_type)
@@ -422,27 +461,30 @@ class GpxStudio(QMainWindow):
         if not locations:
             return
 
-        center_lat = sum(loc.latitude for loc in locations) / len(locations)
-        center_lon = sum(loc.longitude for loc in locations) / len(locations)
+        def get_lat(loc):
+            return loc.get('lat') if isinstance(loc, dict) else loc.latitude
+        def get_lon(loc):
+            return loc.get('lon') if isinstance(loc, dict) else loc.longitude
+        def get_address(loc):
+            return loc.get('address', '') if isinstance(loc, dict) else loc.address
+
+        center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
+        center_lon = sum(get_lon(loc) for loc in locations) / len(locations)
 
         m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12)
 
-        # 搜索结果标记颜色
         colors = {"start": "green", "end": "red", "waypoint": "blue"}
         color = colors.get(location_type, "orange")
 
-        # 添加搜索结果标记
         for i, location in enumerate(locations):
             MapRenderer.add_marker(
-                m, [location.latitude, location.longitude],
-                f"{i+1}. {location.address}",
+                m, [get_lat(location), get_lon(location)],
+                f"{i+1}. {get_address(location)}",
                 color=color, icon='info-sign'
             )
 
-        # 添加已选择的点
         self._add_selected_points_to_map(m)
 
-        # 添加路线
         if self.route_points:
             MapRenderer.add_route(m, self.route_points)
 
@@ -474,17 +516,24 @@ class GpxStudio(QMainWindow):
             color = colors.get(self.searching_for, "orange")
 
             for i, location in enumerate(self.search_results):
+                def get_lat(loc):
+                    return loc.get('lat') if isinstance(loc, dict) else loc.latitude
+                def get_lon(loc):
+                    return loc.get('lon') if isinstance(loc, dict) else loc.longitude
+                def get_address(loc):
+                    return loc.get('address', '') if isinstance(loc, dict) else loc.address
+
                 is_selected = (self.selected_search_result_coords and
-                              abs(location.latitude - self.selected_search_result_coords[0]) < 0.0001 and
-                              abs(location.longitude - self.selected_search_result_coords[1]) < 0.0001)
+                              abs(get_lat(location) - self.selected_search_result_coords[0]) < 0.0001 and
+                              abs(get_lon(location) - self.selected_search_result_coords[1]) < 0.0001)
                 MapRenderer.add_marker(
-                    m, [location.latitude, location.longitude],
-                    f"{i+1}. {location.address}",
+                    m, [get_lat(location), get_lon(location)],
+                    f"{i+1}. {get_address(location)}",
                     color=color, icon='info-sign'
                 )
                 if is_selected:
                     MapRenderer.add_marker(
-                        m, [location.latitude, location.longitude],
+                        m, [get_lat(location), get_lon(location)],
                         "已选择",
                         color='purple', icon='star'
                     )
@@ -540,7 +589,11 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem(f"方式: {transport_mode}")
 
             self.logger.debug("正在调用路线规划服务...")
-            self.route_points = self.routing_service.plan_route(points, transport_mode)
+            if gaode_config.is_configured and gaode_config.get_api_key():
+                self.route_points = self.gaode_routing_service.plan_route(points, transport_mode)
+            else:
+                self.route_points = []
+                self.logger.warning("高德地图API未配置，无法进行路线规划。请先配置高德地图API密钥。")
 
             self.progress_bar.setMaximum(100)
             self.progress_bar.setMinimum(0)
@@ -710,7 +763,7 @@ class GpxStudio(QMainWindow):
     # ========== 定位相关方法 ==========
 
     def get_current_location(self):
-        """获取当前位置（先尝试Windows原生服务，失败则使用IP定位）"""
+        """获取当前位置（优先使用高德地图定位，然后Windows原生，最后IP定位）"""
         self.logger.info("开始定位流程")
 
         try:
@@ -720,12 +773,26 @@ class GpxStudio(QMainWindow):
             QApplication.processEvents()
 
             self.search_results_list.clear()
-            self.search_results_list.addItem("正在尝试定位...")
+            self.search_results_list.addItem("正在定位...")
+
+            if gaode_config.is_configured and gaode_config.get_api_key():
+                self.search_results_list.addItem("正在使用高德地图定位...")
+                self.logger.info("尝试使用高德地图IP定位...")
+
+                location_info = self.gaode_geocoding_service.get_ip_location()
+
+                if location_info:
+                    self.handle_gaode_location_success(location_info)
+                    return
+
+                self.search_results_list.clear()
+                self.search_results_list.addItem("高德定位不可用")
+                self.logger.warning("高德地图IP定位失败，尝试其他方式")
 
             self.logger.debug(f"Windows位置服务可用: {self.windows_location_service.is_available()}")
 
             if self.windows_location_service.is_available():
-                self.search_results_list.addItem("正在使用Windows原生定位服务...")
+                self.search_results_list.addItem("正在使用Windows原生定位...")
                 self.logger.info("尝试使用Windows原生位置服务...")
 
                 location_info = self.windows_location_service.get_location(timeout=10)
@@ -738,7 +805,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("Windows定位不可用")
             self.search_results_list.addItem("正在使用IP地址定位...")
 
-            self.logger.warning("Windows位置服务不可用，使用IP定位作为备选方案")
+            self.logger.warning("Windows位置服务不可使用，使用IP定位作为备选方案")
 
             def ip_log(level: str, message: str):
                 level_map = {
@@ -780,6 +847,50 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
 
+    def handle_gaode_location_success(self, location_info):
+        """处理高德地图定位成功"""
+        self.logger.info("高德地图定位成功")
+
+        lat = location_info['lat']
+        lon = location_info['lon']
+        city = location_info.get('city', '')
+        province = location_info.get('province', '')
+
+        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 城市: {city}")
+
+        try:
+            if gaode_config.is_configured and gaode_config.get_api_key():
+                address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
+            else:
+                address_info = None
+
+            self.current_location = (lat, lon)
+
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+
+            self.search_results_list.clear()
+            self.search_results_list.addItem("定位成功！")
+            self.search_results_list.addItem("定位方式: 高德地图IP定位")
+
+            full_address = f"{province}{city}" if province and city else (city or province)
+            if full_address:
+                self.search_results_list.addItem(f"位置: {full_address}")
+                popup_text = f"我的位置\n{full_address}\n定位方式: 高德地图IP定位"
+            else:
+                popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 高德地图IP定位"
+
+            self.search_results_list.addItem(f"坐标: {lat:.6f}, {lon:.6f}")
+
+            self.logger.info(f"位置信息: {full_address}")
+            self.show_location_on_map(lat, lon, popup_text)
+
+        except Exception as e:
+            self.logger.exception(f"高德定位处理异常: {str(e)}")
+            self.show_location_on_map(lat, lon, f"我的位置\n坐标: {lat:.4f}, {lon:.4f}")
+
     def handle_native_location_success(self, location_info):
         """处理Windows原生定位成功"""
         self.logger.info("Windows原生定位成功")
@@ -791,7 +902,11 @@ class GpxStudio(QMainWindow):
         self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}米")
 
         try:
-            address_info = self.geocoding_service.reverse_geocode(lat, lon)
+            if gaode_config.is_configured and gaode_config.get_api_key():
+                address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
+            else:
+                address_info = None
+                self.logger.warning("高德地图API未配置，无法获取地址信息")
 
             self.current_location = (lat, lon)
 
