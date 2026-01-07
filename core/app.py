@@ -12,6 +12,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
 import os
+from typing import Optional
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -79,6 +80,9 @@ class GpxStudio(QMainWindow):
 
         # 定位处理器
         self.geolocation_handler = GeolocationHandler()
+
+        self.geolocation_handler.geolocation_success.connect(self._on_geolocation_success)
+        self.geolocation_handler.geolocation_error.connect(self._on_geolocation_error)
 
         # 初始化UI
         self.init_ui()
@@ -881,7 +885,7 @@ class GpxStudio(QMainWindow):
     # ========== 定位相关方法 ==========
 
     def get_current_location(self):
-        """获取当前位置（优先使用高德地图定位，然后Windows原生，最后IP定位）"""
+        """获取当前位置（优先使用：Windows原生 → 高德在线定位 → 高德IP定位 → 公共IP定位）"""
         self.logger.info("开始定位流程")
 
         try:
@@ -892,20 +896,6 @@ class GpxStudio(QMainWindow):
 
             self.search_results_list.clear()
             self.search_results_list.addItem("正在定位...")
-
-            if gaode_config.is_configured and gaode_config.get_api_key():
-                self.search_results_list.addItem("正在使用高德地图定位...")
-                self.logger.info("尝试使用高德地图IP定位...")
-
-                location_info = self.gaode_geocoding_service.get_ip_location()
-
-                if location_info:
-                    self.handle_gaode_location_success(location_info)
-                    return
-
-                self.search_results_list.clear()
-                self.search_results_list.addItem("高德定位不可用")
-                self.logger.warning("高德地图IP定位失败，尝试其他方式")
 
             self.logger.debug(f"Windows位置服务可用: {self.windows_location_service.is_available()}")
 
@@ -921,9 +911,54 @@ class GpxStudio(QMainWindow):
 
             self.search_results_list.clear()
             self.search_results_list.addItem("Windows定位不可用")
-            self.search_results_list.addItem("正在使用IP地址定位...")
 
-            self.logger.warning("Windows位置服务不可使用，使用IP定位作为备选方案")
+            if gaode_config.is_configured and gaode_config.get_api_key():
+                self.search_results_list.addItem("正在使用高德地图在线定位...")
+                self.logger.info("尝试使用高德地图在线定位...")
+
+                location_info = self.get_gaode_online_location()
+
+                if location_info:
+                    self.handle_gaode_online_location_success(location_info)
+                    return
+
+                self.search_results_list.clear()
+                self.search_results_list.addItem("高德在线定位不可用")
+                self.search_results_list.addItem("正在使用高德地图IP定位...")
+                self.logger.warning("高德地图在线定位失败，尝试高德IP定位")
+
+                def gaode_ip_log(level: str, message: str):
+                    level_map = {
+                        "DEBUG": self.logger.debug,
+                        "INFO": self.logger.info,
+                        "WARNING": self.logger.warning,
+                        "ERROR": self.logger.error,
+                        "CRITICAL": self.logger.critical
+                    }
+                    log_func = level_map.get(level, self.logger.info)
+                    log_func(f"[高德IP定位] {message}")
+
+                location_info = LocationHelper.get_ip_location(
+                    use_gaode=True,
+                    api_key=gaode_config.get_api_key() if gaode_config.is_configured else None,
+                    logger=gaode_ip_log
+                )
+
+                if location_info:
+                    self.progress_bar.setMaximum(100)
+                    self.progress_bar.setMinimum(0)
+                    self.progress_bar.setValue(100)
+                    QApplication.processEvents()
+                    self.handle_ip_location_success(location_info, source="高德IP定位")
+                    return
+
+                self.search_results_list.clear()
+                self.search_results_list.addItem("高德IP定位不可用")
+                self.logger.warning("高德IP定位失败，尝试公共IP定位")
+
+            self.search_results_list.addItem("正在使用公共IP定位...")
+
+            self.logger.warning("所有定位方式不可使用，使用公共IP定位作为备选方案")
 
             def ip_log(level: str, message: str):
                 level_map = {
@@ -934,7 +969,7 @@ class GpxStudio(QMainWindow):
                     "CRITICAL": self.logger.critical
                 }
                 log_func = level_map.get(level, self.logger.info)
-                log_func(f"[IP定位] {message}")
+                log_func(f"[公共IP定位] {message}")
 
             location_info = LocationHelper.get_ip_location(logger=ip_log)
 
@@ -944,7 +979,7 @@ class GpxStudio(QMainWindow):
             QApplication.processEvents()
 
             if location_info:
-                self.handle_ip_location_success(location_info)
+                self.handle_ip_location_success(location_info, source="公共IP定位")
             else:
                 self.search_results_list.clear()
                 self.search_results_list.addItem("定位失败")
@@ -964,6 +999,179 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("定位出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
+
+    def get_gaode_online_location(self) -> Optional[dict]:
+        """
+        使用浏览器Geolocation API + 高德逆地理编码获取当前位置
+
+        Returns:
+            dict: 定位信息 {'lat': float, 'lon': float, 'city': str, 'source': str}
+        """
+        def log_cb(level, message):
+            if self.logger:
+                level_map = {
+                    "DEBUG": self.logger.debug,
+                    "INFO": self.logger.info,
+                    "WARNING": self.logger.warning,
+                    "ERROR": self.logger.error,
+                    "CRITICAL": self.logger.critical
+                }
+                log_func = level_map.get(level, self.logger.info)
+                log_func(message)
+
+        if not gaode_config.is_configured or not gaode_config.get_api_key():
+            log_cb("WARNING", "高德API未配置，无法使用在线定位")
+            return None
+
+        log_cb("DEBUG", "正在通过浏览器Geolocation API获取位置...")
+
+        geolocation_script = """
+        if (navigator.geolocation) {
+            console.log('[定位] 正在调用浏览器定位API...');
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var result = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    };
+                    console.log('[定位] 浏览器定位成功: ' + result.lat + ', ' + result.lon + ', 精度: ' + result.accuracy + 'm');
+                    console.log('定位成功:' + result.lat + ',' + result.lon + ',' + result.accuracy);
+                },
+                function(error) {
+                    var errorMsg = '';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg = '用户拒绝定位请求';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg = '位置信息不可用';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg = '定位请求超时';
+                            break;
+                        default:
+                            errorMsg = '未知错误: ' + error.message;
+                    }
+                    console.log('[定位] 浏览器定位失败: ' + errorMsg);
+                    console.log('定位失败:' + errorMsg);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                }
+            );
+        } else {
+            console.log('[定位] 浏览器不支持Geolocation API');
+            console.log('定位失败: 浏览器不支持定位');
+        }
+        """
+
+        if self.map_view and self.map_view.page():
+            self.map_view.page().runJavaScript(geolocation_script)
+            log_cb("DEBUG", "已发起浏览器定位请求")
+        else:
+            log_cb("WARNING", "地图视图未初始化，无法执行定位")
+
+        return None
+
+    def _on_geolocation_success(self, lat, lon, accuracy):
+        """处理浏览器定位成功信号"""
+        self.logger.info(f"浏览器定位成功: {lat}, {lon}, 精度: {accuracy}m")
+
+        location_info = {
+            'lat': lat,
+            'lon': lon,
+            'accuracy': accuracy
+        }
+        self.handle_gaode_online_location_success(location_info)
+
+    def _on_geolocation_error(self, error_msg):
+        """处理浏览器定位失败信号"""
+        self.logger.warning(f"浏览器定位失败: {error_msg}")
+        self.handle_gaode_location_error({'code': -1, 'message': error_msg})
+
+    def handle_gaode_online_location_success(self, location_info):
+        """处理高德在线定位成功（浏览器Geolocation + 高德逆地理编码）"""
+        self.logger.info("高德在线定位成功")
+
+        lat = location_info['lat']
+        lon = location_info['lon']
+        accuracy = location_info.get('accuracy', 0)
+
+        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}m")
+
+        if gaode_config.is_configured and gaode_config.get_api_key():
+            self.logger.debug("正在进行逆地理编码...")
+            address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
+
+            if address_info:
+                city = address_info.get('city', '')
+                full_address = address_info.get('full_address', '')
+
+                self.logger.debug(f"逆地理编码成功: {full_address}")
+
+                self.progress_bar.setMaximum(100)
+                self.progress_bar.setMinimum(0)
+                self.progress_bar.setValue(100)
+                QApplication.processEvents()
+
+                self.search_results_list.clear()
+                self.search_results_list.addItem("定位成功！")
+                self.search_results_list.addItem("定位方式: 高德地图在线定位（精准定位）")
+                self.search_results_list.addItem(f"位置: {city}")
+
+                self.current_location = (lat, lon)
+
+                popup_text = f"我的位置\n{full_address}\n定位方式: 高德在线定位\n精度: 约{accuracy:.0f}米"
+                MapRenderer.add_marker(self.map_view.current_map, [lat, lon], popup_text, 'green', 'user')
+                self.map_view.current_map.fit_bounds([[lat, lon], [lat, lon]])
+
+                self.show_location_on_map(lat, lon, city, full_address)
+                return
+
+            self.logger.warning("逆地理编码失败，仅显示坐标")
+
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setValue(100)
+        QApplication.processEvents()
+
+        self.search_results_list.clear()
+        self.search_results_list.addItem("定位成功！")
+        self.search_results_list.addItem("定位方式: 浏览器Geolocation API")
+        self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
+
+        self.current_location = (lat, lon)
+
+        popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
+        self.show_location_on_map(lat, lon, "", popup_text)
+
+    def handle_gaode_location_error(self, error):
+        """处理高德在线定位失败"""
+        error_code = error.get('code', -1)
+        error_msg = error.get('message', '未知错误')
+
+        self.logger.warning(f"高德在线定位失败: {error_msg} (代码: {error_code})")
+
+        self.search_results_list.clear()
+        self.search_results_list.addItem("在线定位失败")
+
+        if error_code == 1:
+            self.search_results_list.addItem("原因: 用户拒绝定位请求")
+            self.logger.warning("用户拒绝了定位请求")
+        elif error_code == 2:
+            self.search_results_list.addItem("原因: 位置信息不可用")
+            self.logger.warning("位置信息不可用")
+        elif error_code == 3:
+            self.search_results_list.addItem("原因: 定位请求超时")
+            self.logger.warning("定位请求超时")
+        elif error_code == -1:
+            self.search_results_list.addItem("原因: 浏览器不支持定位")
+            self.logger.warning("浏览器不支持Geolocation API")
+        else:
+            self.search_results_list.addItem(f"原因: {error_msg}")
 
     def handle_gaode_location_success(self, location_info):
         """处理高德地图定位成功"""
@@ -1054,16 +1262,28 @@ class GpxStudio(QMainWindow):
         except Exception as e:
             self.logger.exception(f"处理异常: {str(e)}")
 
-    def handle_ip_location_success(self, location_info):
+    def handle_ip_location_success(self, location_info, source: str = "IP地址定位"):
         """处理IP定位成功"""
-        self.logger.info("IP定位成功")
+        self.logger.info(f"{source}成功")
 
-        lat = location_info['lat']
-        lon = location_info['lon']
+        lat = location_info.get('lat')
+        lon = location_info.get('lon')
         city = location_info.get('city', '')
         country = location_info.get('country', '')
         region = location_info.get('region', '')
         isp = location_info.get('isp', '')
+        source_key = location_info.get('source', '')
+
+        if lat is None or lon is None:
+            self.search_results_list.clear()
+            self.search_results_list.addItem("定位成功！")
+            self.search_results_list.addItem(f"定位方式: {source}（仅城市级别）")
+            self.search_results_list.addItem(f"位置: {city}")
+
+            if source_key == 'gaode_ip_city':
+                self.logger.info(f"高德IP定位成功（城市级别）: {city}")
+                QMessageBox.information(self, "定位成功", f"定位成功！\n\n位置: {city}\n定位方式: {source}（仅城市级别）")
+            return
 
         self.logger.debug(f"纬度: {lat}, 经度: {lon}")
         self.logger.info(f"位置: {city}, {region}, {country}")
@@ -1072,7 +1292,11 @@ class GpxStudio(QMainWindow):
 
         self.search_results_list.clear()
         self.search_results_list.addItem("定位成功！")
-        self.search_results_list.addItem("定位方式: IP地址定位（城市级精度）")
+
+        if source_key == 'gaode_ip':
+            self.search_results_list.addItem("定位方式: 高德IP定位（城市级精度）")
+        else:
+            self.search_results_list.addItem(f"定位方式: {source}（城市级精度）")
 
         location_text = ", ".join(filter(None, [city, region, country]))
         self.search_results_list.addItem(f"位置: {location_text}")
@@ -1080,9 +1304,9 @@ class GpxStudio(QMainWindow):
 
         if isp:
             self.search_results_list.addItem(f"运营商: {isp}")
-            popup_text = f"我的位置\n{location_text}\n定位方式: IP地址定位\n运营商: {isp}"
+            popup_text = f"我的位置\n{location_text}\n定位方式: {source}\n运营商: {isp}"
         else:
-            popup_text = f"我的位置\n{location_text}\n定位方式: IP地址定位"
+            popup_text = f"我的位置\n{location_text}\n定位方式: {source}"
 
         self.show_location_on_map(lat, lon, popup_text)
 

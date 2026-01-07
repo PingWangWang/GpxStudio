@@ -13,16 +13,99 @@ class LocationHelper:
     """定位辅助工具"""
 
     @staticmethod
-    def get_ip_location(logger: Optional[Callable] = None):
+    def get_ip_location(logger: Optional[Callable] = None, use_gaode: bool = False, api_key: Optional[str] = None):
         """
         使用IP地址获取定位
+
+        Args:
+            logger: 日志回调函数
+            use_gaode: 是否使用高德地图IP定位
+            api_key: 高德API密钥
+
+        Returns:
+            dict: 定位信息 {'lat': float, 'lon': float, 'city': str, 'country': str, 'source': str}
+                 失败返回None
+        """
+        def log(level: str, message: str):
+            if logger:
+                logger(level, message)
+
+        try:
+            if use_gaode and api_key:
+                return LocationHelper._get_gaode_ip_location(api_key, logger)
+            else:
+                return LocationHelper._get_public_ip_location(logger)
+        except Exception as e:
+            log("ERROR", f"IP定位失败: {str(e)}")
+            return None
+
+    @staticmethod
+    def _get_gaode_ip_location(api_key: str, logger: Optional[Callable] = None) -> Optional[dict]:
+        """
+        使用高德地图IP定位API获取位置
+
+        Args:
+            api_key: 高德API密钥
+            logger: 日志回调函数
+
+        Returns:
+            dict: 定位信息 {'lat': float, 'lon': float, 'city': str, 'source': str}
+        """
+        def log(level: str, message: str):
+            if logger:
+                logger(level, message)
+
+        try:
+            url = f'https://restapi.amap.com/v3/ip?key={api_key}'
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('status') == '1':
+                city = data.get('city', '')
+                rect = data.get('rectangle', '')
+
+                if rect:
+                    coords = rect.split(';')[0].split(',')
+                    lat = float(coords[1])
+                    lon = float(coords[0])
+                    log("INFO", f"高德IP定位成功: {city}")
+                    return {
+                        'lat': lat,
+                        'lon': lon,
+                        'city': city,
+                        'country': '中国',
+                        'source': 'gaode_ip'
+                    }
+                elif city:
+                    log("INFO", f"高德IP定位成功: {city}（仅城市级别）")
+                    return {
+                        'lat': None,
+                        'lon': None,
+                        'city': city,
+                        'country': '中国',
+                        'source': 'gaode_ip_city'
+                    }
+
+            log("WARNING", f"高德IP定位失败: {data.get('info', '未知错误')}")
+            return None
+        except requests.exceptions.RequestException as e:
+            log("ERROR", f"高德IP定位网络请求失败: {str(e)}")
+            return None
+        except Exception as e:
+            log("ERROR", f"高德IP定位失败: {str(e)}")
+            return None
+
+    @staticmethod
+    def _get_public_ip_location(logger: Optional[Callable] = None) -> Optional[dict]:
+        """
+        使用公共IP定位API获取位置
 
         Args:
             logger: 日志回调函数
 
         Returns:
             dict: 定位信息 {'lat': float, 'lon': float, 'city': str, 'country': str, 'source': str}
-                 失败返回None
         """
         def log(level: str, message: str):
             if logger:
@@ -35,7 +118,7 @@ class LocationHelper:
             data = response.json()
 
             if data.get('status') == 'success':
-                log("INFO", f"IP定位成功: {data.get('city', '')}, {data.get('country', '')}")
+                log("INFO", f"公共IP定位成功: {data.get('city', '')}, {data.get('country', '')}")
                 return {
                     'lat': data.get('lat'),
                     'lon': data.get('lon'),
@@ -45,13 +128,10 @@ class LocationHelper:
                     'isp': data.get('isp', ''),
                     'source': 'ip_api'
                 }
-            log("WARNING", f"IP定位失败: {data.get('message', '未知错误')}")
+            log("WARNING", f"公共IP定位失败: {data.get('message', '未知错误')}")
             return None
         except requests.exceptions.RequestException as e:
-            log("ERROR", f"网络请求失败: {str(e)}")
-            return None
-        except Exception as e:
-            log("ERROR", f"IP定位失败: {str(e)}")
+            log("ERROR", f"公共IP定位网络请求失败: {str(e)}")
             return None
 
     @staticmethod
