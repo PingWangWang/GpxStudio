@@ -6,13 +6,21 @@ GPX导出服务
 import gpxpy
 from gpxpy.gpx import GPXTrack, GPXTrackSegment, GPXTrackPoint
 from datetime import datetime, timedelta
+from typing import Optional, Callable, Any
 
 
 class GpxExportService:
     """GPX导出服务"""
 
-    @staticmethod
-    def export_to_gpx(route_points, start_time, file_path):
+    def __init__(self, logger: Optional[Callable] = None):
+        self.logger = logger
+
+    def log(self, level: str, message: str):
+        """输出日志"""
+        if self.logger:
+            self.logger(level, message)
+
+    def export_to_gpx(self, route_points, start_time, file_path):
         """
         导出路线为GPX文件
 
@@ -24,7 +32,14 @@ class GpxExportService:
         Returns:
             bool: 是否成功
         """
+
+        def log_cb(level: str, message: str):
+            if self.logger:
+                self.logger(level, message)
+
         try:
+            log_cb("INFO", f"开始导出GPX文件: {file_path}")
+
             gpx = gpxpy.gpx.GPX()
 
             # 创建轨迹
@@ -43,8 +58,11 @@ class GpxExportService:
                 microsecond=0
             )
 
+            log_cb("DEBUG", f"起始时间: {current_time}")
+
             # 添加轨迹点
             route_segment = []
+            point_count = 0
             for point in route_points:
                 if point is None:
                     # 处理完一个段
@@ -57,8 +75,10 @@ class GpxExportService:
                             )
                             gpx_segment.points.append(gpx_point)
                             current_time += timedelta(seconds=10)
+                            point_count += 1
                     route_segment = []
                     current_time += timedelta(minutes=5)  # 段间隔5分钟
+                    log_cb("DEBUG", f"添加段分隔符，当前点数: {point_count}")
                 else:
                     route_segment.append(point)
 
@@ -72,15 +92,19 @@ class GpxExportService:
                     )
                     gpx_segment.points.append(gpx_point)
                     current_time += timedelta(seconds=10)
+                    point_count += 1
+
+            log_cb("DEBUG", f"共添加 {point_count} 个轨迹点")
 
             # 保存文件
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(gpx.to_xml())
 
+            log_cb("INFO", "GPX文件导出成功")
             return True
 
         except Exception as e:
-            print(f"导出GPX文件失败: {str(e)}")
+            log_cb("ERROR", f"导出GPX文件失败: {str(e)}")
             return False
 
     @staticmethod

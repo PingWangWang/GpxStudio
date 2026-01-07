@@ -4,17 +4,24 @@
 """
 
 from geopy.geocoders import Nominatim
+from typing import Optional, Callable
 
 
 class GeocodingService:
     """地理编码服务，负责地点搜索"""
 
-    def __init__(self):
+    def __init__(self, logger: Optional[Callable] = None):
         self.geolocator = Nominatim(
             user_agent="gpx_studio",
             timeout=10,
             domain='nominatim.openstreetmap.org'
         )
+        self.logger = logger
+
+    def log(self, level: str, message: str):
+        """输出日志"""
+        if self.logger:
+            self.logger(level, message)
 
     def search_location(self, search_text):
         """
@@ -28,6 +35,10 @@ class GeocodingService:
         """
         locations = None
 
+        def log_cb(level, message):
+            if self.logger:
+                self.logger(level, message)
+
         # 多种搜索策略
         search_strategies = [
             {'text': search_text, 'lang': None},
@@ -39,7 +50,7 @@ class GeocodingService:
 
         for i, strategy in enumerate(search_strategies):
             try:
-                print(f"尝试搜索策略 {i+1}: {strategy['text']} (语言: {strategy['lang']})")
+                log_cb("DEBUG", f"尝试搜索策略 {i+1}: {strategy['text']} (语言: {strategy['lang']})")
                 locations = self.geolocator.geocode(
                     strategy['text'],
                     exactly_one=False,
@@ -48,11 +59,14 @@ class GeocodingService:
                 )
 
                 if locations:
-                    print(f"搜索成功，找到 {len(locations)} 个结果")
+                    log_cb("INFO", f"搜索成功，找到 {len(locations)} 个结果")
                     break
             except Exception as e:
-                print(f"策略 {i+1} 失败: {str(e)}")
+                log_cb("WARNING", f"策略 {i+1} 失败: {str(e)}")
                 continue
+
+        if not locations:
+            log_cb("WARNING", f"未找到地点: {search_text}")
 
         return locations
 
@@ -70,12 +84,16 @@ class GeocodingService:
         import urllib.request
         import json
 
+        def log_cb(level, message):
+            if self.logger:
+                self.logger(level, message)
+
         try:
             url = f'https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&accept-language=zh-CN'
-            print(f"[反向地理编码] 请求URL: {url}")
+            log_cb("DEBUG", f"反向地理编码请求URL: {url}")
             response = urllib.request.urlopen(url, timeout=5)
             data = json.loads(response.read())
-            print(f"[反向地理编码] 响应数据: {data}")
+            log_cb("DEBUG", f"反向地理编码响应数据: {data}")
 
             city = data.get('address', {}).get('city', '')
             if not city:
@@ -84,11 +102,12 @@ class GeocodingService:
                 city = data.get('address', {}).get('village', '')
             country = data.get('address', {}).get('country', '')
 
+            log_cb("INFO", f"反向地理编码成功: {city}, {country}")
             return {
                 'city': city,
                 'country': country,
                 'full_address': data.get('display_name', '')
             }
         except Exception as e:
-            print(f"[反向地理编码] 失败: {str(e)}")
+            log_cb("ERROR", f"反向地理编码失败: {str(e)}")
             return None

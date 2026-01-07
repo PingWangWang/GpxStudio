@@ -20,10 +20,12 @@ from handlers.webengine import ConsoleWebEnginePage
 from services.geocoding import GeocodingService
 from services.routing import RoutingService
 from services.gpx_export import GpxExportService
+from services.windows_location import WindowsLocationService
 from utils.map_renderer import MapRenderer
 from utils.location_helper import LocationHelper
 from ui.styles import UIStyles
 from ui.panels import PanelFactory
+from ui.log_panel import LogPanel, setup_logger
 
 
 class GpxStudio(QMainWindow):
@@ -43,9 +45,9 @@ class GpxStudio(QMainWindow):
         self.move(window_geometry.topLeft())
 
         # 初始化服务
-        self.geocoding_service = GeocodingService()
-        self.routing_service = RoutingService()
-        self.gpx_service = GpxExportService()
+        self.geocoding_service = GeocodingService(logger=self._log_to_geocoding)
+        self.routing_service = RoutingService(logger=self._log_to_routing)
+        self.gpx_service = GpxExportService(logger=self._log_to_gpx)
 
         # 数据状态
         self.start_coords = None
@@ -59,13 +61,65 @@ class GpxStudio(QMainWindow):
 
         # 定位处理器
         self.geolocation_handler = GeolocationHandler()
-        self.geolocation_handler.geolocation_success.connect(self.handle_geolocation_success)
-        self.geolocation_handler.geolocation_error.connect(
-            lambda msg: self.fallback_to_ip_geolocation(msg)
-        )
 
         # 初始化UI
         self.init_ui()
+
+        # 初始化日志系统
+        self.logger = setup_logger(self.log_panel, "GpxStudio")
+
+        # 初始化Windows位置服务（需要logger）
+        self.windows_location_service = WindowsLocationService(logger=self._log_to_service)
+
+        self.logger.info("程序启动完成")
+
+    def _log_to_service(self, level: str, message: str):
+        """将日志转发到WindowsLocationService"""
+        level_map = {
+            "DEBUG": self.logger.debug,
+            "INFO": self.logger.info,
+            "WARNING": self.logger.warning,
+            "ERROR": self.logger.error,
+            "CRITICAL": self.logger.critical
+        }
+        log_func = level_map.get(level, self.logger.info)
+        log_func(f"[Windows定位] {message}")
+
+    def _log_to_geocoding(self, level: str, message: str):
+        """将日志转发到GeocodingService"""
+        level_map = {
+            "DEBUG": self.logger.debug,
+            "INFO": self.logger.info,
+            "WARNING": self.logger.warning,
+            "ERROR": self.logger.error,
+            "CRITICAL": self.logger.critical
+        }
+        log_func = level_map.get(level, self.logger.info)
+        log_func(f"[地理编码] {message}")
+
+    def _log_to_routing(self, level: str, message: str):
+        """将日志转发到RoutingService"""
+        level_map = {
+            "DEBUG": self.logger.debug,
+            "INFO": self.logger.info,
+            "WARNING": self.logger.warning,
+            "ERROR": self.logger.error,
+            "CRITICAL": self.logger.critical
+        }
+        log_func = level_map.get(level, self.logger.info)
+        log_func(f"[路线规划] {message}")
+
+    def _log_to_gpx(self, level: str, message: str):
+        """将日志转发到GpxExportService"""
+        level_map = {
+            "DEBUG": self.logger.debug,
+            "INFO": self.logger.info,
+            "WARNING": self.logger.warning,
+            "ERROR": self.logger.error,
+            "CRITICAL": self.logger.critical
+        }
+        log_func = level_map.get(level, self.logger.info)
+        log_func(f"[GPX导出] {message}")
 
     def init_ui(self):
         """初始化用户界面"""
@@ -107,12 +161,6 @@ class GpxStudio(QMainWindow):
         locate_button.clicked.connect(self.get_current_location)
         locate_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
         left_layout.addWidget(locate_button)
-
-        # 测试按钮
-        test_button = QPushButton("🧪 测试定位功能")
-        test_button.clicked.connect(self.test_geolocation)
-        test_button.setStyleSheet(UIStyles.TEST_BUTTON)
-        left_layout.addWidget(test_button)
 
         # 滚动区域
         scroll = QScrollArea()
@@ -177,7 +225,9 @@ class GpxStudio(QMainWindow):
         clear_button.setStyleSheet(UIStyles.CLEAR_BUTTON)
         layout.addWidget(clear_button)
 
-        layout.addStretch()
+        # 日志显示面板
+        self.log_panel = LogPanel()
+        layout.addWidget(self.log_panel)
 
         # 进度条
         self.progress_bar = PanelFactory.create_progress_bar()
@@ -440,15 +490,47 @@ class GpxStudio(QMainWindow):
         transport_mode = self.transport_combo.currentText()
         points = [self.start_coords] + self.waypoints_coords + [self.end_coords]
 
+        self.logger.info(f"开始规划路线，方式: {transport_mode}")
+        self.logger.debug(f"起点: {self.start_coords}, 终点: {self.end_coords}")
+
         try:
+            self.progress_bar.setMaximum(0)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(0)
+            QApplication.processEvents()
+
+            self.search_results_list.clear()
+            self.search_results_list.addItem("正在规划路线...")
+            self.search_results_list.addItem(f"方式: {transport_mode}")
+
+            self.logger.debug("正在调用路线规划服务...")
             self.route_points = self.routing_service.plan_route(points, transport_mode)
 
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+
             if self.route_points:
+                self.logger.info(f"路线规划成功，共 {len(self.route_points)} 个点")
+                self.search_results_list.clear()
+                self.search_results_list.addItem("路线规划成功！")
                 self.show_route_on_map()
             else:
+                self.logger.warning("路线规划失败，未返回路线点")
+                self.search_results_list.clear()
+                self.search_results_list.addItem("路线规划失败")
                 QMessageBox.warning(self, "错误", "路线规划失败")
 
         except Exception as e:
+            self.logger.exception(f"路线规划出错: {str(e)}")
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+            self.search_results_list.clear()
+            self.search_results_list.addItem("路线规划出错")
+            self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"路线规划出错: {str(e)}")
 
     def show_route_on_map(self):
@@ -492,18 +574,55 @@ class GpxStudio(QMainWindow):
         if not file_path:
             return
 
+        self.logger.info(f"开始导出GPX文件: {file_path}")
+
         try:
+            self.progress_bar.setMaximum(0)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(0)
+            QApplication.processEvents()
+
+            self.search_results_list.clear()
+            self.search_results_list.addItem("正在导出GPX文件...")
+
+            self.logger.debug("正在调用GPX导出服务...")
             start_time = self.start_time_edit.time()
+
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(50)
+            QApplication.processEvents()
+
             success = self.gpx_service.export_to_gpx(
                 self.route_points, start_time, file_path
             )
 
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+
             if success:
+                self.logger.info("GPX文件导出成功")
+                self.search_results_list.clear()
+                self.search_results_list.addItem("导出成功！")
+                self.search_results_list.addItem(f"文件: {file_path}")
                 QMessageBox.information(self, "成功", f"GPX文件已导出到: {file_path}")
             else:
+                self.logger.warning("GPX文件导出失败")
+                self.search_results_list.clear()
+                self.search_results_list.addItem("导出失败")
                 QMessageBox.warning(self, "错误", "导出GPX文件失败")
 
         except Exception as e:
+            self.logger.exception(f"导出GPX文件出错: {str(e)}")
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+            self.search_results_list.clear()
+            self.search_results_list.addItem("导出出错")
+            self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"导出GPX文件出错: {str(e)}")
 
     # ========== 时间计算相关方法 ==========
@@ -555,10 +674,8 @@ class GpxStudio(QMainWindow):
     # ========== 定位相关方法 ==========
 
     def get_current_location(self):
-        """获取当前位置"""
-        print("\n" + "="*50)
-        print("[定位] 开始定位流程")
-        print("="*50)
+        """获取当前位置（先尝试Windows原生服务，失败则使用IP定位）"""
+        self.logger.info("开始定位流程")
 
         try:
             self.progress_bar.setMaximum(0)
@@ -567,21 +684,55 @@ class GpxStudio(QMainWindow):
             QApplication.processEvents()
 
             self.search_results_list.clear()
-            self.search_results_list.addItem("正在尝试使用电脑定位服务...")
+            self.search_results_list.addItem("正在尝试定位...")
 
-            # 创建带定位脚本的地图
-            m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10)
-            MapRenderer.add_geolocation_script(m)
+            self.logger.debug(f"Windows位置服务可用: {self.windows_location_service.is_available()}")
 
-            url = MapRenderer.save_and_get_url(m)
-            self.map_view.setUrl(url)
-            print("[定位] 地图加载完成，等待定位结果...")
-            print("="*50 + "\n")
+            if self.windows_location_service.is_available():
+                self.search_results_list.addItem("正在使用Windows原生定位服务...")
+                self.logger.info("尝试使用Windows原生位置服务...")
+
+                location_info = self.windows_location_service.get_location(timeout=10)
+
+                if location_info:
+                    self.handle_native_location_success(location_info)
+                    return
+
+            self.search_results_list.clear()
+            self.search_results_list.addItem("Windows定位不可用")
+            self.search_results_list.addItem("正在使用IP地址定位...")
+
+            self.logger.warning("Windows位置服务不可用，使用IP定位作为备选方案")
+
+            def ip_log(level: str, message: str):
+                level_map = {
+                    "DEBUG": self.logger.debug,
+                    "INFO": self.logger.info,
+                    "WARNING": self.logger.warning,
+                    "ERROR": self.logger.error,
+                    "CRITICAL": self.logger.critical
+                }
+                log_func = level_map.get(level, self.logger.info)
+                log_func(f"[IP定位] {message}")
+
+            location_info = LocationHelper.get_ip_location(logger=ip_log)
+
+            self.progress_bar.setMaximum(100)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setValue(100)
+            QApplication.processEvents()
+
+            if location_info:
+                self.handle_ip_location_success(location_info)
+            else:
+                self.search_results_list.clear()
+                self.search_results_list.addItem("定位失败")
+                self.search_results_list.addItem("无法获取您的位置信息")
+                self.logger.error("定位失败：无法获取您的位置信息")
+                QMessageBox.warning(self, "定位失败", "无法获取您的位置信息\n\n建议：\n1. 检查网络连接\n2. 确认Windows位置服务已开启（如适用）")
 
         except Exception as e:
-            print(f"[定位] 定位流程异常: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            self.logger.exception(f"定位流程异常: {str(e)}")
 
             self.progress_bar.setMaximum(100)
             self.progress_bar.setMinimum(0)
@@ -593,12 +744,15 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
 
-    def handle_geolocation_success(self, lat, lon, accuracy):
-        """处理定位成功"""
-        print("\n" + "="*50)
-        print("[定位成功] 开始处理定位结果")
-        print("="*50)
-        print(f"[定位成功] 纬度: {lat}, 经度: {lon}, 精度: {accuracy}")
+    def handle_native_location_success(self, location_info):
+        """处理Windows原生定位成功"""
+        self.logger.info("Windows原生定位成功")
+
+        lat = location_info['latitude']
+        lon = location_info['longitude']
+        accuracy = location_info.get('accuracy', 0)
+
+        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}米")
 
         try:
             address_info = self.geocoding_service.reverse_geocode(lat, lon)
@@ -612,74 +766,56 @@ class GpxStudio(QMainWindow):
 
             self.search_results_list.clear()
             self.search_results_list.addItem("定位成功！")
-            self.search_results_list.addItem(f"定位方式: 电脑定位服务")
+            self.search_results_list.addItem("定位方式: Windows原生定位（高精度）")
 
             if address_info:
                 city = address_info.get('city', '')
                 country = address_info.get('country', '')
                 self.search_results_list.addItem(f"位置: {city}, {country}")
-                popup_text = f"我的位置\n{city}, {country}\n定位方式: 电脑定位服务"
+                popup_text = f"我的位置\n{city}, {country}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
             else:
-                popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 电脑定位服务"
+                popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
 
-            self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
+            self.search_results_list.addItem(f"坐标: {lat:.6f}, {lon:.6f}")
+            self.search_results_list.addItem(f"精度: 约{accuracy:.0f}米")
 
+            self.logger.info(f"位置信息: {address_info}")
             self.show_location_on_map(lat, lon, popup_text)
-            print("="*50 + "\n")
 
         except Exception as e:
-            print(f"[定位成功] 处理异常: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            self.logger.exception(f"处理异常: {str(e)}")
 
-    def fallback_to_ip_geolocation(self, error_msg):
-        """回退到IP定位"""
-        try:
-            self.search_results_list.clear()
-            self.search_results_list.addItem(f"电脑定位失败: {error_msg}")
-            self.search_results_list.addItem("正在使用IP地址定位...")
+    def handle_ip_location_success(self, location_info):
+        """处理IP定位成功"""
+        self.logger.info("IP定位成功")
 
-            location_info = LocationHelper.get_ip_location()
+        lat = location_info['lat']
+        lon = location_info['lon']
+        city = location_info.get('city', '')
+        country = location_info.get('country', '')
+        region = location_info.get('region', '')
+        isp = location_info.get('isp', '')
 
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
+        self.logger.debug(f"纬度: {lat}, 经度: {lon}")
+        self.logger.info(f"位置: {city}, {region}, {country}")
 
-            if location_info:
-                lat = location_info['lat']
-                lon = location_info['lon']
-                city = location_info['city']
-                country = location_info['country']
+        self.current_location = (lat, lon)
 
-                self.current_location = (lat, lon)
+        self.search_results_list.clear()
+        self.search_results_list.addItem("定位成功！")
+        self.search_results_list.addItem("定位方式: IP地址定位（城市级精度）")
 
-                self.search_results_list.clear()
-                self.search_results_list.addItem("定位成功！")
-                self.search_results_list.addItem(f"定位方式: IP地址定位")
-                self.search_results_list.addItem(f"位置: {city}, {country}")
-                self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
+        location_text = ", ".join(filter(None, [city, region, country]))
+        self.search_results_list.addItem(f"位置: {location_text}")
+        self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
 
-                self.show_location_on_map(
-                    lat, lon,
-                    f"我的位置\n{city}, {country}\n定位方式: IP地址定位"
-                )
-            else:
-                self.search_results_list.clear()
-                self.search_results_list.addItem("定位失败")
-                self.search_results_list.addItem("无法获取您的位置信息")
-                QMessageBox.warning(self, "定位失败", "无法获取您的位置信息")
+        if isp:
+            self.search_results_list.addItem(f"运营商: {isp}")
+            popup_text = f"我的位置\n{location_text}\n定位方式: IP地址定位\n运营商: {isp}"
+        else:
+            popup_text = f"我的位置\n{location_text}\n定位方式: IP地址定位"
 
-        except Exception as e:
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("定位出错")
-            self.search_results_list.addItem(f"错误信息: {str(e)}")
-            QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
+        self.show_location_on_map(lat, lon, popup_text)
 
     def show_location_on_map(self, lat, lon, popup_text):
         """在地图上显示定位"""
@@ -702,9 +838,8 @@ class GpxStudio(QMainWindow):
 
     def test_geolocation(self):
         """测试定位功能"""
-        print("\n" + "="*50)
-        print("[测试] 开始测试定位功能")
-        print("="*50)
+        self.logger.info("开始测试定位功能")
+        self.logger.debug("="*50)
 
         self.search_results_list.clear()
         self.search_results_list.addItem("=== 定位功能测试 ===")
@@ -712,11 +847,13 @@ class GpxStudio(QMainWindow):
         self.search_results_list.addItem(
             f"   状态: {'✓ 已初始化' if self.geolocation_handler else '✗ 未初始化'}"
         )
+        self.logger.debug(f"定位处理器状态: {self.geolocation_handler is not None}")
 
         self.search_results_list.addItem("2. 检查地图视图...")
         self.search_results_list.addItem(
             f"   状态: {'✓ 已创建' if self.map_view else '✗ 未创建'}"
         )
+        self.logger.debug(f"地图视图状态: {self.map_view is not None}")
 
         self.search_results_list.addItem("3. 检查当前位置...")
         self.search_results_list.addItem(
@@ -726,17 +863,22 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem(
                 f"   坐标: {self.current_location[0]:.4f}, {self.current_location[1]:.4f}"
             )
+            self.logger.debug(f"当前位置: {self.current_location[0]:.4f}, {self.current_location[1]:.4f}")
+        else:
+            self.logger.debug("当前位置: 未定位")
 
         self.search_results_list.addItem("4. 测试信号连接...")
         try:
             self.geolocation_handler.test_geolocation()
             self.search_results_list.addItem("   状态: ✓ 信号连接正常")
+            self.logger.debug("测试结果: 信号连接正常")
         except Exception as e:
             self.search_results_list.addItem(f"   状态: ✗ 信号连接失败: {e}")
+            self.logger.error(f"信号连接测试失败: {e}")
 
         self.search_results_list.addItem("=== 测试完成 ===")
-        print("[测试] 测试完成")
-        print("="*50 + "\n")
+        self.logger.info("定位功能测试完成")
+        self.logger.debug("="*50)
 
 
 if __name__ == "__main__":
