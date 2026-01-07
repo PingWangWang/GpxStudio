@@ -51,13 +51,17 @@ class GpxStudio(QMainWindow):
 
         # 数据状态
         self.start_coords = None
+        self.start_name = None
         self.end_coords = None
+        self.end_name = None
         self.waypoints_coords = []
+        self.waypoints_names = []
         self.current_route = None
         self.route_points = []
         self.current_location = None
         self.search_results = []
         self.searching_for = None
+        self.selected_search_result_coords = None  # 当前选中的搜索结果坐标
 
         # 定位处理器
         self.geolocation_handler = GeolocationHandler()
@@ -317,7 +321,7 @@ class GpxStudio(QMainWindow):
 
             for i, location in enumerate(locations):
                 item = QListWidgetItem(f"{i+1}. {location.address}")
-                item.setData(Qt.UserRole, (location.latitude, location.longitude))
+                item.setData(Qt.UserRole, (location.address, location.latitude, location.longitude))
                 self.search_results_list.addItem(item)
 
             self.show_search_results_on_map(locations, location_type)
@@ -335,37 +339,48 @@ class GpxStudio(QMainWindow):
 
     def select_location(self, item, location_type):
         """选择地点（起点/终点）"""
-        coords = item.data(Qt.UserRole)
+        data = item.data(Qt.UserRole)
+        coords = (data[1], data[2]) if len(data) == 3 else data
 
         if location_type == "start":
             self.start_coords = coords
+            self.start_name = data[0] if len(data) == 3 else None
             self.start_list.clear()
-            self.start_list.addItem(f"起点: {coords[0]:.4f}, {coords[1]:.4f}")
+            display_text = self.start_name if self.start_name else f"{coords[0]:.4f}, {coords[1]:.4f}"
+            self.start_list.addItem(display_text)
         elif location_type == "end":
             self.end_coords = coords
+            self.end_name = data[0] if len(data) == 3 else None
             self.end_list.clear()
-            self.end_list.addItem(f"终点: {coords[0]:.4f}, {coords[1]:.4f}")
+            display_text = self.end_name if self.end_name else f"{coords[0]:.4f}, {coords[1]:.4f}"
+            self.end_list.addItem(display_text)
 
         self.update_map_preview()
 
     def select_search_result(self, item):
         """从搜索结果中选择"""
-        coords = item.data(Qt.UserRole)
+        data = item.data(Qt.UserRole)
+        name = data[0]
+        coords = (data[1], data[2])
+        self.selected_search_result_coords = coords
 
         if self.searching_for == "start":
             self.start_coords = coords
+            self.start_name = name
             self.start_list.clear()
-            self.start_list.addItem(f"起点: {coords[0]:.4f}, {coords[1]:.4f}")
+            self.start_list.addItem(name)
         elif self.searching_for == "end":
             self.end_coords = coords
+            self.end_name = name
             self.end_list.clear()
-            self.end_list.addItem(f"终点: {coords[0]:.4f}, {coords[1]:.4f}")
+            self.end_list.addItem(name)
         elif self.searching_for == "waypoint":
             self.waypoints_coords.append(coords)
+            self.waypoints_names.append(name)
             waypoint_item = QListWidgetItem(
-                f"途径点 {len(self.waypoints_coords)}: {coords[0]:.4f}, {coords[1]:.4f}"
+                f"{len(self.waypoints_coords)}. {name}"
             )
-            waypoint_item.setData(Qt.UserRole, coords)
+            waypoint_item.setData(Qt.UserRole, (name, coords[0], coords[1]))
             self.waypoint_list.addItem(waypoint_item)
 
         self.update_map_preview()
@@ -374,6 +389,7 @@ class GpxStudio(QMainWindow):
         """清空搜索结果"""
         self.search_results = []
         self.searching_for = None
+        self.selected_search_result_coords = None
         self.search_results_list.clear()
         self.search_results_title.setText("搜索结果")
 
@@ -384,12 +400,18 @@ class GpxStudio(QMainWindow):
         if current_row >= 0:
             self.waypoint_list.takeItem(current_row)
             self.waypoints_coords.pop(current_row)
+            self.waypoints_names.pop(current_row)
 
             # 重新编号
             for i in range(self.waypoint_list.count()):
                 item = self.waypoint_list.item(i)
-                coords = item.data(Qt.UserRole)
-                item.setText(f"途径点 {i + 1}: {coords[0]:.4f}, {coords[1]:.4f}")
+                data = item.data(Qt.UserRole)
+                if len(data) == 3:
+                    name = data[0]
+                    item.setText(f"{i + 1}. {name}")
+                else:
+                    coords = data
+                    item.setText(f"{i + 1}. {coords[0]:.4f}, {coords[1]:.4f}")
 
             self.update_map_preview()
 
@@ -432,7 +454,9 @@ class GpxStudio(QMainWindow):
         # 确定中心点
         center_lat, center_lon = 39.9042, 116.4074
 
-        if self.start_coords:
+        if self.selected_search_result_coords:
+            center_lat, center_lon = self.selected_search_result_coords
+        elif self.start_coords:
             center_lat, center_lon = self.start_coords
         elif self.end_coords:
             center_lat, center_lon = self.end_coords
@@ -450,32 +474,44 @@ class GpxStudio(QMainWindow):
             color = colors.get(self.searching_for, "orange")
 
             for i, location in enumerate(self.search_results):
+                is_selected = (self.selected_search_result_coords and
+                              abs(location.latitude - self.selected_search_result_coords[0]) < 0.0001 and
+                              abs(location.longitude - self.selected_search_result_coords[1]) < 0.0001)
                 MapRenderer.add_marker(
                     m, [location.latitude, location.longitude],
                     f"{i+1}. {location.address}",
                     color=color, icon='info-sign'
                 )
+                if is_selected:
+                    MapRenderer.add_marker(
+                        m, [location.latitude, location.longitude],
+                        "已选择",
+                        color='purple', icon='star'
+                    )
 
         url = MapRenderer.save_and_get_url(m)
         self.map_view.setUrl(url)
 
     def _add_selected_points_to_map(self, map_obj):
         """添加已选择的点到地图"""
+        start_name = self.start_name if self.start_name else "起点"
         if self.start_coords:
             MapRenderer.add_marker(
-                map_obj, self.start_coords, "起点",
+                map_obj, self.start_coords, start_name,
                 color='green', icon='play'
             )
 
-        for i, waypoint in enumerate(self.waypoints_coords):
+        for i, (waypoint, name) in enumerate(zip(self.waypoints_coords, self.waypoints_names)):
+            display_name = name if name else f"途径点 {i + 1}"
             MapRenderer.add_marker(
-                map_obj, waypoint, f"途径点 {i + 1}",
+                map_obj, waypoint, display_name,
                 color='blue', icon='info-sign'
             )
 
+        end_name = self.end_name if self.end_name else "终点"
         if self.end_coords:
             MapRenderer.add_marker(
-                map_obj, self.end_coords, "终点",
+                map_obj, self.end_coords, end_name,
                 color='red', icon='stop'
             )
 
