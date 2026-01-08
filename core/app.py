@@ -28,6 +28,7 @@ from utils.location_helper import LocationHelper
 from ui.styles import UIStyles
 from ui.panels import PanelFactory
 from ui.log_panel import LogPanel, setup_logger
+from ui.scale_panel import ScalePanel
 from ui.gaode_config_dialog import GaodeConfigDialog
 
 
@@ -274,6 +275,10 @@ class GpxStudio(QMainWindow):
         self.log_panel = LogPanel()
         layout.addWidget(self.log_panel)
 
+        # 地图缩放比例尺显示面板
+        self.scale_panel = ScalePanel()
+        layout.addWidget(self.scale_panel)
+
         # 进度条
         self.progress_bar = PanelFactory.create_progress_bar()
         layout.addWidget(self.progress_bar)
@@ -287,9 +292,13 @@ class GpxStudio(QMainWindow):
 
         # 创建地图视图
         self.map_view = QWebEngineView()
-        web_page = ConsoleWebEnginePage()
-        web_page.set_geolocation_handler(self.geolocation_handler)
-        self.map_view.setPage(web_page)
+        self.web_page = ConsoleWebEnginePage()
+        self.web_page.set_geolocation_handler(self.geolocation_handler)
+
+        # 连接缩放变化信号到比例尺面板
+        self.web_page.zoom_changed.connect(self.on_map_zoom_changed)
+
+        self.map_view.setPage(self.web_page)
 
         # 设置User Agent
         profile = QWebEngineProfile.defaultProfile()
@@ -306,6 +315,13 @@ class GpxStudio(QMainWindow):
         m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10)
         url = MapRenderer.save_and_get_url(m)
         self.map_view.setUrl(url)
+        # 初始化比例尺显示
+        self.scale_panel.update_zoom(10)
+
+    def on_map_zoom_changed(self, zoom_level: int):
+        """处理地图缩放变化事件"""
+        self.logger.info(f"地图缩放级别变化: {zoom_level}")
+        self.scale_panel.update_zoom(zoom_level)
 
     # ========== 搜索相关方法 ==========
 

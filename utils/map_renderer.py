@@ -102,10 +102,16 @@ class MapRenderer:
             var maxChecks = 30;
             var checkInterval = setInterval(function() {
                 checkCount++;
-                var mapElement = document.querySelector('.leaflet-container');
-                if (mapElement && mapElement._leaflet_map) {
+                // 查找以map_开头的全局变量
+                var map = null;
+                for (var key in window) {
+                    if (key.startsWith('map_') && window[key] && window[key].scrollWheelZoom) {
+                        map = window[key];
+                        break;
+                    }
+                }
+                if (map) {
                     clearInterval(checkInterval);
-                    var map = mapElement._leaflet_map;
                     map.scrollWheelZoom.enable();
                     console.log('[地图] 滚轮缩放已启用');
                 } else if (checkCount >= maxChecks) {
@@ -144,6 +150,52 @@ class MapRenderer:
         </script>
         """
         m.get_root().html.add_child(folium.Element(scale_script))
+
+        # 添加缩放监听脚本
+        zoom_listener_script = """
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var checkCount = 0;
+            var maxChecks = 50;
+            var checkInterval = setInterval(function() {
+                checkCount++;
+                // 查找以map_开头的全局变量
+                var map = null;
+                for (var key in window) {
+                    if (key.startsWith('map_') && window[key] && window[key].getZoom) {
+                        map = window[key];
+                        break;
+                    }
+                }
+                if (map) {
+                    clearInterval(checkInterval);
+
+                    // 初始化缩放级别并立即发送
+                    var currentZoom = map.getZoom();
+                    console.log('[地图缩放] 初始缩放级别: ' + currentZoom);
+                    console.log('缩放变化:' + currentZoom);
+
+                    // 监听缩放结束事件
+                    map.on('zoomend', function() {
+                        var newZoom = map.getZoom();
+                        console.log('[地图缩放] 缩放级别变化: ' + newZoom);
+                        // 输出格式化消息供Qt应用捕获
+                        console.log('缩放变化:' + newZoom);
+                    });
+
+                    // 监听缩放开始事件
+                    map.on('zoomstart', function() {
+                        console.log('[地图缩放] 开始缩放操作');
+                    });
+                } else if (checkCount >= maxChecks) {
+                    clearInterval(checkInterval);
+                    console.log('[地图缩放] 初始化超时');
+                }
+            }, 100);
+        });
+        </script>
+        """
+        m.get_root().html.add_child(folium.Element(zoom_listener_script))
 
         return m
 

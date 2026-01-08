@@ -1,13 +1,17 @@
 """
 自定义WebEngine页面
-用于拦截JS控制台消息并处理定位信息
+用于拦截JS控制台消息并处理定位信息和地图缩放事件
 """
 
 from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings
+from PyQt5.QtCore import pyqtSignal
 
 
 class ConsoleWebEnginePage(QWebEnginePage):
     """自定义WebEnginePage，拦截JS控制台消息"""
+
+    # 定义地图缩放变化信号
+    zoom_changed = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,6 +91,15 @@ class ConsoleWebEnginePage(QWebEnginePage):
     def javaScriptConsoleMessage(self, level, message, line_number, source_id):
         """处理JavaScript控制台消息"""
         print(f"[Console] [{level}] 行{line_number}: {message}")
+
+        # 处理地图缩放变化消息
+        if message.startswith('缩放变化:'):
+            try:
+                zoom_level = int(message[len('缩放变化:'):].strip())
+                print(f"[地图缩放] 捕获到缩放级别: {zoom_level}")
+                self.zoom_changed.emit(zoom_level)
+            except Exception as e:
+                print(f"[地图缩放] 解析缩放级别失败: {e}")
 
         if self.geolocation_handler:
             if message.startswith('定位成功:'):
