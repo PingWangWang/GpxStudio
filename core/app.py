@@ -316,6 +316,8 @@ class GpxStudio(QMainWindow):
         if not search_text:
             return
 
+        # 恢复信息展示框标题
+        self.search_results_title.setText("搜索结果")
         self.search_results_list.clear()
         self.progress_bar.setMaximum(0)
         self.progress_bar.setMinimum(0)
@@ -331,6 +333,8 @@ class GpxStudio(QMainWindow):
         if not search_text:
             return
 
+        # 恢复信息展示框标题
+        self.search_results_title.setText("搜索结果")
         self.search_results_list.clear()
         self.progress_bar.setMaximum(0)
         self.progress_bar.setMinimum(0)
@@ -698,7 +702,53 @@ class GpxStudio(QMainWindow):
             if self.route_points:
                 self.logger.info(f"路线规划成功，共 {len(self.route_points)} 个点")
                 self.search_results_list.clear()
+
+                # 修改信息展示框标题
+                self.search_results_title.setText("路线信息")
+
+                # 显示路线详细信息
                 self.search_results_list.addItem("路线规划成功！")
+                self.search_results_list.addItem("=" * 30)
+
+                # 起点、途径点、终点
+                self.search_results_list.addItem(f"起点: {self.start_name or '未命名'}")
+
+                # 显示途径点
+                if self.waypoints_coords:
+                    for i, waypoint in enumerate(self.waypoints_coords):
+                        if waypoint and i < len(self.waypoints_names):
+                            waypoint_name = self.waypoints_names[i] or f"途径点{i+1}"
+                            self.search_results_list.addItem(f"途径点{i+1}: {waypoint_name}")
+
+                self.search_results_list.addItem(f"终点: {self.end_name or '未命名'}")
+                self.search_results_list.addItem("=" * 30)
+
+                # 交通方式
+                transport_mode = self.transport_combo.currentText()
+                self.search_results_list.addItem(f"交通方式: {transport_mode}")
+
+                # 起始时间
+                start_datetime = self.start_time_edit.dateTime()
+                start_time_str = start_datetime.toString("yyyy-MM-dd HH:mm")
+                self.search_results_list.addItem(f"起始时间: {start_time_str}")
+
+                # 途径时间
+                duration_hours = self.estimated_duration_seconds // 3600
+                duration_minutes = (self.estimated_duration_seconds % 3600) // 60
+                self.search_results_list.addItem(f"途径时间: {int(duration_hours)}小时{duration_minutes}分钟")
+
+                # 结束时间
+                end_datetime = self.end_time_edit.dateTime()
+                end_time_str = end_datetime.toString("yyyy-MM-dd HH:mm")
+                self.search_results_list.addItem(f"结束时间: {end_time_str}")
+
+                # 总距离
+                if self.gaode_routing_service:
+                    total_distance = self.gaode_routing_service.calculate_distance(self.route_points)
+                    self.search_results_list.addItem(f"总距离: {total_distance:.2f} 公里")
+
+                self.search_results_list.addItem("=" * 30)
+
                 self.show_route_on_map()
             else:
                 self.logger.warning("路线规划失败，未返回路线点")
