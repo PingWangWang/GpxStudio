@@ -5,7 +5,7 @@ GPX Studio - 路线规划工具
 
 import sys
 from PyQt5.QtWidgets import QApplication
-from core import GpxStudio
+from app.app import GpxStudio
 
 
 def main():

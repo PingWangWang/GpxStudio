@@ -6,10 +6,12 @@
 import requests
 import hashlib
 import json
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Dict
+
+from services.interfaces.geocoding_service import IGeocodingService
 
 
-class GaodeGeocodingService:
+class GaodeGeocodingService(IGeocodingService):
     """高德地图地理编码服务"""
 
     GEOCODE_URL = "https://restapi.amap.com/v3/place/text"

@@ -5,10 +5,12 @@
 
 import requests
 import hashlib
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Tuple
+
+from modules.routing.interfaces.routing_service import IRoutingService
 
 
-class GaodeRoutingService:
+class GaodeRoutingService(IRoutingService):
     """高德地图路线规划服务"""
 
     # 不同交通方式使用不同的API版本
