@@ -73,6 +73,7 @@ class GpxStudio(QMainWindow):
         self.search_results = []
         self.searching_for = None
         self.selected_search_result_coords = None
+        self.estimated_duration_seconds = 0
         self.last_selected_coords = None
         self.last_selected_level = None
         self.last_selected_type = None
@@ -175,10 +176,10 @@ class GpxStudio(QMainWindow):
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 6)
+        splitter.setStretchFactor(2, 4)
 
         # 设置初始尺寸分配，让地图列更宽
-        splitter.setSizes([300, 250, 1000])
+        splitter.setSizes([300, 300, 700])
 
         main_layout.addWidget(splitter)
 
@@ -188,6 +189,7 @@ class GpxStudio(QMainWindow):
     def create_left_panel(self):
         """创建左侧控制面板"""
         left_widget = QWidget()
+        left_widget.setMinimumWidth(300)
         left_layout = QVBoxLayout(left_widget)
 
         # 顶部按钮布局
@@ -461,6 +463,9 @@ class GpxStudio(QMainWindow):
         self.last_selected_type = type_info
         self.last_selected_from_search = True
 
+        # 设置选中的搜索结果坐标，用于在地图上区分
+        self.selected_search_result_coords = coords
+
         if self.searching_for == "start":
             self.start_coords = coords
             self.start_name = name
@@ -660,23 +665,27 @@ class GpxStudio(QMainWindow):
             self.logger.debug("正在调用路线规划服务...")
             if gaode_config.is_configured and gaode_config.get_api_key():
                 self.route_points, estimated_duration = self.gaode_routing_service.plan_route(points, transport_mode)
+                self.estimated_duration_seconds = estimated_duration
 
                 from datetime import datetime
                 current_time = datetime.now()
                 current_time_zero_sec = current_time.replace(second=0)
-                self.start_time_edit.setTime(QTime(current_time.hour, current_time.minute))
 
-                duration_hours = estimated_duration // 3600
-                duration_minutes = (estimated_duration % 3600) // 60
-                self.duration_time_edit.setTime(QTime(duration_hours, duration_minutes))
+                from PyQt5.QtCore import QDateTime
+                qt_current_datetime = QDateTime.fromString(current_time_zero_sec.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
+                self.start_time_edit.setDateTime(qt_current_datetime)
+
+                # 计算途径时间（小时，支持小数）
+                duration_hours = estimated_duration / 3600
+                self.duration_time_edit.setText(f"{duration_hours:.1f}")
 
                 end_time = current_time_zero_sec.timestamp() + estimated_duration
                 end_datetime = datetime.fromtimestamp(end_time)
-                end_hour = end_datetime.hour
-                end_minute = end_datetime.minute
-                self.end_time_edit.setTime(QTime(end_hour, end_minute))
+                qt_end_datetime = QDateTime.fromString(end_datetime.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
+                self.end_time_edit.setDateTime(qt_end_datetime)
 
-                self.search_results_list.addItem(f"预估时间: {duration_hours}小时{duration_minutes}分钟")
+                duration_minutes = (estimated_duration % 3600) // 60
+                self.search_results_list.addItem(f"预估时间: {int(duration_hours)}小时{duration_minutes}分钟")
             else:
                 self.route_points = []
                 self.logger.warning("高德地图API未配置，无法进行路线规划。请先配置高德地图API密钥。")
@@ -778,8 +787,23 @@ class GpxStudio(QMainWindow):
             QMessageBox.warning(self, "错误", "请先规划路线")
             return
 
+        # 生成默认文件名
+        start_name = self.start_name if self.start_name else "起点"
+        end_name = self.end_name if self.end_name else "终点"
+        transport_mode = self.transport_combo.currentText()
+        start_datetime = self.start_time_edit.dateTime()
+        start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
+
+        # 格式化途径时间（小时和分钟）
+        duration_hours = self.estimated_duration_seconds // 3600
+        duration_minutes = (self.estimated_duration_seconds % 3600) // 60
+        duration_str = f"{duration_hours}小时{duration_minutes}分钟"
+
+        # 生成默认文件名
+        default_filename = f"{start_name}_{end_name}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "保存GPX文件", "", "GPX文件 (*.gpx);;所有文件 (*.*)"
+            self, "保存GPX文件", default_filename, "GPX文件 (*.gpx);;所有文件 (*.*)"
         )
 
         if not file_path:
@@ -797,7 +821,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("正在导出GPX文件...")
 
             self.logger.debug("正在调用GPX导出服务...")
-            start_time = self.start_time_edit.time()
+            start_datetime = self.start_time_edit.dateTime()
 
             self.progress_bar.setMaximum(100)
             self.progress_bar.setMinimum(0)
@@ -805,7 +829,7 @@ class GpxStudio(QMainWindow):
             QApplication.processEvents()
 
             success = self.gpx_service.export_to_gpx(
-                self.route_points, start_time, file_path
+                self.route_points, start_datetime, file_path
             )
 
             self.progress_bar.setMaximum(100)
@@ -838,49 +862,133 @@ class GpxStudio(QMainWindow):
 
     # ========== 时间计算相关方法 ==========
 
+    def show_date_panel(self, time_type):
+        """显示日期选择面板
+
+        Args:
+            time_type: "start"，表示起始时间
+        """
+        # 自动关闭已打开的时间选择面板
+        if self.time_panel.isVisible():
+            self.time_panel.hide()
+
+        self.time_type = time_type
+        # 连接日期选择信号
+        try:
+            self.date_panel.date_selected.disconnect()
+        except TypeError:
+            pass  # 没有连接时忽略错误
+        self.date_panel.date_selected.connect(self.on_date_selected)
+
+        # 设置当前选中的日期（只处理起始时间）
+        current_date = self.start_time_edit.dateTime().date()
+
+        # 获取日志面板的全局位置和大小
+        log_rect = self.log_panel.rect()
+        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
+        log_size = self.log_panel.size()
+
+        self.date_panel.show_panel(current_date, log_pos, 0, log_size)
+
+    def on_date_selected(self, selected_date):
+        """日期选择回调
+
+        Args:
+            selected_date: 选择的日期（datetime对象）
+        """
+        from PyQt5.QtCore import QDateTime, QTime
+
+        # 只处理起始时间
+        if hasattr(self, 'time_type') and self.time_type == "start":
+            # 更新起始日期
+            current_time = self.start_time_edit.dateTime().time()
+            new_datetime = QDateTime(
+                selected_date.year, selected_date.month, selected_date.day,
+                current_time.hour(), current_time.minute()
+            )
+            self.start_time_edit.setDateTime(new_datetime)
+
+            # 自动计算结束时间
+            self.calculate_times()
+
+    def show_time_panel(self, time_type):
+        """显示时间选择面板
+
+        Args:
+            time_type: "start"，表示起始时间
+        """
+        # 自动关闭已打开的日期选择面板
+        if self.date_panel.isVisible():
+            self.date_panel.hide()
+
+        self.time_type = time_type
+        # 连接时间选择信号
+        try:
+            self.time_panel.time_selected.disconnect()
+        except TypeError:
+            pass  # 没有连接时忽略错误
+        self.time_panel.time_selected.connect(self.on_time_selected)
+
+        # 设置当前选中的时间（只处理起始时间）
+        current_time = self.start_time_edit.dateTime().time()
+
+        # 获取日志面板的全局位置和大小
+        log_rect = self.log_panel.rect()
+        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
+        log_size = self.log_panel.size()
+
+        self.time_panel.show_panel(current_time, log_pos, 0, log_size)
+
+    def on_time_selected(self, selected_time):
+        """时间选择回调
+
+        Args:
+            selected_time: 选择的时间（datetime对象）
+        """
+        from PyQt5.QtCore import QDateTime, QTime
+
+        # 只处理起始时间
+        if hasattr(self, 'time_type') and self.time_type == "start":
+            # 更新起始时间
+            current_date = self.start_time_edit.dateTime().date()
+            new_datetime = QDateTime(
+                current_date.year(), current_date.month(), current_date.day(),
+                selected_time.hour, selected_time.minute
+            )
+            self.start_time_edit.setDateTime(new_datetime)
+
+            # 自动计算结束时间
+            self.calculate_times()
+
     def calculate_times(self):
-        """计算时间（起始/经历/结束时间联动）"""
-        from PyQt5.QtCore import QTime
+        """计算时间（根据起始时间和经历时间自动计算结束时间）"""
+        from PyQt5.QtCore import QDateTime
 
-        sender = self.sender()
+        try:
+            # 获取起始时间
+            start_datetime = self.start_time_edit.dateTime()
 
-        if sender == self.start_time_edit:
-            start_time = self.start_time_edit.time()
-            duration_time = self.duration_time_edit.time()
+            # 从文本框获取经历小时数
+            duration_text = self.duration_time_edit.text().strip()
+            if not duration_text:
+                duration_hours = 1  # 默认1小时
+            else:
+                try:
+                    duration_hours = float(duration_text)
+                    if duration_hours < 0:
+                        duration_hours = 0
+                except ValueError:
+                    duration_hours = 1  # 无效输入时默认1小时
 
-            end_time = QTime(start_time.hour(), start_time.minute())
-            end_time = end_time.addSecs(
-                duration_time.hour() * 3600 + duration_time.minute() * 60
-            )
+            # 计算结束时间（支持小数小时）
+            duration_seconds = int(duration_hours * 3600)
+            end_datetime = start_datetime.addSecs(duration_seconds)
 
-            self.end_time_edit.blockSignals(True)
-            self.end_time_edit.setTime(end_time)
-            self.end_time_edit.blockSignals(False)
+            # 更新结束时间显示
+            self.end_time_edit.setDateTime(end_datetime)
 
-        elif sender == self.duration_time_edit:
-            start_time = self.start_time_edit.time()
-            duration_time = self.duration_time_edit.time()
-
-            end_time = QTime(start_time.hour(), start_time.minute())
-            end_time = end_time.addSecs(
-                duration_time.hour() * 3600 + duration_time.minute() * 60
-            )
-
-            self.end_time_edit.blockSignals(True)
-            self.end_time_edit.setTime(end_time)
-            self.end_time_edit.blockSignals(False)
-
-        elif sender == self.end_time_edit:
-            start_time = self.start_time_edit.time()
-            end_time = self.end_time_edit.time()
-
-            duration = start_time.secsTo(end_time)
-            duration_hours = duration // 3600
-            duration_minutes = (duration % 3600) // 60
-
-            self.duration_time_edit.blockSignals(True)
-            self.duration_time_edit.setTime(QTime(duration_hours, duration_minutes))
-            self.duration_time_edit.blockSignals(False)
+        except Exception as e:
+            self.logger.warning(f"计算时间时出错: {str(e)}")
 
     # ========== 定位相关方法 ==========
 

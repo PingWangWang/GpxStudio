@@ -10,7 +10,7 @@ import os
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services import GeocodingService, RoutingService, GpxExportService
+from services import GaodeGeocodingService, GaodeRoutingService, GpxExportService
 from utils import LocationHelper
 from datetime import datetime
 from PyQt5.QtCore import QTime
@@ -20,7 +20,7 @@ def test_geocoding_service():
     """测试地理编码服务"""
     print("=== 测试地理编码服务 ===")
 
-    service = GeocodingService()
+    service = GaodeGeocodingService()
 
     # 测试地点搜索
     print("1. 测试地点搜索...")
@@ -45,23 +45,27 @@ def test_routing_service():
     """测试路由规划服务"""
     print("\n=== 测试路由规划服务 ===")
 
-    service = RoutingService()
+    service = GaodeRoutingService()
 
-    # 测试坐标点
+    # 使用更近的测试坐标点，避免API调用限制
     points = [
-        (39.9042, 116.4074),  # 北京
-        (31.2304, 121.4737),  # 上海
+        (39.9042, 116.4074),  # 北京天安门
+        (39.9150, 116.4070),  # 北京故宫
     ]
 
-    print("1. 测试路线规划...")
-    route_points = service.plan_route(points, "驾车")
-    if route_points:
-        print(f"   规划成功，路线点数: {len([p for p in route_points if p is not None])}")
-        # 计算距离
-        distance = service.calculate_distance(route_points)
-        print(f"   总距离: {distance:.1f} 公里")
-    else:
-        print("   路线规划失败")
+    # 测试所有交通方式
+    for mode in ["驾车", "步行", "骑行"]:
+        print(f"\n1. 测试{mode}路线规划...")
+        route_points, duration = service.plan_route(points, mode)
+        if route_points:
+            valid_points = [p for p in route_points if p is not None]
+            print(f"   {mode}规划成功，路线点数: {len(valid_points)}")
+            # 计算距离
+            distance = service.calculate_distance(route_points)
+            print(f"   总距离: {distance:.1f} 公里")
+            print(f"   预估时间: {duration} 秒")
+        else:
+            print(f"   {mode}路线规划失败")
 
 
 def test_location_helper():

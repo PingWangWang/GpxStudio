@@ -20,13 +20,13 @@ class GpxExportService:
         if self.logger:
             self.logger(level, message)
 
-    def export_to_gpx(self, route_points, start_time, file_path):
+    def export_to_gpx(self, route_points, start_datetime, file_path):
         """
         导出路线为GPX文件
 
         Args:
             route_points: 路线点列表 [(lat, lon), ...], None表示段分隔
-            start_time: 起始时间 (QTime对象)
+            start_datetime: 起始时间 (QDateTime对象)
             file_path: 保存路径
 
         Returns:
@@ -51,11 +51,14 @@ class GpxExportService:
             gpx_track.segments.append(gpx_segment)
 
             # 设置起始时间
-            current_time = datetime.now().replace(
-                hour=start_time.hour(),
-                minute=start_time.minute(),
-                second=0,
-                microsecond=0
+            current_time = datetime(
+                start_datetime.date().year(),
+                start_datetime.date().month(),
+                start_datetime.date().day(),
+                start_datetime.time().hour(),
+                start_datetime.time().minute(),
+                0,
+                0
             )
 
             log_cb("DEBUG", f"起始时间: {current_time}")

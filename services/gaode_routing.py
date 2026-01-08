@@ -11,7 +11,12 @@ from typing import Optional, Callable, List
 class GaodeRoutingService:
     """高德地图路线规划服务"""
 
-    DIRECTION_URL = "https://restapi.amap.com/v3/direction"
+    # 不同交通方式使用不同的API版本
+    DIRECTION_URLS = {
+        "walking": "https://restapi.amap.com/v3/direction/walking",
+        "bicycling": "https://restapi.amap.com/v4/direction/bicycling",
+        "driving": "https://restapi.amap.com/v3/direction/driving"
+    }
 
     TRANSPORT_MODES = {
         "步行": "walking",
@@ -89,45 +94,56 @@ class GaodeRoutingService:
                 if self.security_key:
                     params['sig'] = self._sign(params)
 
-                url = f"{self.DIRECTION_URL}/{mode}"
+                # 构建API URL
+                url = self.DIRECTION_URLS.get(mode, self.DIRECTION_URLS["driving"])
                 response = requests.get(url, params=params, timeout=10)
                 data = response.json()
 
-                if data.get('status') == '1':
-                    route_data = data.get('route', {})
-                    if mode == 'driving':
+                # 处理不同API版本的响应格式
+                success = False
+                route_data = {}
+                paths = []
+                segment_duration = 0
+
+                if mode == 'bicycling':
+                    # v4版本的骑行API响应格式
+                    if data.get('errcode') == 0:
+                        success = True
+                        route_data = data.get('data', {})
                         paths = route_data.get('paths', [])
-                        if paths:
-                            path = paths[0]
-                            steps = path.get('steps', [])
-                            segment_duration = int(path.get('duration', 0))
-                            total_duration += segment_duration
-                            for step in steps:
-                                polyline = step.get('polyline', '')
-                                if polyline:
-                                    coords = polyline.split(';')
-                                    for coord in coords:
-                                        parts = coord.split(',')
-                                        if len(parts) == 2:
-                                            route_points.append((float(parts[1]), float(parts[0])))
-                    else:
+                else:
+                    # v3版本的API响应格式
+                    if data.get('status') == '1':
+                        success = True
                         route_data = data.get('route', {})
-                        if route_data:
-                            segment_duration = int(route_data.get('duration', 0))
-                            total_duration += segment_duration
-                            steps = route_data.get('steps', [])
-                            for step in steps:
-                                polyline = step.get('polyline', '')
-                                if polyline:
-                                    coords = polyline.split(';')
-                                    for coord in coords:
-                                        parts = coord.split(',')
-                                        if len(parts) == 2:
-                                            route_points.append((float(parts[1]), float(parts[0])))
+                        paths = route_data.get('paths', [])
+
+                if success and paths:
+                    path = paths[0]
+                    steps = path.get('steps', [])
+
+                    # 处理持续时间（v4版本返回的是数字，v3版本返回的是字符串）
+                    duration_val = path.get('duration', 0)
+                    segment_duration = int(duration_val) if isinstance(duration_val, (str, int)) else 0
+                    total_duration += segment_duration
+
+                    # 处理路径点
+                    for step in steps:
+                        polyline = step.get('polyline', '')
+                        if polyline:
+                            coords = polyline.split(';')
+                            for coord in coords:
+                                parts = coord.split(',')
+                                if len(parts) == 2:
+                                    route_points.append((float(parts[1]), float(parts[0])))
 
                     log_cb("INFO", f"路段 {i+1} 规划成功")
                 else:
-                    error_msg = data.get('info', '未知错误')
+                    # 处理错误信息
+                    if mode == 'bicycling':
+                        error_msg = data.get('errmsg', '未知错误')
+                    else:
+                        error_msg = data.get('info', '未知错误')
                     log_cb("ERROR", f"路段 {i+1} 规划失败: {error_msg}")
 
                 if i < len(points) - 2:
