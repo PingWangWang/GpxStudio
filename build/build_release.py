@@ -8,6 +8,8 @@
 import os
 import subprocess
 import shutil
+import site
+import sys
 
 # 项目根目录（相对路径，脚本位于build目录下）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +19,24 @@ PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 BUILD_NAME = "GPXStudio"
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build", BUILD_NAME)
 DIST_FILE = os.path.join(PROJECT_ROOT, "dist", f"{BUILD_NAME}.exe")
+
+# 动态查找xyzservices包的位置
+try:
+    import xyzservices
+    xyzservices_path = os.path.dirname(xyzservices.__file__)
+    XYZ_SERVICES_DATA = os.path.join(xyzservices_path, "data")
+except ImportError:
+    # 如果无法导入，尝试从site-packages中查找
+    site_packages = site.getsitepackages()
+    XYZ_SERVICES_DATA = None
+    for sp in site_packages:
+        candidate_path = os.path.join(sp, "xyzservices", "data")
+        if os.path.exists(candidate_path):
+            XYZ_SERVICES_DATA = candidate_path
+            break
+    if not XYZ_SERVICES_DATA:
+        # 如果仍然找不到，回退到相对路径（适用于开发环境）
+        XYZ_SERVICES_DATA = os.path.join(PROJECT_ROOT, ".venv", "lib", "site-packages", "xyzservices", "data")
 
 
 def main():
@@ -47,7 +67,7 @@ def main():
         "--add-data=services;services",
         "--add-data=core;core",
         "--add-data=app;app",
-        "--add-data=.venv/lib/site-packages/xyzservices/data;xyzservices/data",
+        f"--add-data={XYZ_SERVICES_DATA};xyzservices/data",
         "--hidden-import=PyQt5.sip",
         "--hidden-import=PyQt5.QtCore",
         "--hidden-import=PyQt5.QtGui",
@@ -68,6 +88,7 @@ def main():
         print("[GPXStudio] 发布版本构建成功！")
         print(f"[GPXStudio] 可执行文件位置: {DIST_FILE}")
         print("[GPXStudio] 构建完成！")
+        input("按Enter键退出...")
 
     except subprocess.CalledProcessError as e:
         print("[GPXStudio] 发布版本构建失败！")
