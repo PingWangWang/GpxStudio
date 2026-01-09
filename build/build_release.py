@@ -47,6 +47,13 @@ def main():
         "--add-data=services;services",
         "--add-data=core;core",
         "--add-data=app;app",
+        "--add-data=.venv/lib/site-packages/xyzservices/data;xyzservices/data",
+        "--hidden-import=PyQt5.sip",
+        "--hidden-import=PyQt5.QtCore",
+        "--hidden-import=PyQt5.QtGui",
+        "--hidden-import=PyQt5.QtWidgets",
+        "--hidden-import=PyQt5.QtWebEngineWidgets",
+        "--hidden-import=PyQt5.QtWebEngineCore",
         "main.py"
     ]
 
@@ -61,7 +68,6 @@ def main():
         print("[GPXStudio] 发布版本构建成功！")
         print(f"[GPXStudio] 可执行文件位置: {DIST_FILE}")
         print("[GPXStudio] 构建完成！")
-        input("按Enter键退出...")
 
     except subprocess.CalledProcessError as e:
         print("[GPXStudio] 发布版本构建失败！")
