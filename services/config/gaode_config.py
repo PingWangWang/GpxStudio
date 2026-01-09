@@ -13,7 +13,7 @@ from services.interfaces.config_service import IConfigService
 class GaodeConfig(IConfigService):
     """高德地图配置类"""
 
-    CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config', 'gaode_config.json')
+    CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'gaode_config.json')
 
     def __init__(self):
         self.api_key = ""
