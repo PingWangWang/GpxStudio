@@ -5,7 +5,7 @@ GPX导出服务
 
 import gpxpy
 from gpxpy.gpx import GPXTrack, GPXTrackSegment, GPXTrackPoint
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Callable, Any, List, Dict
 
 from modules.gpx.interfaces.gpx_export_service import IGpxExportService
@@ -60,7 +60,8 @@ class GpxExportService(IGpxExportService):
                 start_datetime.time().hour(),
                 start_datetime.time().minute(),
                 0,
-                0
+                0,
+                tzinfo=timezone.utc
             )
 
             log_cb("DEBUG", f"起始时间: {current_time}")
