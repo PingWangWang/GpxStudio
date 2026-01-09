@@ -383,25 +383,33 @@ class MapRenderer:
 
         bounds = [[min_lat, min_lon], [max_lat, max_lon]]
 
-        fit_bounds_script = f"""
+        # 使用更简单的方式生成JavaScript脚本，避免语法错误
+        from folium import Element
+
+        # 创建一个简单的fit_bounds调用，使用folium的内置功能
+        # folium已经有fit_bounds方法，我们可以直接使用它
+        # 这里我们增加一个延迟执行，确保路线绘制完成
+        map_obj.fit_bounds([(min_lat, min_lon), (max_lat, max_lon)], padding=(80, 80))
+
+        # 添加额外的JavaScript来确保地图正确显示
+        extra_script = Element('''
         <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            setTimeout(function() {{
-                var mapElement = document.querySelector('.leaflet-container');
-                if (mapElement && mapElement._leaflet_map) {{
-                    var bounds = {bounds};
-                    mapElement._leaflet_map.fitBounds(bounds, {{
-                        padding: [80, 80],
-                        maxZoom: {max_zoom},
-                        minZoom: {min_zoom}
-                    }});
-                    console.log('[地图] 缩放调整 - 范围: ' + {max_diff:.4f} + '度, maxZoom: {max_zoom}, minZoom: {min_zoom}');
-                }}
-            }}, 500);
-        }});
+        // 延迟执行，确保路线绘制完成后再调整一次
+        setTimeout(function() {
+            var mapElement = document.querySelector('.leaflet-container');
+            if (mapElement && mapElement._leaflet_map) {
+                // 重新获取当前地图边界并应用
+                var bounds = mapElement._leaflet_map.getBounds();
+                mapElement._leaflet_map.fitBounds(bounds, { padding: [80, 80] });
+                console.log('[地图] 二次边界调整完成');
+            }
+        }, 1500);
         </script>
-        """
-        map_obj.get_root().html.add_child(folium.Element(fit_bounds_script))
+        ''')
+
+        map_obj.get_root().html.add_child(extra_script)
+
+        # 不需要单独的fit_bounds_script，因为我们已经使用了folium的内置fit_bounds方法
 
     @staticmethod
     def add_geolocation_script(map_obj):

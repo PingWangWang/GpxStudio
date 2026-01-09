@@ -808,44 +808,33 @@ class GpxStudio(QMainWindow):
             if wp:
                 all_coords.append(wp)
 
-        min_lat = min(p[0] for p in all_coords)
-        max_lat = max(p[0] for p in all_coords)
-        min_lon = min(p[1] for p in all_coords)
-        max_lon = max(p[1] for p in all_coords)
+        # 确保所有路线点都包含在边界计算中，避免遗漏
+        all_route_points = [p for p in self.route_points if p is not None]
 
-        lat_diff = max_lat - min_lat
-        lon_diff = max_lon - min_lon
-        max_diff = max(lat_diff, lon_diff)
+        # 创建一个包含所有相关点的列表
+        combined_coords = []
+        # 添加起点、终点和途径点
+        if self.start_coords and self.start_coords not in combined_coords:
+            combined_coords.append(self.start_coords)
+        for wp in self.waypoints_coords:
+            if wp and wp not in combined_coords:
+                combined_coords.append(wp)
+        if self.end_coords and self.end_coords not in combined_coords:
+            combined_coords.append(self.end_coords)
+        # 添加所有路线点
+        for rp in all_route_points:
+            if rp and rp not in combined_coords:
+                combined_coords.append(rp)
 
-        if max_diff < 0.01:
-            initial_zoom = 18
-        elif max_diff < 0.05:
-            initial_zoom = 17
-        elif max_diff < 0.1:
-            initial_zoom = 16
-        elif max_diff < 0.5:
-            initial_zoom = 15
-        elif max_diff < 1:
-            initial_zoom = 12
-        elif max_diff < 3:
-            initial_zoom = 10
-        elif max_diff < 5:
-            initial_zoom = 8
-        elif max_diff < 10:
-            initial_zoom = 6
-        else:
-            initial_zoom = 4
-
-        center_lat = sum(p[0] for p in all_coords) / len(all_coords)
-        center_lon = sum(p[1] for p in all_coords) / len(all_coords)
-
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=initial_zoom)
+        # 更新地图显示，使用MapRenderer的fit_bounds方法进行边界计算和调整
+        m = MapRenderer.create_base_map(self.start_coords or combined_coords[0], zoom_start=12)  # 使用适中的初始缩放
 
         self._add_selected_points_to_map(m)
 
         MapRenderer.add_route(m, self.route_points)
 
-        MapRenderer.fit_bounds(m, all_coords)
+        # 使用所有坐标点进行边界调整，确保完整显示
+        MapRenderer.fit_bounds(m, combined_coords)
 
         url = MapRenderer.save_and_get_url(m)
         self.map_view.setUrl(url)
