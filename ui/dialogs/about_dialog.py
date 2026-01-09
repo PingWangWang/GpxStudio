@@ -131,7 +131,7 @@ class AboutDialog(QDialog):
             <h3>GPX Studio</h3>
             <div class="section">
                 <div class="version-info">
-                    版本: 1.0.0 | 平台: Windows
+                    版本: 1.0.1 | 平台: Windows
                 </div>
                 <div class="description">
                     路线规划工具，支持多种交通方式，可导出GPX格式文件
