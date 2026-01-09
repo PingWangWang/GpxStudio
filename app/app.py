@@ -31,6 +31,13 @@ from ui.panels.panel_factory import PanelFactory
 from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
 from ui.dialogs.gaode_config_dialog import GaodeConfigDialog
+from ui.dialogs.about_dialog import AboutDialog
+from .constants import (
+    WINDOW_TITLE, WINDOW_SIZE, SEARCH_TYPE_START, SEARCH_TYPE_END, SEARCH_TYPE_WAYPOINT,
+    COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_ORANGE, ICON_INFO, ICON_SUCCESS,
+    ICON_WARNING, ICON_ERROR, GEOLOCATION_ERROR_MESSAGES, PANEL_SIZES, PANEL_STRETCH_FACTORS,
+    MAP_LOAD_DELAY_MS, SEARCH_RESULTS_TITLE, SEARCH_LIST_TITLES
+)
 
 
 class GpxStudio(QMainWindow):
@@ -38,8 +45,18 @@ class GpxStudio(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GPX Studio - 路线规划工具")
-        self.resize(1400, 800)
+        self._init_window()
+        self._init_services()
+        self._init_data_state()
+        self._init_geolocation_and_signals()
+        self._init_ui()
+        self._init_logging()
+        self.logger.info("程序启动完成")
+
+    def _init_window(self):
+        """初始化窗口设置"""
+        self.setWindowTitle(WINDOW_TITLE)
+        self.resize(*WINDOW_SIZE)
 
         # 窗口居中
         screen = QApplication.primaryScreen()
@@ -49,7 +66,8 @@ class GpxStudio(QMainWindow):
         window_geometry.moveCenter(center_point)
         self.move(window_geometry.topLeft())
 
-        # 初始化服务
+    def _init_services(self):
+        """初始化服务"""
         self.gaode_geocoding_service = GaodeGeocodingService(
             api_key=gaode_config.get_api_key(),
             security_key=gaode_config.get_security_key(),
@@ -62,7 +80,8 @@ class GpxStudio(QMainWindow):
         )
         self.gpx_service = GpxExportService(logger=self._log_to_gpx)
 
-        # 数据状态
+    def _init_data_state(self):
+        """初始化数据状态"""
         self.start_coords = None
         self.start_name = None
         self.end_coords = None
@@ -81,26 +100,23 @@ class GpxStudio(QMainWindow):
         self.last_selected_type = None
         self.last_selected_from_search = False
 
-        # 定位处理器
+    def _init_geolocation_and_signals(self):
+        """初始化定位和信号系统"""
         self.geolocation_handler = GeolocationHandler()
-
-        # 创建信号管理器实例
         self.signal_manager = SignalManager()
 
         # 使用信号管理器连接地理定位信号
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
 
-        # 初始化UI
+    def _init_ui(self):
+        """初始化UI"""
         self.init_ui()
 
-        # 初始化日志系统
+    def _init_logging(self):
+        """初始化日志系统"""
         self.logger = setup_logger(self.log_panel, "GpxStudio")
-
-        # 初始化Windows位置服务（需要logger）
         self.windows_location_service = WindowsLocationService(logger=self._log_to_service)
-
-        self.logger.info("程序启动完成")
 
     def show_gaode_config(self):
         """显示高德地图配置对话框"""
@@ -116,42 +132,22 @@ class GpxStudio(QMainWindow):
 
     def _log_to_service(self, level: str, message: str):
         """将日志转发到WindowsLocationService"""
-        level_map = {
-            "DEBUG": self.logger.debug,
-            "INFO": self.logger.info,
-            "WARNING": self.logger.warning,
-            "ERROR": self.logger.error,
-            "CRITICAL": self.logger.critical
-        }
-        log_func = level_map.get(level, self.logger.info)
-        log_func(f"[Windows定位] {message}")
+        self._log_with_prefix("Windows定位", level, message)
 
     def _log_to_geocoding(self, level: str, message: str):
         """将日志转发到GeocodingService"""
-        level_map = {
-            "DEBUG": self.logger.debug,
-            "INFO": self.logger.info,
-            "WARNING": self.logger.warning,
-            "ERROR": self.logger.error,
-            "CRITICAL": self.logger.critical
-        }
-        log_func = level_map.get(level, self.logger.info)
-        log_func(f"[地理编码] {message}")
+        self._log_with_prefix("地理编码", level, message)
 
     def _log_to_routing(self, level: str, message: str):
         """将日志转发到RoutingService"""
-        level_map = {
-            "DEBUG": self.logger.debug,
-            "INFO": self.logger.info,
-            "WARNING": self.logger.warning,
-            "ERROR": self.logger.error,
-            "CRITICAL": self.logger.critical
-        }
-        log_func = level_map.get(level, self.logger.info)
-        log_func(f"[路线规划] {message}")
+        self._log_with_prefix("路线规划", level, message)
 
     def _log_to_gpx(self, level: str, message: str):
         """将日志转发到GpxExportService"""
+        self._log_with_prefix("GPX导出", level, message)
+
+    def _log_with_prefix(self, prefix: str, level: str, message: str):
+        """通用日志转发方法"""
         level_map = {
             "DEBUG": self.logger.debug,
             "INFO": self.logger.info,
@@ -160,9 +156,9 @@ class GpxStudio(QMainWindow):
             "CRITICAL": self.logger.critical
         }
         log_func = level_map.get(level, self.logger.info)
-        log_func(f"[GPX导出] {message}")
+        log_func(f"[{prefix}] {message}")
 
-    def init_ui(self):
+    def _init_ui(self):
         """初始化用户界面"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -180,17 +176,17 @@ class GpxStudio(QMainWindow):
         splitter.addWidget(left_panel)
         splitter.addWidget(middle_panel)
         splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 4)
+        splitter.setStretchFactor(0, PANEL_STRETCH_FACTORS[0])
+        splitter.setStretchFactor(1, PANEL_STRETCH_FACTORS[1])
+        splitter.setStretchFactor(2, PANEL_STRETCH_FACTORS[2])
 
         # 设置初始尺寸分配，让地图列更宽
-        splitter.setSizes([300, 300, 700])
+        splitter.setSizes(PANEL_SIZES)
 
         main_layout.addWidget(splitter)
 
         # 延迟加载初始地图，确保UI完全初始化后再显示地图
-        QTimer.singleShot(500, self.show_initial_map)
+        QTimer.singleShot(MAP_LOAD_DELAY_MS, self.show_initial_map)
 
     def create_left_panel(self):
         """创建左侧控制面板"""
@@ -338,7 +334,15 @@ class GpxStudio(QMainWindow):
     def search_location(self, location_type):
         """搜索地点（起点/终点）"""
         search_text = getattr(self, f"{location_type}_input").text()
+        self._perform_generic_search(search_text, location_type)
 
+    def search_waypoint(self):
+        """搜索途径点"""
+        search_text = self.waypoint_input.text()
+        self._perform_generic_search(search_text, "waypoint")
+
+    def _perform_generic_search(self, search_text, location_type):
+        """执行通用搜索"""
         if not search_text:
             return
 
@@ -351,23 +355,6 @@ class GpxStudio(QMainWindow):
         QApplication.processEvents()
 
         self._perform_search(search_text, location_type)
-
-    def search_waypoint(self):
-        """搜索途径点"""
-        search_text = self.waypoint_input.text()
-
-        if not search_text:
-            return
-
-        # 恢复信息展示框标题
-        self.search_results_title.setText("搜索结果")
-        self.search_results_list.clear()
-        self.progress_bar.setMaximum(0)
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setValue(0)
-        QApplication.processEvents()
-
-        self._perform_search(search_text, "waypoint")
 
     def _perform_search(self, search_text, location_type):
         """执行搜索"""
@@ -386,13 +373,7 @@ class GpxStudio(QMainWindow):
             self.search_results = locations
             self.searching_for = location_type
 
-            titles = {
-                "start": "起点搜索列表",
-                "end": "终点搜索列表",
-                "waypoint": "途径点搜索列表"
-            }
-
-            self.search_results_title.setText(titles.get(location_type, "搜索结果"))
+            self.search_results_title.setText(SEARCH_LIST_TITLES.get(location_type, SEARCH_RESULTS_TITLE))
 
             for i, location in enumerate(locations):
                 if isinstance(location, dict):
@@ -639,7 +620,7 @@ class GpxStudio(QMainWindow):
                     MapRenderer.add_marker(
                         m, [get_lat(location), get_lon(location)],
                         "已选择",
-                        color='purple', icon='star'
+                        color=COLOR_WARNING, icon=ICON_WARNING
                     )
 
         url = MapRenderer.save_and_get_url(m)
@@ -651,21 +632,21 @@ class GpxStudio(QMainWindow):
         if self.start_coords:
             MapRenderer.add_marker(
                 map_obj, self.start_coords, start_name,
-                color='green', icon='play'
+                color=COLOR_SUCCESS, icon=ICON_SUCCESS
             )
 
         for i, (waypoint, name) in enumerate(zip(self.waypoints_coords, self.waypoints_names)):
             display_name = name if name else f"途径点 {i + 1}"
             MapRenderer.add_marker(
                 map_obj, waypoint, display_name,
-                color='blue', icon='info-sign'
+                color=COLOR_INFO, icon=ICON_INFO
             )
 
         end_name = self.end_name if self.end_name else "终点"
         if self.end_coords:
             MapRenderer.add_marker(
                 map_obj, self.end_coords, end_name,
-                color='red', icon='stop'
+                color=COLOR_ERROR, icon=ICON_ERROR
             )
 
     # ========== 路线规划相关方法 ==========
@@ -1331,18 +1312,10 @@ class GpxStudio(QMainWindow):
         self.search_results_list.clear()
         self.search_results_list.addItem("在线定位失败")
 
-        if error_code == 1:
-            self.search_results_list.addItem("原因: 用户拒绝定位请求")
-            self.logger.warning("用户拒绝了定位请求")
-        elif error_code == 2:
-            self.search_results_list.addItem("原因: 位置信息不可用")
-            self.logger.warning("位置信息不可用")
-        elif error_code == 3:
-            self.search_results_list.addItem("原因: 定位请求超时")
-            self.logger.warning("定位请求超时")
-        elif error_code == -1:
-            self.search_results_list.addItem("原因: 浏览器不支持定位")
-            self.logger.warning("浏览器不支持Geolocation API")
+        if error_code in GEOLOCATION_ERROR_MESSAGES:
+            error_text = GEOLOCATION_ERROR_MESSAGES[error_code]
+            self.search_results_list.addItem(f"原因: {error_text}")
+            self.logger.warning(error_text)
         else:
             self.search_results_list.addItem(f"原因: {error_msg}")
 
@@ -1489,7 +1462,7 @@ class GpxStudio(QMainWindow):
 
         MapRenderer.add_marker(
             m, [lat, lon], popup_text,
-            color='orange', icon='star'
+            color=COLOR_ORANGE, icon=ICON_WARNING
         )
 
         # 添加已选择的点
@@ -1548,150 +1521,7 @@ class GpxStudio(QMainWindow):
 
     def show_about_dialog(self):
         """显示关于对话框"""
-        about_text = """
-        <style>
-            body {
-                font-family: 'Microsoft YaHei', Arial, sans-serif;
-                color: #333;
-                line-height: 1.5;
-                background-color: #f9f9f9;
-                padding: 10px;
-                border-radius: 5px;
-            }
-            h3 {
-                color: #4CAF50;
-                margin-top: 0;
-                margin-bottom: 15px;
-                font-size: 20px;
-                text-align: center;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #e0e0e0;
-            }
-            .container {
-                max-width: 520px;
-                margin: 0 auto;
-            }
-            .section {
-                margin-bottom: 15px;
-                padding: 8px;
-            }
-            .version-info {
-                font-size: 13px;
-                color: #666;
-                text-align: center;
-                font-weight: bold;
-            }
-            .description {
-                font-size: 13px;
-                color: #555;
-                text-align: center;
-                margin-bottom: 10px;
-            }
-            .open-source {
-                color: #2196F3;
-                font-size: 14px;
-                text-align: center;
-                font-weight: bold;
-                padding: 10px;
-                background-color: #e8f5e9;
-                border-radius: 3px;
-                margin: 10px 0;
-            }
-            .developer-info {
-                font-size: 13px;
-                text-align: center;
-                background-color: #f5f5f5;
-                padding: 10px;
-                border-radius: 3px;
-            }
-            .copyright {
-                font-size: 11px;
-                color: #777;
-                text-align: center;
-                padding: 8px;
-                border-top: 1px solid #e0e0e0;
-                margin-top: 10px;
-            }
-        </style>
-
-        <div class="container">
-            <h3>GPX Studio</h3>
-            <div class="section">
-                <div class="version-info">
-                    版本: 1.0.0 | 平台: Windows
-                </div>
-                <div class="description">
-                    路线规划工具，支持多种交通方式，可导出GPX格式文件
-                </div>
-            </div>
-            <div class="section">
-                <div class="open-source">
-                    开源软件 - 本软件采用 MIT 许可证开源
-                </div>
-            </div>
-            <div class="section">
-                <div class="developer-info">
-                    开发者: GPX Studio 团队<br>
-                    邮箱: contact@gpxstudio.com
-                </div>
-            </div>
-            <div class="section">
-                <div class="copyright">
-                    © 2024-2025 GPX Studio 团队<br>
-                    使用高德地图API，© 2025 AutoNavi
-                </div>
-            </div>
-        </div>
-        """
-
-        # 创建自定义对话框
-        dialog = QDialog(self)
-        dialog.setWindowTitle("关于 GPX Studio")
-        dialog.setFixedSize(600, 300)  # 设置固定大小为600*300
-
-        # 创建布局
-        layout = QVBoxLayout(dialog)
-
-        # 创建标签用于显示HTML内容
-        label = QLabel()
-        label.setTextFormat(Qt.RichText)
-        label.setText(about_text)
-        label.setWordWrap(True)
-        label.setStyleSheet("padding: 20px;")
-
-        # 创建关闭按钮
-        close_button = QPushButton("关闭")
-        close_button.clicked.connect(dialog.close)
-        close_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                padding: 8px 20px;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-                font-weight: bold;
-                min-width: 100px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #388e3c;
-            }
-        """)
-
-        # 添加到布局
-        layout.addWidget(label)
-
-        # 创建按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(close_button)
-        button_layout.addStretch()
-        button_layout.setContentsMargins(0, 0, 0, 20)
-        layout.addLayout(button_layout)
-
+        dialog = AboutDialog(self)
         dialog.exec_()
 
     def closeEvent(self, event):
