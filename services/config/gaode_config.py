@@ -5,6 +5,7 @@
 
 import os
 import json
+import sys
 from typing import Optional, Dict, Any
 
 from services.interfaces.config_service import IConfigService
@@ -13,7 +14,20 @@ from services.interfaces.config_service import IConfigService
 class GaodeConfig(IConfigService):
     """高德地图配置类"""
 
-    CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'gaode_config.json')
+    def _get_config_path(self):
+        """获取配置文件路径，保存在用户目录下"""
+        if hasattr(sys, '_MEIPASS'):
+            # 打包后的环境
+            app_dir = os.path.join(os.path.expanduser("~"), "GPXStudio")
+        else:
+            # 开发环境
+            app_dir = os.path.join(os.path.expanduser("~"), "GPXStudio")
+
+        # 创建应用程序目录（如果不存在）
+        if not os.path.exists(app_dir):
+            os.makedirs(app_dir)
+
+        return os.path.join(app_dir, "gaode_config.json")
 
     def __init__(self):
         self.api_key = ""
@@ -25,8 +39,9 @@ class GaodeConfig(IConfigService):
     def _load_config(self):
         """从配置文件加载配置"""
         try:
-            if os.path.exists(self.CONFIG_FILE):
-                with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config_file = self._get_config_path()
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
                     self._config_data = json.load(f)
                     self.api_key = self._config_data.get('api_key', '')
                     self.security_key = self._config_data.get('security_key', '')
@@ -42,7 +57,8 @@ class GaodeConfig(IConfigService):
     def save_config(self, config_data: Dict[str, Any]) -> bool:
         """保存配置到文件"""
         try:
-            with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
+            config_file = self._get_config_path()
+            with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, ensure_ascii=False, indent=2)
             self.api_key = config_data.get('api_key', '')
             self.security_key = config_data.get('security_key', '')
@@ -55,8 +71,9 @@ class GaodeConfig(IConfigService):
     def clear_config(self):
         """清除配置"""
         try:
-            if os.path.exists(self.CONFIG_FILE):
-                os.remove(self.CONFIG_FILE)
+            config_file = self._get_config_path()
+            if os.path.exists(config_file):
+                os.remove(config_file)
             self.api_key = ""
             self.security_key = ""
             self.is_configured = False
