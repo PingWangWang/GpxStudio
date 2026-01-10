@@ -13,7 +13,7 @@ class UIStyles:
             background-color: #FF9800;
             color: white;
             padding: 10px;
-            font-size: 14px;
+            font-size: 9pt;
             border-radius: 5px;
             font-weight: bold;
         }
@@ -27,7 +27,7 @@ class UIStyles:
             background-color: #2196F3;
             color: white;
             padding: 10px;
-            font-size: 14px;
+            font-size: 9pt;
             border-radius: 5px;
             font-weight: bold;
         }
@@ -41,7 +41,7 @@ class UIStyles:
             background-color: #4CAF50;
             color: white;
             padding: 10px;
-            font-size: 14px;
+            font-size: 9pt;
         }
     """
 
@@ -50,7 +50,7 @@ class UIStyles:
             background-color: #2196F3;
             color: white;
             padding: 10px;
-            font-size: 14px;
+            font-size: 9pt;
         }
     """
 
@@ -59,7 +59,7 @@ class UIStyles:
             background-color: #9E9E9E;
             color: white;
             padding: 8px;
-            font-size: 12px;
+            font-size: 9pt;
             border-radius: 3px;
         }
         QPushButton:hover {
@@ -74,6 +74,7 @@ class UIStyles:
             border-radius: 5px;
             text-align: center;
             background-color: #f0f0f0;
+            font-size: 9pt;
         }
         QProgressBar::chunk {
             background-color: #3b82f6;
@@ -82,4 +83,4 @@ class UIStyles:
     """
 
     # 标题样式
-    TITLE_LABEL = "font-size: 16px; font-weight: bold; padding: 10px;"
+    TITLE_LABEL = "font-size: 9pt; font-weight: bold; padding: 10px;"

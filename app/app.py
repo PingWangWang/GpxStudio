@@ -32,10 +32,11 @@ from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
 from ui.dialogs.gaode_config_dialog import GaodeConfigDialog
 from ui.dialogs.about_dialog import AboutDialog
+from ui.layout.layout_manager import LayoutManager
 from .constants import (
     WINDOW_TITLE, WINDOW_SIZE, SEARCH_TYPE_START, SEARCH_TYPE_END, SEARCH_TYPE_WAYPOINT,
     COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_ORANGE, ICON_INFO, ICON_SUCCESS,
-    ICON_WARNING, ICON_ERROR, GEOLOCATION_ERROR_MESSAGES, PANEL_SIZES, PANEL_STRETCH_FACTORS,
+    ICON_WARNING, ICON_ERROR, GEOLOCATION_ERROR_MESSAGES,
     MAP_LOAD_DELAY_MS, SEARCH_RESULTS_TITLE, SEARCH_LIST_TITLES
 )
 
@@ -176,12 +177,8 @@ class GpxStudio(QMainWindow):
         splitter.addWidget(left_panel)
         splitter.addWidget(middle_panel)
         splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, PANEL_STRETCH_FACTORS[0])
-        splitter.setStretchFactor(1, PANEL_STRETCH_FACTORS[1])
-        splitter.setStretchFactor(2, PANEL_STRETCH_FACTORS[2])
-
-        # 设置初始尺寸分配，让地图列更宽
-        splitter.setSizes(PANEL_SIZES)
+        # 使用布局管理器设置布局
+        LayoutManager.setup_layout(splitter)
 
         main_layout.addWidget(splitter)
 
@@ -191,7 +188,7 @@ class GpxStudio(QMainWindow):
     def create_left_panel(self):
         """创建左侧控制面板"""
         left_widget = QWidget()
-        left_widget.setMinimumWidth(300)
+        left_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[0])
         left_layout = QVBoxLayout(left_widget)
 
         # 顶部按钮布局
@@ -259,6 +256,7 @@ class GpxStudio(QMainWindow):
     def create_middle_panel(self):
         """创建中间搜索结果面板"""
         middle_widget = QWidget()
+        middle_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[1])
         layout = QVBoxLayout(middle_widget)
 
         # 标题
@@ -294,11 +292,12 @@ class GpxStudio(QMainWindow):
     def create_right_panel(self):
         """创建右侧地图面板"""
         right_widget = QWidget()
+        right_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[2])
         layout = QVBoxLayout(right_widget)
 
         # 创建地图视图
         self.map_view = QWebEngineView()
-        self.web_page = ConsoleWebEnginePage()
+        self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
         self.web_page.set_geolocation_handler(self.geolocation_handler)
 
         # 使用信号管理器连接地图缩放信号

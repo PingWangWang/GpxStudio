@@ -33,7 +33,7 @@ class DateSelectPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("日期选择")
-        title_label.setStyleSheet("font-weight: bold; color: #000000;")
+        title_label.setStyleSheet("font-weight: bold; color: #000000; font-size: 9pt;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -155,7 +155,7 @@ class TimeSelectPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("时间选择")
-        title_label.setStyleSheet("font-weight: bold; color: #000000;")
+        title_label.setStyleSheet("font-weight: bold; color: #000000; font-size: 9pt;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -214,7 +214,7 @@ class TimeSelectPanel(QWidget):
             for minute in [0, 30]:
                 time_str = f"{hour:02d}:{minute:02d}"
                 item = QListWidgetItem(time_str)
-                item.setFont(QFont("Consolas", 10))
+                item.setFont(QFont("Consolas", 9))
                 self.time_list.addItem(item)
 
     def on_time_selected(self, item):

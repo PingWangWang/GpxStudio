@@ -4,7 +4,7 @@
 """
 
 from typing import Optional
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import pyqtSignal
 
 
@@ -17,33 +17,29 @@ class ScalePanel(QWidget):
 
     def setup_ui(self):
         """设置UI"""
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(2)
 
         # 标题
         title_label = QLabel("地图缩放:")
-        title_label.setStyleSheet("font-weight: bold; color: #333333;")
+        title_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
         title_label.setToolTip("显示当前地图的缩放级别和比例尺信息")
         layout.addWidget(title_label)
 
         # 缩放级别显示
         self.zoom_label = QLabel("级别: -")
-        self.zoom_label.setStyleSheet("color: #666666;")
+        self.zoom_label.setStyleSheet("color: #666666; font-size: 9pt;")
         self.zoom_label.setToolTip("地图缩放级别：数字越大，地图显示越详细\n范围：3-18（3为国家级，18为建筑级）")
+        self.zoom_label.setWordWrap(True)
         layout.addWidget(self.zoom_label)
-
-        # 分隔符
-        separator = QLabel("|")
-        separator.setStyleSheet("color: #cccccc;")
-        layout.addWidget(separator)
 
         # 比例尺显示
         self.scale_label = QLabel("比例: -")
-        self.scale_label.setStyleSheet("color: #666666;")
+        self.scale_label.setStyleSheet("color: #666666; font-size: 9pt;")
         self.scale_label.setToolTip("地图比例尺：表示地图上的距离与实际距离的比值\n例如 1:50,000 表示地图上1厘米代表实际50,000厘米(500米)")
+        self.scale_label.setWordWrap(True)
         layout.addWidget(self.scale_label)
-
-        layout.addStretch()
 
         # 设置面板样式
         self.setStyleSheet("""
@@ -51,6 +47,7 @@ class ScalePanel(QWidget):
                 background-color: #f9f9f9;
                 border: 1px solid #dddddd;
                 border-radius: 3px;
+                max-height: 60px;
             }
         """)
 
@@ -89,8 +86,7 @@ class ScalePanel(QWidget):
 
         Args:
             zoom_level: 地图缩放级别
-        level_description = self._get_level_description(zoom_level)
-        self.zoom_label.setText(f"级别: {zoom_level} ({level_description})
+
         Returns:
             描述性文字
         """

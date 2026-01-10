@@ -30,15 +30,33 @@ class GaodeConfigDialog(QDialog):
         config_tab = QWidget()
         config_layout = QFormLayout(config_tab)
 
+        # API Key 输入框和眼睛按钮
+        api_key_layout = QHBoxLayout()
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setPlaceholderText("请输入高德地图Web服务API Key")
         self.api_key_edit.setEchoMode(QLineEdit.Password)
-        config_layout.addRow("API Key:", self.api_key_edit)
+        api_key_layout.addWidget(self.api_key_edit)
+        
+        self.api_key_eye_btn = QPushButton("👁️")
+        self.api_key_eye_btn.setFixedSize(30, 30)
+        self.api_key_eye_btn.setStyleSheet("border: none; background: transparent;")
+        self.api_key_eye_btn.clicked.connect(self.toggle_api_key_visibility)
+        api_key_layout.addWidget(self.api_key_eye_btn)
+        config_layout.addRow("API Key:", api_key_layout)
 
+        # 安全密钥输入框和眼睛按钮
+        security_key_layout = QHBoxLayout()
         self.security_key_edit = QLineEdit()
         self.security_key_edit.setPlaceholderText("可选：签名校验密钥")
         self.security_key_edit.setEchoMode(QLineEdit.Password)
-        config_layout.addRow("安全密钥:", self.security_key_edit)
+        security_key_layout.addWidget(self.security_key_edit)
+        
+        self.security_key_eye_btn = QPushButton("👁️")
+        self.security_key_eye_btn.setFixedSize(30, 30)
+        self.security_key_eye_btn.setStyleSheet("border: none; background: transparent;")
+        self.security_key_eye_btn.clicked.connect(self.toggle_security_key_visibility)
+        security_key_layout.addWidget(self.security_key_eye_btn)
+        config_layout.addRow("安全密钥:", security_key_layout)
 
         self.status_label = QLabel("未配置")
         self.status_label.setAlignment(Qt.AlignCenter)
@@ -151,3 +169,21 @@ class GaodeConfigDialog(QDialog):
                 self.status_label.setText("未配置")
                 self.status_label.setStyleSheet("color: red;")
                 QMessageBox.information(self, "成功", "配置已清除")
+
+    def toggle_api_key_visibility(self):
+        """切换API Key的可见性"""
+        if self.api_key_edit.echoMode() == QLineEdit.Password:
+            self.api_key_edit.setEchoMode(QLineEdit.Normal)
+            self.api_key_eye_btn.setText("👁️‍🗨️")
+        else:
+            self.api_key_edit.setEchoMode(QLineEdit.Password)
+            self.api_key_eye_btn.setText("👁️")
+
+    def toggle_security_key_visibility(self):
+        """切换安全密钥的可见性"""
+        if self.security_key_edit.echoMode() == QLineEdit.Password:
+            self.security_key_edit.setEchoMode(QLineEdit.Normal)
+            self.security_key_eye_btn.setText("👁️‍🗨️")
+        else:
+            self.security_key_edit.setEchoMode(QLineEdit.Password)
+            self.security_key_eye_btn.setText("👁️")

@@ -13,9 +13,10 @@ from core.signals import signal_manager
 class ConsoleWebEnginePage(QWebEnginePage):
     """自定义WebEnginePage，拦截JS控制台消息"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, signal_manager=None):
         super().__init__(parent)
         self.geolocation_handler = None
+        self.signal_manager = signal_manager
         print("[ConsoleWebEnginePage] 初始化自定义WebEnginePage")
 
         # 连接权限请求信号
@@ -97,9 +98,17 @@ class ConsoleWebEnginePage(QWebEnginePage):
             try:
                 zoom_level = int(message[len('缩放变化:'):].strip())
                 print(f"[地图缩放] 捕获到缩放级别: {zoom_level}")
-                signal_manager.map_zoom_changed.emit(zoom_level)
+                # 使用传入的信号管理器或全局信号管理器
+                if self.signal_manager:
+                    print("[地图缩放] 使用实例信号管理器发送信号")
+                    self.signal_manager.map_zoom_changed.emit(zoom_level)
+                else:
+                    print("[地图缩放] 使用全局信号管理器发送信号")
+                    signal_manager.map_zoom_changed.emit(zoom_level)
             except Exception as e:
                 print(f"[地图缩放] 解析缩放级别失败: {e}")
+                import traceback
+                traceback.print_exc()
 
         if self.geolocation_handler:
             if message.startswith('定位成功:'):

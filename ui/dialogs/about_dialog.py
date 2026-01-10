@@ -36,7 +36,7 @@ class AboutDialog(QDialog):
                 padding: 8px 20px;
                 border: none;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 9pt;
                 font-weight: bold;
                 min-width: 100px;
             }
@@ -70,12 +70,14 @@ class AboutDialog(QDialog):
                 background-color: #f9f9f9;
                 padding: 10px;
                 border-radius: 5px;
+                font-size: 9pt;
             }
             h3 {
                 color: #4CAF50;
                 margin-top: 0;
                 margin-bottom: 15px;
-                font-size: 20px;
+                font-size: 9pt;
+                font-weight: bold;
                 text-align: center;
                 padding-bottom: 8px;
                 border-bottom: 1px solid #e0e0e0;
@@ -89,20 +91,20 @@ class AboutDialog(QDialog):
                 padding: 8px;
             }
             .version-info {
-                font-size: 13px;
+                font-size: 9pt;
                 color: #666;
                 text-align: center;
                 font-weight: bold;
             }
             .description {
-                font-size: 13px;
+                font-size: 9pt;
                 color: #555;
                 text-align: center;
                 margin-bottom: 10px;
             }
             .open-source {
                 color: #2196F3;
-                font-size: 14px;
+                font-size: 9pt;
                 text-align: center;
                 font-weight: bold;
                 padding: 10px;
@@ -111,14 +113,14 @@ class AboutDialog(QDialog):
                 margin: 10px 0;
             }
             .developer-info {
-                font-size: 13px;
+                font-size: 9pt;
                 text-align: center;
                 background-color: #f5f5f5;
                 padding: 10px;
                 border-radius: 3px;
             }
             .copyright {
-                font-size: 11px;
+                font-size: 9pt;
                 color: #777;
                 text-align: center;
                 padding: 8px;

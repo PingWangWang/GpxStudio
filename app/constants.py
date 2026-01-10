@@ -34,9 +34,7 @@ GEOLOCATION_ERROR_MESSAGES = {
     4: "未知错误"
 }
 
-# 面板尺寸配置
-PANEL_SIZES = [300, 300, 700]
-PANEL_STRETCH_FACTORS = [1, 1, 4]
+
 
 # 地图加载延迟
 MAP_LOAD_DELAY_MS = 500

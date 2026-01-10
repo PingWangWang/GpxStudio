@@ -154,45 +154,72 @@ class MapRenderer:
         # 添加缩放监听脚本
         zoom_listener_script = """
         <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var checkCount = 0;
-            var maxChecks = 50;
-            var checkInterval = setInterval(function() {
-                checkCount++;
-                // 查找以map_开头的全局变量
-                var map = null;
+        // 直接在全局作用域中添加缩放监听
+        (function() {
+            var map = null;
+            var initAttempts = 0;
+            var maxInitAttempts = 30;
+            
+            function initMapListener() {
+                initAttempts++;
+                
+                // 尝试获取地图对象
+                // 方法1: 通过leaflet-container元素
+                var mapElement = document.querySelector('.leaflet-container');
+                if (mapElement && mapElement._leaflet_map) {
+                    map = mapElement._leaflet_map;
+                    console.log('[地图缩放] 成功通过.leaflet-container找到地图');
+                    setupZoomListener();
+                    return;
+                }
+                
+                // 方法2: 查找所有可能的地图对象
                 for (var key in window) {
-                    if (key.startsWith('map_') && window[key] && window[key].getZoom) {
+                    if (window[key] && typeof window[key] === 'object' && 
+                        window[key].getZoom && typeof window[key].getZoom === 'function' &&
+                        window[key].on && typeof window[key].on === 'function') {
                         map = window[key];
-                        break;
+                        console.log('[地图缩放] 成功通过全局对象找到地图: ' + key);
+                        setupZoomListener();
+                        return;
                     }
                 }
-                if (map) {
-                    clearInterval(checkInterval);
-
-                    // 初始化缩放级别并立即发送
-                    var currentZoom = map.getZoom();
-                    console.log('[地图缩放] 初始缩放级别: ' + currentZoom);
-                    console.log('缩放变化:' + currentZoom);
-
-                    // 监听缩放结束事件
-                    map.on('zoomend', function() {
-                        var newZoom = map.getZoom();
-                        console.log('[地图缩放] 缩放级别变化: ' + newZoom);
-                        // 输出格式化消息供Qt应用捕获
-                        console.log('缩放变化:' + newZoom);
-                    });
-
-                    // 监听缩放开始事件
-                    map.on('zoomstart', function() {
-                        console.log('[地图缩放] 开始缩放操作');
-                    });
-                } else if (checkCount >= maxChecks) {
-                    clearInterval(checkInterval);
-                    console.log('[地图缩放] 初始化超时');
+                
+                // 如果还是没找到，继续尝试
+                if (initAttempts < maxInitAttempts) {
+                    setTimeout(initMapListener, 200);
+                } else {
+                    console.log('[地图缩放] 初始化失败，无法找到地图对象');
                 }
-            }, 100);
-        });
+            }
+            
+            function setupZoomListener() {
+                if (!map) return;
+                
+                console.log('[地图缩放] 开始设置缩放监听器');
+                
+                // 立即发送当前缩放级别
+                var currentZoom = map.getZoom();
+                console.log('[地图缩放] 当前缩放级别: ' + currentZoom);
+                console.log('缩放变化:' + currentZoom);
+                
+                // 监听缩放事件
+                map.on('zoomend', function() {
+                    var zoomLevel = map.getZoom();
+                    console.log('[地图缩放] 缩放级别变化: ' + zoomLevel);
+                    console.log('缩放变化:' + zoomLevel);
+                });
+                
+                console.log('[地图缩放] 缩放监听器设置完成');
+            }
+            
+            // 页面加载完成后初始化
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initMapListener);
+            } else {
+                initMapListener();
+            }
+        })();
         </script>
         """
         m.get_root().html.add_child(folium.Element(zoom_listener_script))
