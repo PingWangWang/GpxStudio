@@ -65,7 +65,7 @@ class MapRenderer:
         return 14
 
     @staticmethod
-    def create_base_map(center, zoom_start=10, map_type='roadmap'):
+    def create_base_map(center, zoom_start=10, map_type='roadmap', map_source='osm'):
         """
         创建基础地图
 
@@ -73,27 +73,39 @@ class MapRenderer:
             center: 中心点 [lat, lon]
             zoom_start: 初始缩放级别
             map_type: 地图类型 ('roadmap', 'satellite', 'hybrid')
+            map_source: 地图数据源 ('osm', 'gaode')
 
         Returns:
             folium.Map: 地图对象
         """
         m = folium.Map(location=center, zoom_start=zoom_start, tiles=None)
 
-        tile_urls = {
-            'roadmap': 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-            'satellite': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
-            'hybrid': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
-        }
+        if map_source == 'gaode':
+            # 使用高德地图瓦片
+            tile_urls = {
+                'roadmap': 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                'satellite': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
+                'hybrid': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+            }
 
-        tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
+            tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
 
-        folium.TileLayer(
-            tiles=tile_url,
-            attr='© 高德地图',
-            name='高德地图',
-            overlay=False,
-            control=False
-        ).add_to(m)
+            folium.TileLayer(
+                tiles=tile_url,
+                attr='© 高德地图',
+                name='高德地图',
+                overlay=False,
+                control=False
+            ).add_to(m)
+        else:
+            # 使用OSM地图瓦片
+            folium.TileLayer(
+                tiles='OpenStreetMap',
+                attr='© OpenStreetMap contributors',
+                name='OpenStreetMap',
+                overlay=False,
+                control=False
+            ).add_to(m)
 
         scroll_zoom_script = """
         <script>

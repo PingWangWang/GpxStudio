@@ -10,7 +10,8 @@ from typing import Optional
 # 导入需要注入的服务和组件
 from services.gaode_geocoding import GaodeGeocodingService
 from services.gaode_routing import GaodeRoutingService
-from services.config.gaode_config import GaodeConfig
+from services.osm_geocoding import OsmGeocodingService
+from services.config.map_config import MapConfig
 from core.signals import SignalManager
 
 # 设置日志
@@ -23,18 +24,21 @@ class AppModule(Module):
     def configure(self, binder):
         """配置依赖绑定"""
         # 绑定单例实例
-        config = GaodeConfig()
-        binder.bind(GaodeConfig, to=config, scope=singleton)
+        config = MapConfig()
+        binder.bind(MapConfig, to=config, scope=singleton)
 
         signal_manager = SignalManager()
         binder.bind(SignalManager, to=signal_manager, scope=singleton)
 
         # 绑定服务实现
-        geocoding_service = GaodeGeocodingService(
+        gaode_geocoding_service = GaodeGeocodingService(
             api_key=config.api_key,
             security_key=config.security_key
         )
-        binder.bind(GaodeGeocodingService, to=geocoding_service, scope=singleton)
+        binder.bind(GaodeGeocodingService, to=gaode_geocoding_service, scope=singleton)
+
+        osm_geocoding_service = OsmGeocodingService()
+        binder.bind(OsmGeocodingService, to=osm_geocoding_service, scope=singleton)
 
         routing_service = GaodeRoutingService(
             api_key=config.api_key,
@@ -79,9 +83,10 @@ class DIContainer:
         """
         # 返回所有已定义的提供者名称
         return [
-            'GaodeConfig',
+            'MapConfig',
             'SignalManager',
             'GaodeGeocodingService',
+            'OsmGeocodingService',
             'GaodeRoutingService'
         ]
 
