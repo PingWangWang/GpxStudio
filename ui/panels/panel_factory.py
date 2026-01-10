@@ -89,10 +89,20 @@ class PanelFactory:
         waypoint_list = QListWidget()
         layout.addWidget(waypoint_list)
 
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        
         # 删除按钮
         remove_button = QPushButton("删除选中的途径点")
         remove_button.clicked.connect(parent.remove_waypoint)
-        layout.addWidget(remove_button)
+        button_layout.addWidget(remove_button)
+        
+        # 清空所有按钮
+        clear_all_button = QPushButton("清空所有途径点")
+        clear_all_button.clicked.connect(parent.clear_all_waypoints)
+        button_layout.addWidget(clear_all_button)
+        
+        layout.addLayout(button_layout)
 
         group.setLayout(layout)
 

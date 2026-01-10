@@ -146,8 +146,53 @@ class GpxStudio(QMainWindow):
                 self.gaode_routing_service.security_key = security_key
                 self.logger.info("高德地图API配置已更新")
             
+            # 清空所有路线相关数据
+            self.clear_route_data()
+            
             # 重新加载地图
             self.show_initial_map()
+    
+    def clear_route_data(self):
+        """清空所有路线相关数据"""
+        # 清空起点终点数据
+        self.start_coords = None
+        self.start_name = None
+        self.end_coords = None
+        self.end_name = None
+        
+        # 清空途径点数据
+        self.waypoints_coords = []
+        self.waypoints_names = []
+        
+        # 清空路线数据
+        self.current_route = None
+        self.route_points = []
+        self.estimated_duration_seconds = 0
+        
+        # 清空搜索相关数据
+        self.search_results = []
+        self.searching_for = None
+        self.selected_search_result_coords = None
+        
+        # 清空最后选中位置数据
+        self.last_selected_coords = None
+        self.last_selected_level = None
+        self.last_selected_type = None
+        self.last_selected_from_search = False
+        
+        # 清空UI显示
+        if hasattr(self, 'start_list'):
+            self.start_list.clear()
+        if hasattr(self, 'end_list'):
+            self.end_list.clear()
+        if hasattr(self, 'waypoint_list'):
+            self.waypoint_list.clear()
+        if hasattr(self, 'search_results_list'):
+            self.search_results_list.clear()
+        if hasattr(self, 'search_results_title'):
+            self.search_results_title.setText("搜索结果")
+        
+        self.logger.info("已清空所有路线相关数据")
 
     def _log_to_service(self, level: str, message: str):
         """将日志转发到WindowsLocationService"""
@@ -560,6 +605,16 @@ class GpxStudio(QMainWindow):
                     item.setText(f"{i + 1}. {coords[0]:.4f}, {coords[1]:.4f}")
 
             self.update_map_preview()
+
+    def clear_all_waypoints(self):
+        """清空所有途径点"""
+        # 清空列表
+        self.waypoint_list.clear()
+        # 清空数据
+        self.waypoints_coords.clear()
+        self.waypoints_names.clear()
+        # 更新地图预览
+        self.update_map_preview()
 
     # ========== 地图显示相关方法 ==========
 
