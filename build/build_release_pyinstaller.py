@@ -56,26 +56,57 @@ def main():
 
     # 执行PyInstaller命令构建发布版本
     print("[GPXStudio] 执行PyInstaller构建命令...")
+    # 获取pyinstaller的完整路径
+    pyinstaller_path = shutil.which('pyinstaller')
+    if not pyinstaller_path:
+        # 尝试从虚拟环境中查找
+        pyinstaller_path = os.path.join(PROJECT_ROOT, '.venv', 'Scripts', 'pyinstaller.exe')
+    print(f"[GPXStudio] 使用pyinstaller路径: {pyinstaller_path}")
+    
+    # 在Windows中，--add-data参数使用分号分隔，需要正确处理路径
     command = [
-        "pyinstaller",
+        pyinstaller_path,
         "--onefile",
         "--windowed",
         f"--name={BUILD_NAME}",
-        "--add-data=services/config/config;services/config/config",
-        "--add-data=ui;ui",
-        "--add-data=modules;modules",
-        "--add-data=services;services",
-        "--add-data=core;core",
-        "--add-data=app;app",
-        f"--add-data={XYZ_SERVICES_DATA};xyzservices/data",
-        "--hidden-import=PyQt5.sip",
-        "--hidden-import=PyQt5.QtCore",
-        "--hidden-import=PyQt5.QtGui",
-        "--hidden-import=PyQt5.QtWidgets",
-        "--hidden-import=PyQt5.QtWebEngineWidgets",
-        "--hidden-import=PyQt5.QtWebEngineCore",
+        "--add-data", "services/config/config;services/config/config",
+        "--add-data", "ui;ui",
+        "--add-data", "modules;modules",
+        "--add-data", "services;services",
+        "--add-data", "core;core",
+        "--add-data", "app;app",
+        "--add-data", f"{XYZ_SERVICES_DATA};xyzservices/data",
+        "--hidden-import", "PyQt5.sip",
+        "--hidden-import", "PyQt5.QtCore",
+        "--hidden-import", "PyQt5.QtGui",
+        "--hidden-import", "PyQt5.QtWidgets",
+        "--hidden-import", "PyQt5.QtWebEngineWidgets",
+        "--hidden-import", "PyQt5.QtWebEngineCore",
         "main.py"
     ]
+
+    # 验证所有路径是否存在
+    print("[GPXStudio] 验证路径是否存在...")
+    paths_to_check = [
+        "services/config/config",
+        "ui",
+        "modules",
+        "services",
+        "core",
+        "app",
+        XYZ_SERVICES_DATA,
+        "main.py"
+    ]
+    
+    for path in paths_to_check:
+        if os.path.exists(path):
+            print(f"[GPXStudio] ✅ 路径存在: {path}")
+        else:
+            print(f"[GPXStudio] ❌ 路径不存在: {path}")
+    
+    # 打印完整的命令
+    print("[GPXStudio] 执行命令:")
+    print(' '.join(command))
 
     try:
         result = subprocess.run(
@@ -92,12 +123,17 @@ def main():
 
     except subprocess.CalledProcessError as e:
         print("[GPXStudio] 发布版本构建失败！")
-        print(f"[GPXStudio] 错误信息: {e.stderr}")
+        print(f"[GPXStudio] 返回代码: {e.returncode}")
+        print(f"[GPXStudio] 标准输出: {e.stdout}")
+        print(f"[GPXStudio] 标准错误: {e.stderr}")
         input("按Enter键退出...")
         return 1
     except Exception as e:
         print("[GPXStudio] 发布版本构建失败！")
+        print(f"[GPXStudio] 错误类型: {type(e).__name__}")
         print(f"[GPXStudio] 错误信息: {str(e)}")
+        import traceback
+        print(f"[GPXStudio] 堆栈跟踪: {traceback.format_exc()}")
         input("按Enter键退出...")
         return 1
 
