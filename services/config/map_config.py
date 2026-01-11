@@ -30,7 +30,7 @@ class MapConfig(IConfigService):
         return os.path.join(app_dir, "map_config.json")
 
     def __init__(self):
-        self.map_source = "osm"  # 默认使用OSM
+        self.map_source = ""  # 首次运行时默认无地图源
         self.api_key = ""
         self.security_key = ""
         self.is_configured = False
@@ -44,7 +44,7 @@ class MapConfig(IConfigService):
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     self._config_data = json.load(f)
-                    self.map_source = self._config_data.get('map_source', 'osm')
+                    self.map_source = self._config_data.get('map_source', '')
                     self.api_key = self._config_data.get('api_key', '')
                     self.security_key = self._config_data.get('security_key', '')
                     self.is_configured = True
@@ -62,7 +62,7 @@ class MapConfig(IConfigService):
             config_file = self._get_config_path()
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, ensure_ascii=False, indent=2)
-            self.map_source = config_data.get('map_source', 'osm')
+            self.map_source = config_data.get('map_source', '')
             self.api_key = config_data.get('api_key', '')
             self.security_key = config_data.get('security_key', '')
             self.is_configured = True
