@@ -1,9 +1,22 @@
+# GPX Studio 依赖项
+
+# GUI 框架
 PyQt5>=5.15.0
 PyQtWebEngine>=5.15.0
+
+# 地图相关
 folium>=0.14.0
-gpxpy>=1.6.0
+xyzservices>=2025.11.0
+
+# 路线规划和地理编码
 requests>=2.31.0
 geopy>=2.3.0
+
+# GPX 处理
+gpxpy>=1.6.0
+
+# Windows 定位服务（仅 Windows）
 winrt-Windows.Devices.Geolocation>=3.2.1
+
+# 打包工具
 pyinstaller>=6.0.0
-xyzservices>=2025.11.0
