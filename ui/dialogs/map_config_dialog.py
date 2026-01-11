@@ -16,7 +16,9 @@ class MapConfigDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("地图配置")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(400)
+        self.resize(550, 450)
         self.init_ui()
         self.load_current_config()
 
@@ -36,6 +38,7 @@ class MapConfigDialog(QDialog):
         self.map_source_combo.addItem("OpenStreetMap")
         self.map_source_combo.addItem("高德地图")
         self.map_source_combo.currentIndexChanged.connect(self.on_map_source_changed)
+        self.map_source_combo.setMinimumWidth(300)
         config_layout.addRow("地图数据源:", self.map_source_combo)
 
         # API Key 输入框和眼睛按钮
@@ -43,6 +46,7 @@ class MapConfigDialog(QDialog):
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setPlaceholderText("请输入高德地图Web服务API Key")
         self.api_key_edit.setEchoMode(QLineEdit.Password)
+        self.api_key_edit.setMinimumWidth(300)
         self.api_key_layout.addWidget(self.api_key_edit)
         
         self.api_key_eye_btn = QPushButton("👁️")
@@ -57,6 +61,7 @@ class MapConfigDialog(QDialog):
         self.security_key_edit = QLineEdit()
         self.security_key_edit.setPlaceholderText("可选：签名校验密钥")
         self.security_key_edit.setEchoMode(QLineEdit.Password)
+        self.security_key_edit.setMinimumWidth(300)
         self.security_key_layout.addWidget(self.security_key_edit)
         
         self.security_key_eye_btn = QPushButton("👁️")
@@ -71,18 +76,24 @@ class MapConfigDialog(QDialog):
         self.status_row = config_layout.addRow("配置状态:", self.status_label)
 
         self.btn_layout = QHBoxLayout()
+        self.btn_layout.addStretch(1)
+        
         self.test_btn = QPushButton("测试连接")
         self.test_btn.clicked.connect(self.test_connection)
+        self.test_btn.setMinimumWidth(100)
         self.btn_layout.addWidget(self.test_btn)
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
+        self.save_btn.setMinimumWidth(100)
         self.btn_layout.addWidget(self.save_btn)
 
         self.clear_btn = QPushButton("清除配置")
         self.clear_btn.clicked.connect(self.clear_config)
+        self.clear_btn.setMinimumWidth(100)
         self.btn_layout.addWidget(self.clear_btn)
 
+        self.btn_layout.addStretch(1)
         self.btn_row = config_layout.addRow("", self.btn_layout)
 
         tabs.addTab(config_tab, "配置")
@@ -126,30 +137,41 @@ class MapConfigDialog(QDialog):
         help_layout.addWidget(help_text)
         tabs.addTab(help_tab, "帮助")
 
+        # 添加间距
+        layout.addSpacing(20)
+        
+        # 关闭按钮布局
+        close_btn_layout = QHBoxLayout()
+        close_btn_layout.addStretch(1)
+        
         close_btn = QPushButton("关闭")
         close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn)
+        close_btn.setMinimumWidth(100)
+        close_btn_layout.addWidget(close_btn)
+        
+        close_btn_layout.addStretch(1)
+        layout.addLayout(close_btn_layout)
 
     def on_map_source_changed(self, index):
         """地图数据源选择变化时的处理"""
         if index == 0:  # 0 是无
-            # 隐藏所有API Key相关控件
-            self.api_key_edit.setVisible(False)
-            self.api_key_eye_btn.setVisible(False)
-            self.security_key_edit.setVisible(False)
-            self.security_key_eye_btn.setVisible(False)
-            self.test_btn.setVisible(False)
+            # 禁用所有API Key相关控件
+            self.api_key_edit.setEnabled(False)
+            self.api_key_eye_btn.setEnabled(False)
+            self.security_key_edit.setEnabled(False)
+            self.security_key_eye_btn.setEnabled(False)
+            self.test_btn.setEnabled(False)
             
             # 更新状态标签
             self.status_label.setText("未选择")
             self.status_label.setStyleSheet("color: gray;")
         elif index == 2:  # 2 是高德地图
-            # 显示API Key相关控件
-            self.api_key_edit.setVisible(True)
-            self.api_key_eye_btn.setVisible(True)
-            self.security_key_edit.setVisible(True)
-            self.security_key_eye_btn.setVisible(True)
-            self.test_btn.setVisible(True)
+            # 启用API Key相关控件
+            self.api_key_edit.setEnabled(True)
+            self.api_key_eye_btn.setEnabled(True)
+            self.security_key_edit.setEnabled(True)
+            self.security_key_eye_btn.setEnabled(True)
+            self.test_btn.setEnabled(True)
             
             # 更新状态标签
             if map_config.is_gaode_configured():
@@ -159,12 +181,12 @@ class MapConfigDialog(QDialog):
                 self.status_label.setText("未配置")
                 self.status_label.setStyleSheet("color: red;")
         else:  # 1 是OpenStreetMap
-            # 隐藏API Key相关控件
-            self.api_key_edit.setVisible(False)
-            self.api_key_eye_btn.setVisible(False)
-            self.security_key_edit.setVisible(False)
-            self.security_key_eye_btn.setVisible(False)
-            self.test_btn.setVisible(False)
+            # 禁用所有API Key相关控件
+            self.api_key_edit.setEnabled(False)
+            self.api_key_eye_btn.setEnabled(False)
+            self.security_key_edit.setEnabled(False)
+            self.security_key_eye_btn.setEnabled(False)
+            self.test_btn.setEnabled(False)
             
             # 更新状态标签
             self.status_label.setText("无需配置")
@@ -184,6 +206,13 @@ class MapConfigDialog(QDialog):
         # 加载API Key配置
         self.api_key_edit.setText(map_config.get_api_key())
         self.security_key_edit.setText(map_config.get_security_key())
+        
+        # 确保所有控件都可见
+        self.api_key_edit.setVisible(True)
+        self.api_key_eye_btn.setVisible(True)
+        self.security_key_edit.setVisible(True)
+        self.security_key_eye_btn.setVisible(True)
+        self.test_btn.setVisible(True)
         
         # 触发一次数据源变化事件，以更新UI
         self.on_map_source_changed(self.map_source_combo.currentIndex())
