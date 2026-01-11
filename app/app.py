@@ -92,6 +92,10 @@ class GpxStudio(QMainWindow):
         self.logger.debug(f"窗口标题: {self.windowTitle()}")
         self.logger.debug(f"窗口大小: {self.size()}")
         self.logger.debug("程序启动状态: 正常")
+        
+        # 标记首次启动完成，调整日志级别
+        from core.logging_setup import mark_first_run_completed
+        mark_first_run_completed()
 
     def _init_window(self):
         """初始化窗口设置"""

@@ -63,6 +63,7 @@ class LoggingSetup:
             backupCount=5,  # 最多保留5个备份
             encoding='utf-8'
         )
+        file_handler.setLevel(log_level)
         
         # 设置日志格式
         formatter = logging.Formatter(
@@ -82,24 +83,63 @@ class LoggingSetup:
         return logger
     
     @staticmethod
+    def mark_first_run_completed():
+        """
+        标记首次启动完成
+        将 is_first_run 设置为 False，并将日志级别设置为 WARNING（如果用户没有手动修改）
+        """
+        from services.config.map_config import map_config
+        
+        # 检查是否是首次启动
+        is_first_run = map_config.get('is_first_run', True)
+        
+        if is_first_run:
+            # 检查用户是否手动修改了日志级别
+            has_custom_log_level = map_config.get('log_level') is not None
+            
+            if not has_custom_log_level:
+                # 用户没有手动修改，设置为 WARNING
+                map_config.set('log_level', 'WARNING')
+            
+            # 标记首次启动完成
+            map_config.set('is_first_run', False)
+            
+            # 重新初始化日志配置
+            LoggingSetup.setup_logging()
+    
+    @staticmethod
     def get_log_level():
         """
         获取日志级别
         从配置中读取，默认为WARNING
+        首次启动时使用DEBUG级别（如果用户没有手动设置）
         """
         from services.config.map_config import map_config
-        log_level_str = map_config.get('log_level', 'WARNING')
         
-        # 转换为logging模块的级别常量
-        log_level_map = {
-            'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR,
-            'CRITICAL': logging.CRITICAL
-        }
+        # 首先检查用户是否手动设置了日志级别
+        log_level_str = map_config.get('log_level')
         
-        return log_level_map.get(log_level_str, logging.WARNING)
+        # 如果用户手动设置了日志级别，直接使用
+        if log_level_str is not None:
+            # 转换为logging模块的级别常量
+            log_level_map = {
+                'DEBUG': logging.DEBUG,
+                'INFO': logging.INFO,
+                'WARNING': logging.WARNING,
+                'ERROR': logging.ERROR,
+                'CRITICAL': logging.CRITICAL
+            }
+            return log_level_map.get(log_level_str, logging.WARNING)
+        
+        # 检查是否是首次启动
+        is_first_run = map_config.get('is_first_run', True)
+        
+        # 首次启动时使用DEBUG级别
+        if is_first_run:
+            return logging.DEBUG
+        
+        # 非首次启动且用户没有手动设置，使用WARNING级别
+        return logging.WARNING
     
     @staticmethod
     def set_log_level(level):
@@ -108,7 +148,9 @@ class LoggingSetup:
         """
         from services.config.map_config import map_config
         # 保存到配置
-        map_config.set('log_level', level)
+        success = map_config.set('log_level', level)
+        if not success:
+            raise Exception("保存日志级别失败")
         
         # 重新初始化日志配置
         LoggingSetup.setup_logging()
@@ -217,3 +259,4 @@ clean_logs = LoggingSetup.clean_logs
 open_log_directory = LoggingSetup.open_log_directory
 get_log_level = LoggingSetup.get_log_level
 set_log_level = LoggingSetup.set_log_level
+mark_first_run_completed = LoggingSetup.mark_first_run_completed

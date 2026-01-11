@@ -43,12 +43,17 @@ class MapConfig(IConfigService):
             config_file = self._get_config_path()
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
-                    self._config_data = json.load(f)
+                    try:
+                        self._config_data = json.load(f)
+                    except json.JSONDecodeError:
+                        # 如果JSON解析失败，使用默认配置
+                        self._config_data = {}
                     self.map_source = self._config_data.get('map_source', '')
                     self.api_key = self._config_data.get('api_key', '')
                     self.security_key = self._config_data.get('security_key', '')
                     self.is_configured = True
         except Exception:
+            self._config_data = {}
             self.is_configured = False
 
     def load_config(self) -> Dict[str, Any]:
@@ -59,14 +64,19 @@ class MapConfig(IConfigService):
     def save_config(self, config_data: Dict[str, Any]) -> bool:
         """保存配置到文件"""
         try:
+            # 合并配置数据，保留现有的其他配置项
+            merged_config = self._config_data.copy()
+            merged_config.update(config_data)
+            
             config_file = self._get_config_path()
             with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=2)
-            self.map_source = config_data.get('map_source', '')
-            self.api_key = config_data.get('api_key', '')
-            self.security_key = config_data.get('security_key', '')
+                json.dump(merged_config, f, ensure_ascii=False, indent=2)
+            
+            self.map_source = merged_config.get('map_source', '')
+            self.api_key = merged_config.get('api_key', '')
+            self.security_key = merged_config.get('security_key', '')
             self.is_configured = True
-            self._config_data = config_data
+            self._config_data = merged_config
             return True
         except Exception:
             return False

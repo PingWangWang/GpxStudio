@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayo
 from PyQt5.QtCore import Qt
 
 from core.logging_setup import get_log_size
+from services.config import about_config
 
 
 class AboutDialog(QDialog):
@@ -68,126 +69,125 @@ class AboutDialog(QDialog):
         if log_size > 100:
             log_warning = "<div style='color: red;'>⚠️ 运行日志超过100MB，请及时清理</div>"
         
+        # 从配置中获取信息
+        app_name = about_config.get_app_name()
+        app_version = about_config.get_app_version()
+        app_platform = about_config.get_app_platform()
+        app_description = about_config.get_app_description()
+        license_text = about_config.get_license_text()
+        developer_team = about_config.get_developer_team()
+        developer_email = about_config.get_developer_email()
+        copyright_text = about_config.get_copyright_text()
+        map_api_copyright = about_config.get_map_api_copyright()
+        
         # 使用普通字符串拼接，避免format方法解析CSS中的大括号
-        html = """
-        <style>
-            body {
-                font-family: 'Microsoft YaHei', Arial, sans-serif;
-                color: #333;
-                line-height: 1.5;
-                background-color: #f9f9f9;
-                padding: 10px;
-                border-radius: 5px;
-                font-size: 9pt;
-            }
-            h3 {
-                color: #4CAF50;
-                margin-top: 0;
-                margin-bottom: 15px;
-                font-size: 9pt;
-                font-weight: bold;
-                text-align: center;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #e0e0e0;
-            }
-            .container {
-                max-width: 520px;
-                margin: 0 auto;
-            }
-            .section {
-                margin-bottom: 15px;
-                padding: 8px;
-            }
-            .version-info {
-                font-size: 9pt;
-                color: #666;
-                text-align: center;
-                font-weight: bold;
-            }
-            .description {
-                font-size: 9pt;
-                color: #555;
-                text-align: center;
-                margin-bottom: 10px;
-            }
-            .open-source {
-                color: #2196F3;
-                font-size: 9pt;
-                text-align: center;
-                font-weight: bold;
-                padding: 10px;
-                background-color: #e8f5e9;
-                border-radius: 3px;
-                margin: 10px 0;
-            }
-            .developer-info {
-                font-size: 9pt;
-                text-align: center;
-                background-color: #f5f5f5;
-                padding: 10px;
-                border-radius: 3px;
-            }
-            .log-info {
-                font-size: 9pt;
-                text-align: center;
-                background-color: #f0f8ff;
-                padding: 10px;
-                border-radius: 3px;
-                margin: 10px 0;
-            }
-            .copyright {
-                font-size: 9pt;
-                color: #777;
-                text-align: center;
-                padding: 8px;
-                border-top: 1px solid #e0e0e0;
-                margin-top: 10px;
-            }
-        </style>
-
-        <div class="container">
-            <h3>GPX Studio</h3>
-            <div class="section">
-                <div class="version-info">
-                    版本: 1.1.0 | 平台: Windows
-                </div>
-                <div class="description">
-                    路线规划工具，支持多种交通方式，可导出GPX格式文件
-                </div>
-            </div>
-            <div class="section">
-                <div class="open-source">
-                    开源软件 - 本软件采用 MIT 许可证开源
-                </div>
-            </div>
-            <div class="section">
-                <div class="developer-info">
-                    开发者: GPX Studio 团队<br>
-                    邮箱: contact@gpxstudio.com
-                </div>
-            </div>
-            <div class="section">
-                <div class="log-info">
-                    运行日志大小: 
-        """
-        
-        html += "{:.2f}".format(log_size)
-        html += " MB"
-        
+        html = ""
+        html += "<style>"
+        html += "body {"
+        html += "font-family: 'Microsoft YaHei', Arial, sans-serif;"
+        html += "color: #333;"
+        html += "line-height: 1.5;"
+        html += "background-color: #f9f9f9;"
+        html += "padding: 10px;"
+        html += "border-radius: 5px;"
+        html += "font-size: 9pt;"
+        html += "}"
+        html += "h3 {"
+        html += "color: #4CAF50;"
+        html += "margin-top: 0;"
+        html += "margin-bottom: 15px;"
+        html += "font-size: 9pt;"
+        html += "font-weight: bold;"
+        html += "text-align: center;"
+        html += "padding-bottom: 8px;"
+        html += "border-bottom: 1px solid #e0e0e0;"
+        html += "}"
+        html += ".container {"
+        html += "max-width: 520px;"
+        html += "margin: 0 auto;"
+        html += "}"
+        html += ".section {"
+        html += "margin-bottom: 15px;"
+        html += "padding: 8px;"
+        html += "}"
+        html += ".version-info {"
+        html += "font-size: 9pt;"
+        html += "color: #666;"
+        html += "text-align: center;"
+        html += "font-weight: bold;"
+        html += "}"
+        html += ".description {"
+        html += "font-size: 9pt;"
+        html += "color: #555;"
+        html += "text-align: center;"
+        html += "margin-bottom: 10px;"
+        html += "}"
+        html += ".open-source {"
+        html += "color: #2196F3;"
+        html += "font-size: 9pt;"
+        html += "text-align: center;"
+        html += "font-weight: bold;"
+        html += "padding: 10px;"
+        html += "background-color: #e8f5e9;"
+        html += "border-radius: 3px;"
+        html += "margin: 10px 0;"
+        html += "}"
+        html += ".developer-info {"
+        html += "font-size: 9pt;"
+        html += "text-align: center;"
+        html += "background-color: #f5f5f5;"
+        html += "padding: 10px;"
+        html += "border-radius: 3px;"
+        html += "}"
+        html += ".log-info {"
+        html += "font-size: 9pt;"
+        html += "text-align: center;"
+        html += "background-color: #f0f8ff;"
+        html += "padding: 10px;"
+        html += "border-radius: 3px;"
+        html += "margin: 10px 0;"
+        html += "}"
+        html += ".copyright {"
+        html += "font-size: 9pt;"
+        html += "color: #777;"
+        html += "text-align: center;"
+        html += "padding: 8px;"
+        html += "border-top: 1px solid #e0e0e0;"
+        html += "margin-top: 10px;"
+        html += "}"
+        html += "</style>"
+        html += "<div class='container'>"
+        html += "<h3>" + app_name + "</h3>"
+        html += "<div class='section'>"
+        html += "<div class='version-info'>"
+        html += "版本: " + app_version + " | 平台: " + app_platform
+        html += "</div>"
+        html += "<div class='description'>"
+        html += app_description
+        html += "</div>"
+        html += "</div>"
+        html += "<div class='section'>"
+        html += "<div class='open-source'>"
+        html += license_text
+        html += "</div>"
+        html += "</div>"
+        html += "<div class='section'>"
+        html += "<div class='developer-info'>"
+        html += "开发者: " + developer_team + "<br>邮箱: " + developer_email
+        html += "</div>"
+        html += "</div>"
+        html += "<div class='section'>"
+        html += "<div class='log-info'>"
+        html += "运行日志大小: " + "{:.2f}".format(log_size) + " MB"
         if log_warning:
-            html += "<br>"
-            html += log_warning
-        
-        html += """
-                </div>
-            </div>
-            <div class="section">
-                <div class="copyright">
-                    © 2024-2025 GPX Studio 团队<br>
-                    使用高德地图API，© 2025 AutoNavi
-                </div>
-            </div>
-        </div>
-        """
+            html += "<br>" + log_warning
+        html += "</div>"
+        html += "</div>"
+        html += "<div class='section'>"
+        html += "<div class='copyright'>"
+        html += copyright_text + "<br>" + map_api_copyright
+        html += "</div>"
+        html += "</div>"
+        html += "</div>"
         
         return html
