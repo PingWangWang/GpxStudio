@@ -14,6 +14,9 @@ import sys
 import os
 from typing import Optional
 
+# 确保日志重定向生效 - 必须在其他导入之前执行
+import core.logging_setup
+
 # 导入信号管理器
 from core.signals import SignalManager
 
@@ -48,50 +51,119 @@ class GpxStudio(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # 添加启动标记日志
+        print("=" * 80)
+        print("GPX Studio 程序启动开始")
+        print("=" * 80)
+        
+        # 先初始化基本组件，然后再初始化日志系统
+        print("开始初始化窗口设置")
         self._init_window()
+        print("窗口设置初始化完成")
+        
+        print("开始初始化服务")
         self._init_services()
+        print("服务初始化完成")
+        
+        print("开始初始化数据状态")
         self._init_data_state()
+        print("数据状态初始化完成")
+        
+        print("开始初始化定位和信号系统")
         self._init_geolocation_and_signals()
+        print("定位和信号系统初始化完成")
+        
+        print("开始初始化UI")
         self._init_ui()
+        print("UI初始化完成")
+        
+        print("开始初始化日志系统")
         self._init_logging()
-        self.logger.info("程序启动完成")
+        print("日志系统初始化完成")
+        
+        # 添加启动完成标记日志
+        self.logger.info("=" * 80)
+        self.logger.info("GPX Studio 程序启动完成")
+        self.logger.info("=" * 80)
+        self.logger.info("所有初始化步骤已完成")
+        
+        # 记录初始化完成后的状态
+        self.logger.debug("程序启动完成，开始记录初始化状态")
+        self.logger.debug(f"窗口标题: {self.windowTitle()}")
+        self.logger.debug(f"窗口大小: {self.size()}")
+        self.logger.debug("程序启动状态: 正常")
 
     def _init_window(self):
         """初始化窗口设置"""
+        print(f"设置窗口标题: {WINDOW_TITLE}")
         self.setWindowTitle(WINDOW_TITLE)
+        
+        print(f"设置窗口大小: {WINDOW_SIZE}")
         self.resize(*WINDOW_SIZE)
 
         # 窗口居中
+        print("开始窗口居中操作")
         screen = QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
+        print(f"屏幕几何信息: {screen_geometry}")
+        
         window_geometry = self.frameGeometry()
         center_point = screen_geometry.center()
+        print(f"屏幕中心点: {center_point}")
+        
         window_geometry.moveCenter(center_point)
+        print(f"窗口居中后的位置: {window_geometry.topLeft()}")
         self.move(window_geometry.topLeft())
+        print("窗口居中操作完成")
 
     def _init_services(self):
         """初始化服务"""
-        # 初始化服务
+        print("开始初始化服务")
+        
+        # 获取配置信息
+        api_key = map_config.get_api_key()
+        security_key = map_config.get_security_key()
+        print(f"API Key 配置: {'已配置' if api_key else '未配置'}")
+        print(f"Security Key 配置: {'已配置' if security_key else '未配置'}")
+        
+        # 初始化高德地理编码服务
+        print("初始化高德地理编码服务")
         self.gaode_geocoding_service = GaodeGeocodingService(
-            api_key=map_config.get_api_key(),
-            security_key=map_config.get_security_key(),
+            api_key=api_key,
+            security_key=security_key,
             logger=self._log_to_geocoding
         )
+        
+        # 初始化高德路线规划服务
+        print("初始化高德路线规划服务")
         self.gaode_routing_service = GaodeRoutingService(
-            api_key=map_config.get_api_key(),
-            security_key=map_config.get_security_key(),
+            api_key=api_key,
+            security_key=security_key,
             logger=self._log_to_routing
         )
+        
+        # 初始化OSM地理编码服务
+        print("初始化OSM地理编码服务")
         self.osm_geocoding_service = OsmGeocodingService(
             logger=self._log_to_geocoding
         )
+        
+        # 初始化OSM路线规划服务
+        print("初始化OSM路线规划服务")
         self.osm_routing_service = OsmRoutingService(
             logger=self._log_to_routing
         )
+        
+        # 初始化GPX导出服务
+        print("初始化GPX导出服务")
         self.gpx_service = GpxExportService(logger=self._log_to_gpx)
+        
+        print("服务初始化完成")
 
     def _init_data_state(self):
         """初始化数据状态"""
+        print("开始初始化数据状态")
+        
         self.start_coords = None
         self.start_name = None
         self.end_coords = None
@@ -109,24 +181,42 @@ class GpxStudio(QMainWindow):
         self.last_selected_level = None
         self.last_selected_type = None
         self.last_selected_from_search = False
+        
+        print("数据状态初始化完成")
+        print(f"初始数据状态: start_coords={self.start_coords}, end_coords={self.end_coords}, waypoints_coords={self.waypoints_coords}")
 
     def _init_geolocation_and_signals(self):
         """初始化定位和信号系统"""
+        print("开始初始化定位和信号系统")
+        
+        print("创建地理定位处理器")
         self.geolocation_handler = GeolocationHandler()
+        
+        print("创建信号管理器")
         self.signal_manager = SignalManager()
 
         # 使用信号管理器连接地理定位信号
+        print("连接地理定位成功信号")
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
+        
+        print("连接地理定位错误信号")
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
+        
+        print("定位和信号系统初始化完成")
 
     def _init_ui(self):
         """初始化UI"""
+        print("开始初始化UI")
         self.init_ui()
+        print("UI初始化完成")
 
     def _init_logging(self):
         """初始化日志系统"""
+        print("开始初始化日志系统")
         self.logger = setup_logger(self.log_panel, "GpxStudio")
+        self.logger.debug("创建Windows定位服务")
         self.windows_location_service = WindowsLocationService(logger=self._log_to_service)
+        self.logger.debug("日志系统初始化完成")
 
     def show_map_config(self):
         """显示地图配置对话框"""
@@ -739,13 +829,19 @@ class GpxStudio(QMainWindow):
 
     def plan_route(self):
         """规划路线"""
+        self.logger.info("=" * 80)
+        self.logger.info("开始执行路线规划")
+        self.logger.info("=" * 80)
+        
         if not self.start_coords or not self.end_coords:
+            self.logger.warning("路线规划失败：未设置起点或终点")
             QMessageBox.warning(self, "错误", "请先设置起点和终点")
             return
         
         # 检查地图源是否已设置
         map_source = map_config.get_map_source()
         if not map_source:
+            self.logger.warning("路线规划失败：未设置地图数据源")
             QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
             return
 
@@ -754,6 +850,11 @@ class GpxStudio(QMainWindow):
 
         self.logger.info(f"开始规划路线，方式: {transport_mode}")
         self.logger.debug(f"起点: {self.start_coords}, 终点: {self.end_coords}")
+        self.logger.debug(f"途径点数量: {len(self.waypoints_coords)}")
+        self.logger.debug(f"总点数: {len(points)}")
+        
+        if self.waypoints_coords:
+            self.logger.debug(f"途径点: {self.waypoints_coords}")
 
         try:
             self.progress_bar.setMaximum(0)
@@ -892,6 +993,9 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("路线规划出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"路线规划出错: {str(e)}")
+        
+        self.logger.info("路线规划流程完成")
+        self.logger.info("=" * 80)
 
     def show_route_on_map(self):
         """在地图上显示路线"""
@@ -949,7 +1053,12 @@ class GpxStudio(QMainWindow):
 
     def export_gpx(self):
         """导出GPX文件"""
+        self.logger.info("=" * 80)
+        self.logger.info("开始执行GPX文件导出")
+        self.logger.info("=" * 80)
+        
         if not self.route_points:
+            self.logger.warning("GPX导出失败：未规划路线")
             QMessageBox.warning(self, "错误", "请先规划路线")
             return
 
@@ -967,15 +1076,19 @@ class GpxStudio(QMainWindow):
 
         # 生成默认文件名
         default_filename = f"{start_name}_{end_name}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
+        self.logger.debug(f"生成默认文件名: {default_filename}")
 
         file_path, _ = QFileDialog.getSaveFileName(
             self, "保存GPX文件", default_filename, "GPX文件 (*.gpx);;所有文件 (*.*)"
         )
 
         if not file_path:
+            self.logger.info("GPX导出取消：用户未选择文件路径")
             return
 
         self.logger.info(f"开始导出GPX文件: {file_path}")
+        self.logger.debug(f"路线点数量: {len(self.route_points)}")
+        self.logger.debug(f"起始时间: {start_datetime.toString()}")
 
         try:
             self.progress_bar.setMaximum(0)
@@ -994,6 +1107,7 @@ class GpxStudio(QMainWindow):
             self.progress_bar.setValue(50)
             QApplication.processEvents()
 
+            self.logger.debug("执行GPX导出操作...")
             success = self.gpx_service.export_to_gpx(
                 self.route_points, start_datetime, file_path
             )
@@ -1025,6 +1139,9 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("导出出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"导出GPX文件出错: {str(e)}")
+        
+        self.logger.info("GPX导出流程完成")
+        self.logger.info("=" * 80)
 
     # ========== 时间计算相关方法 ==========
 
@@ -1160,9 +1277,14 @@ class GpxStudio(QMainWindow):
 
     def get_current_location(self):
         """获取当前位置（优先使用：Windows原生 → 高德在线定位 → 高德IP定位 → 公共IP定位）"""
+        self.logger.info("=" * 80)
+        self.logger.info("开始执行定位流程")
+        self.logger.info("=" * 80)
+        
         # 检查地图源是否已设置
         map_source = map_config.get_map_source()
         if not map_source:
+            self.logger.warning("定位失败：未设置地图数据源")
             QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
             return
         
@@ -1279,6 +1401,9 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("定位出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
+        
+        self.logger.info("定位流程完成")
+        self.logger.info("=" * 80)
 
     def get_gaode_online_location(self) -> Optional[dict]:
         """

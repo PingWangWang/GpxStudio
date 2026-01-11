@@ -5,6 +5,10 @@ GPX Studio - 路线规划工具
 
 import sys
 from PyQt5.QtWidgets import QApplication
+
+# 导入日志配置，确保重定向功能生效
+import core.logging_setup
+
 from app.app import GpxStudio
 
 

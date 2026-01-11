@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
 from PyQt5.QtCore import Qt
 from services.config.map_config import map_config
 
+from core.logging_setup import clean_logs, open_log_directory
+
 
 class MapConfigDialog(QDialog):
     """地图配置对话框"""
@@ -75,28 +77,100 @@ class MapConfigDialog(QDialog):
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_row = config_layout.addRow("配置状态:", self.status_label)
 
-        self.btn_layout = QHBoxLayout()
-        self.btn_layout.addStretch(1)
+        # 按钮布局 - 按功能分组
+        btn_container_layout = QVBoxLayout()
+        
+        # 第一行：地图配置相关按钮
+        config_btn_layout = QHBoxLayout()
+        config_btn_layout.addStretch(1)
         
         self.test_btn = QPushButton("测试连接")
         self.test_btn.clicked.connect(self.test_connection)
         self.test_btn.setMinimumWidth(100)
-        self.btn_layout.addWidget(self.test_btn)
+        config_btn_layout.addWidget(self.test_btn)
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
         self.save_btn.setMinimumWidth(100)
-        self.btn_layout.addWidget(self.save_btn)
+        config_btn_layout.addWidget(self.save_btn)
 
         self.clear_btn = QPushButton("清除配置")
         self.clear_btn.clicked.connect(self.clear_config)
         self.clear_btn.setMinimumWidth(100)
-        self.btn_layout.addWidget(self.clear_btn)
-
-        self.btn_layout.addStretch(1)
-        self.btn_row = config_layout.addRow("", self.btn_layout)
+        config_btn_layout.addWidget(self.clear_btn)
+        
+        config_btn_layout.addStretch(1)
+        btn_container_layout.addLayout(config_btn_layout)
+        
+        self.btn_row = config_layout.addRow("", btn_container_layout)
 
         tabs.addTab(config_tab, "配置")
+
+        # 日志管理Tab
+        log_tab = QWidget()
+        log_layout = QVBoxLayout(log_tab)
+        
+        # 日志管理说明
+        log_info_label = QLabel()
+        log_info_label.setTextFormat(Qt.RichText)
+        log_info_label.setText("""
+        <div style="padding: 10px; margin-bottom: 20px; background-color: #f0f8ff; border-radius: 5px;">
+            <h4 style="margin-top: 0; color: #2196F3;">日志管理</h4>
+            <p>运行日志记录了应用程序的运行情况，有助于排查问题。</p>
+            <p>当日志文件过大时，可能会影响应用程序性能，建议定期清理。</p>
+        </div>
+        """)
+        log_layout.addWidget(log_info_label)
+        
+        # 日志级别设置
+        log_level_layout = QHBoxLayout()
+        log_level_label = QLabel("日志级别:")
+        log_level_label.setMinimumWidth(80)
+        log_level_layout.addWidget(log_level_label)
+        
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItem("DEBUG", "DEBUG")
+        self.log_level_combo.addItem("INFO", "INFO")
+        self.log_level_combo.addItem("WARNING", "WARNING")
+        self.log_level_combo.addItem("ERROR", "ERROR")
+        self.log_level_combo.addItem("CRITICAL", "CRITICAL")
+        self.log_level_combo.setMinimumWidth(200)
+        log_level_layout.addWidget(self.log_level_combo)
+        
+        self.save_log_level_btn = QPushButton("保存设置")
+        self.save_log_level_btn.clicked.connect(self.on_save_log_level)
+        self.save_log_level_btn.setMinimumWidth(100)
+        log_level_layout.addWidget(self.save_log_level_btn)
+        
+        log_level_layout.addStretch(1)
+        log_layout.addLayout(log_level_layout)
+        
+        # 日志管理按钮
+        log_btn_layout = QHBoxLayout()
+        log_btn_layout.addStretch(1)
+        
+        self.clean_log_btn = QPushButton("清理日志")
+        self.clean_log_btn.clicked.connect(self.on_clean_logs)
+        self.clean_log_btn.setMinimumWidth(120)
+        log_btn_layout.addWidget(self.clean_log_btn)
+
+        self.open_log_btn = QPushButton("打开日志目录")
+        self.open_log_btn.clicked.connect(self.on_open_log_directory)
+        self.open_log_btn.setMinimumWidth(120)
+        log_btn_layout.addWidget(self.open_log_btn)
+        
+        log_btn_layout.addStretch(1)
+        log_layout.addLayout(log_btn_layout)
+        
+        # 日志大小信息
+        from core.logging_setup import get_log_size
+        log_size = get_log_size()
+        log_size_label = QLabel(f"当前日志大小: {log_size:.2f} MB")
+        log_size_label.setAlignment(Qt.AlignCenter)
+        log_size_label.setStyleSheet("margin-top: 20px; font-weight: bold;")
+        log_layout.addWidget(log_size_label)
+        
+        tabs.addTab(log_tab, "日志管理")
 
         help_tab = QWidget()
         help_layout = QVBoxLayout(help_tab)
@@ -207,6 +281,13 @@ class MapConfigDialog(QDialog):
         self.api_key_edit.setText(map_config.get_api_key())
         self.security_key_edit.setText(map_config.get_security_key())
         
+        # 加载日志级别配置
+        log_level = map_config.get('log_level', 'INFO')
+        for i in range(self.log_level_combo.count()):
+            if self.log_level_combo.itemData(i) == log_level:
+                self.log_level_combo.setCurrentIndex(i)
+                break
+        
         # 确保所有控件都可见
         self.api_key_edit.setVisible(True)
         self.api_key_eye_btn.setVisible(True)
@@ -304,3 +385,30 @@ class MapConfigDialog(QDialog):
         else:
             self.security_key_edit.setEchoMode(QLineEdit.Password)
             self.security_key_eye_btn.setText("👁️")
+    
+    def on_clean_logs(self):
+        """清理日志"""
+        reply = QMessageBox.question(self, "确认", "确定要清理所有运行日志吗？",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            if clean_logs():
+                QMessageBox.information(self, "成功", "日志已清理")
+            else:
+                QMessageBox.critical(self, "错误", "清理日志失败")
+    
+    def on_open_log_directory(self):
+        """打开日志目录"""
+        if open_log_directory():
+            pass  # 目录已打开
+        else:
+            QMessageBox.critical(self, "错误", "打开日志目录失败")
+    
+    def on_save_log_level(self):
+        """保存日志级别设置"""
+        from core.logging_setup import set_log_level
+        selected_level = self.log_level_combo.currentData()
+        try:
+            set_log_level(selected_level)
+            QMessageBox.information(self, "成功", f"日志级别已设置为: {selected_level}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存日志级别失败: {str(e)}")

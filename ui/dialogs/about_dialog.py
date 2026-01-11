@@ -1,6 +1,8 @@
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
 
+from core.logging_setup import get_log_size
+
 
 class AboutDialog(QDialog):
     """
@@ -61,7 +63,13 @@ class AboutDialog(QDialog):
 
     def _get_about_text(self):
         """获取关于对话框的HTML内容"""
-        return """
+        log_size = get_log_size()
+        log_warning = ""
+        if log_size > 100:
+            log_warning = "<div style='color: red;'>⚠️ 运行日志超过100MB，请及时清理</div>"
+        
+        # 使用普通字符串拼接，避免format方法解析CSS中的大括号
+        html = """
         <style>
             body {
                 font-family: 'Microsoft YaHei', Arial, sans-serif;
@@ -119,6 +127,14 @@ class AboutDialog(QDialog):
                 padding: 10px;
                 border-radius: 3px;
             }
+            .log-info {
+                font-size: 9pt;
+                text-align: center;
+                background-color: #f0f8ff;
+                padding: 10px;
+                border-radius: 3px;
+                margin: 10px 0;
+            }
             .copyright {
                 font-size: 9pt;
                 color: #777;
@@ -151,6 +167,21 @@ class AboutDialog(QDialog):
                 </div>
             </div>
             <div class="section">
+                <div class="log-info">
+                    运行日志大小: 
+        """
+        
+        html += "{:.2f}".format(log_size)
+        html += " MB"
+        
+        if log_warning:
+            html += "<br>"
+            html += log_warning
+        
+        html += """
+                </div>
+            </div>
+            <div class="section">
                 <div class="copyright">
                     © 2024-2025 GPX Studio 团队<br>
                     使用高德地图API，© 2025 AutoNavi
@@ -158,3 +189,5 @@ class AboutDialog(QDialog):
             </div>
         </div>
         """
+        
+        return html
