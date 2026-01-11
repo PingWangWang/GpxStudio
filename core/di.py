@@ -8,9 +8,9 @@ from injector import Injector, singleton, Module
 from typing import Optional
 
 # 导入需要注入的服务和组件
-from services.gaode_geocoding import GaodeGeocodingService
-from services.gaode_routing import GaodeRoutingService
-from services.osm_geocoding import OsmGeocodingService
+from services.gaode.gaode_geocoding import GaodeGeocodingService
+from services.gaode.gaode_routing import GaodeRoutingService
+from services.osm.osm_geocoding import OsmGeocodingService
 from services.config.map_config import MapConfig
 from core.signals import SignalManager
 

@@ -224,7 +224,7 @@ class MapConfigDialog(QDialog):
             QMessageBox.warning(self, "警告", "请先输入API Key")
             return
 
-        from services.gaode_geocoding import GaodeGeocodingService
+        from services.gaode.gaode_geocoding import GaodeGeocodingService
         service = GaodeGeocodingService(api_key=api_key)
         result = service.search_location("北京市")
 

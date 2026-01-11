@@ -9,9 +9,16 @@ __pycache__/
 env/
 venv/
 
+# 构建文件
+*.egg-info/
+dist/
+build/
+*.egg
+*.nuitka
+*.nuitka-build/
+
 # PyInstaller构建文件
 build/GPXStudio/
-dist/
 *.spec
 
 # IDE配置文件
@@ -33,6 +40,11 @@ Thumbs.db
 *.temp
 *.bak
 
-# 测试文件（可选）
+# 测试文件
 tests/results/
+.pytest_cache/
+
+# 本地配置
+*.local
+config/local/
 

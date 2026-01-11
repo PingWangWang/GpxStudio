@@ -62,22 +62,38 @@ GPX Studio 是一款基于 PyQt5 开发的开源路线规划工具，支持多�
 
 ## 项目结构
 
+### 项目根目录
 ```
 GPX-Studio/
-├── app/              # 主应用
-├── core/             # 核心逻辑
-├── modules/          # 功能模块
-│   ├── geolocation/  # 定位
-│   ├── gpx/          # GPX处理
-│   ├── map/          # 地图渲染
-│   ├── routing/      # 路线规划
-│   └── search/       # 位置搜索
-├── services/         # 服务层
-├── ui/               # UI组件
-├── tests/            # 测试用例
-├── main.py           # 入口
-├── requirements.txt  # 依赖
-└── README.md         # 说明
+├── main.py                 # 应用程序入口
+├── requirements.txt        # 项目依赖
+├── setup.py                # 包构建配置
+├── setup.cfg               # 安装配置
+├── .gitignore              # Git忽略规则
+├── README.md               # 项目说明
+├── docs/                   # 文档
+├── scripts/                # 工具脚本
+```
+
+### 源代码结构
+```
+GPX-Studio/
+├── app/                    # 主应用
+├── core/                   # 核心逻辑
+├── modules/                # 功能模块
+│   ├── geolocation/        # 定位
+│   ├── gpx/                # GPX处理
+│   ├── map/                # 地图渲染
+│   ├── routing/            # 路线规划
+│   └── search/             # 位置搜索
+├── services/               # 服务层
+│   ├── config/             # 配置服务
+│   ├── gaode/              # 高德地图服务
+│   ├── osm/                # OSM地图服务
+│   ├── http/               # HTTP服务
+│   └── interfaces/         # 服务接口
+├── ui/                     # UI组件
+├── tests/                  # 测试用例
 ```
 
 ## 贡献
