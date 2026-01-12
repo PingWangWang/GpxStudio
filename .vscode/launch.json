@@ -7,12 +7,15 @@
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "cwd": "${workspaceFolder}",
+            "pythonPath": "${command:python.interpreterPath}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
-            "python": "${command:python.interpreterPath}"
+            "stopOnEntry": false,
+            "redirectOutput": true,
+            "redirectInput": true
         },
         {
             "name": "Python: GPX Studio (External Terminal)",
@@ -20,12 +23,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "console": "externalTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
-            "python": "${command:python.interpreterPath}"
+            "stopOnEntry": false
         },
         {
             "name": "Python: Debug Core Module",
@@ -33,12 +36,13 @@
             "request": "launch",
             "module": "core.app",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
-            "python": "${command:python.interpreterPath}"
+            "stopOnEntry": false,
+            "redirectOutput": true
         },
         {
             "name": "Python: Debug Services",
@@ -46,12 +50,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/test_services.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
-            "python": "${command:python.interpreterPath}"
+            "stopOnEntry": false,
+            "redirectOutput": true
         }
     ]
 }

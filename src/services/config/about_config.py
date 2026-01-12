@@ -5,7 +5,16 @@
 提供关于对话框中展示的各种信息的配置功能
 """
 
+import os
+import sys
+
+# 添加项目根目录到Python路径
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
 from typing import Dict, Any, Optional
+
+# 导入统一版本号
+from version import __version__
 
 
 class AboutConfig:
@@ -19,7 +28,7 @@ class AboutConfig:
         return {
             "app_info": {
                 "name": "GPX Studio",
-                "version": "1.1.1",
+                "version": __version__,
                 "platform": "Windows",
                 "description": "路线规划工具，支持多种交通方式，可导出GPX格式文件"
             },
@@ -46,13 +55,13 @@ class AboutConfig:
         """获取配置项"""
         keys = key.split('.')
         value = self._config_data
-        
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
                 return default
-        
+
         return value
 
     def get_app_name(self) -> str:
