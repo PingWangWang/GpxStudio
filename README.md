@@ -69,31 +69,41 @@ GPX-Studio/
 ├── requirements.txt        # 项目依赖
 ├── setup.py                # 包构建配置
 ├── setup.cfg               # 安装配置
-├── .gitignore              # Git忽略规则
+├── version.py              # 版本信息
 ├── README.md               # 项目说明
-├── docs/                   # 文档
-├── scripts/                # 工具脚本
+├── build/                  # 构建脚本
+├── clean.py                # 清理脚本
+├── .vscode/                # VS Code配置
+├── .gitignore              # Git忽略规则
+├── .venv/                  # 虚拟环境（可选）
 ```
 
 ### 源代码结构
 ```
 GPX-Studio/
-├── app/                    # 主应用
-├── core/                   # 核心逻辑
-├── modules/                # 功能模块
-│   ├── geolocation/        # 定位
-│   ├── gpx/                # GPX处理
-│   ├── map/                # 地图渲染
-│   ├── routing/            # 路线规划
-│   └── search/             # 位置搜索
-├── services/               # 服务层
-│   ├── config/             # 配置服务
-│   ├── gaode/              # 高德地图服务
-│   ├── osm/                # OSM地图服务
-│   ├── http/               # HTTP服务
-│   └── interfaces/         # 服务接口
-├── ui/                     # UI组件
-├── tests/                  # 测试用例
+├── src/                    # 源代码根目录
+│   ├── app/                # 主应用
+│   ├── core/               # 核心逻辑
+│   ├── modules/            # 功能模块
+│   │   ├── geolocation/    # 定位功能
+│   │   ├── gpx/            # GPX处理
+│   │   ├── map/            # 地图渲染
+│   │   ├── routing/        # 路线规划
+│   │   └── search/         # 位置搜索
+│   ├── services/           # 服务层
+│   │   ├── config/         # 配置服务
+│   │   ├── gaode/          # 高德地图服务
+│   │   ├── osm/            # OSM地图服务
+│   │   ├── http/           # HTTP服务
+│   │   └── interfaces/     # 服务接口
+│   ├── ui/                 # UI组件
+│   │   ├── dialogs/        # 对话框
+│   │   ├── layout/         # 布局管理
+│   │   └── panels/         # 面板组件
+│   ├── tests/              # 测试用例
+│   ├── scripts/            # 工具脚本
+│   ├── docs/               # 文档
+│   └── version.py          # 版本信息
 ```
 
 ## 贡献

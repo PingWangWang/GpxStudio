@@ -10,6 +10,7 @@ import subprocess
 import shutil
 import site
 import sys
+import time
 
 # 项目根目录（相对路径，脚本位于build目录下）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,8 +30,46 @@ DIST_FILE = os.path.join(PROJECT_ROOT, "dist", f"{BUILD_NAME}.exe")
 VENV_DIR = os.path.join(PROJECT_ROOT, ".venv")
 REQUIREMENTS_FILE = os.path.join(PROJECT_ROOT, "requirements.txt")
 
+# 图标文件配置
+ICON_FILE = os.path.join(PROJECT_ROOT, "res", "GPXStudio.png")
+ICO_FILE = os.path.join(PROJECT_ROOT, "res", "GPXStudio.ico")
+
 # 声明全局变量，将在main函数中初始化
 XYZ_SERVICES_DATA = None
+
+
+def convert_png_to_ico():
+    """将PNG图标转换为ICO格式，如果需要的话"""
+    try:
+        from PIL import Image
+
+        # 如果ICO文件不存在或者比PNG文件旧，则转换
+        if not os.path.exists(ICO_FILE) or os.path.getmtime(ICON_FILE) > os.path.getmtime(ICO_FILE):
+            print(f"[GPXStudio] 转换图标文件: {ICON_FILE} -> {ICO_FILE}")
+            img = Image.open(ICON_FILE)
+
+            # 确保图标是正方形的
+            if img.size[0] != img.size[1]:
+                # 如果不是正方形，裁剪成正方形
+                size = min(img.size)
+                img = img.crop(((img.size[0] - size) // 2, (img.size[1] - size) // 2,
+                               (img.size[0] + size) // 2, (img.size[1] + size) // 2))
+
+            # 转换为ICO格式，包含多种尺寸
+            img.save(ICO_FILE, format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+            print(f"[GPXStudio] 图标转换完成")
+        else:
+            print(f"[GPXStudio] ICO图标文件已是最新版本")
+
+    except ImportError:
+        print(f"[GPXStudio] 警告：Pillow库未安装，无法转换PNG到ICO格式")
+        print(f"[GPXStudio] 请手动转换 {ICON_FILE} 为 {ICO_FILE}")
+        return False
+    except Exception as e:
+        print(f"[GPXStudio] 警告：图标转换失败: {e}")
+        return False
+
+    return True
 
 
 def main():
@@ -38,6 +77,13 @@ def main():
 
     # 进入项目根目录
     os.chdir(PROJECT_ROOT)
+
+    # 检查和转换图标文件
+    print("[GPXStudio] 准备图标文件...")
+    if os.path.exists(ICON_FILE):
+        convert_png_to_ico()
+    else:
+        print(f"[GPXStudio] 警告：找不到图标文件: {ICON_FILE}")
 
     # 清理之前的构建文件
     if os.path.exists(BUILD_DIR):
@@ -75,11 +121,20 @@ def main():
         print(f"[GPXStudio] 错误信息: {result.stderr}")
         return 1
 
+    # 安装Pillow库用于图标转换
+    print("[GPXStudio] 安装Pillow库用于图标转换...")
+    pillow_cmd = [pip_path, "install", "Pillow"]
+    result = subprocess.run(pillow_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"[GPXStudio] 警告：安装Pillow库失败，将无法自动转换图标格式")
+        print(f"[GPXStudio] 错误信息: {result.stderr}")
+
     # 导入site模块
     import site
 
     # 更新sys.path以使用虚拟环境
-    sys.path.insert(0, os.path.join(VENV_DIR, "lib", "site-packages"))
+    venv_site_packages = os.path.join(VENV_DIR, "Lib", "site-packages")
+    sys.path.insert(0, venv_site_packages)
 
     # 刷新site-packages路径
     import importlib
@@ -92,21 +147,27 @@ def main():
     global XYZ_SERVICES_DATA
     print("[GPXStudio] 查找xyzservices包的位置...")
     try:
-        import xyzservices
-        xyzservices_path = os.path.dirname(xyzservices.__file__)
+        # 直接从虚拟环境路径查找
+        xyzservices_path = os.path.join(venv_site_packages, "xyzservices")
         XYZ_SERVICES_DATA = os.path.join(xyzservices_path, "data")
+
+        if not os.path.exists(XYZ_SERVICES_DATA):
+            # 如果直接路径不存在，尝试导入方式
+            import xyzservices
+            xyzservices_path = os.path.dirname(xyzservices.__file__)
+            XYZ_SERVICES_DATA = os.path.join(xyzservices_path, "data")
     except ImportError:
         # 如果无法导入，尝试从site-packages中查找
-        site_packages = site.getsitepackages()
+        site_packages_list = [venv_site_packages]
         XYZ_SERVICES_DATA = None
-        for sp in site_packages:
+        for sp in site_packages_list:
             candidate_path = os.path.join(sp, "xyzservices", "data")
             if os.path.exists(candidate_path):
                 XYZ_SERVICES_DATA = candidate_path
                 break
         if not XYZ_SERVICES_DATA:
-            # 如果仍然找不到，回退到相对路径（适用于开发环境）
-            XYZ_SERVICES_DATA = os.path.join(VENV_DIR, "lib", "site-packages", "xyzservices", "data")
+            # 如果仍然找不到，使用默认路径
+            XYZ_SERVICES_DATA = os.path.join(venv_site_packages, "xyzservices", "data")
 
     print(f"[GPXStudio] 使用xyzservices数据路径: {XYZ_SERVICES_DATA}")
 
@@ -117,8 +178,8 @@ def main():
 
     # 执行PyInstaller命令构建发布版本
     print("[GPXStudio] 执行PyInstaller构建命令...")
-    # 使用系统的pyinstaller
-    pyinstaller_path = "pyinstaller.exe"
+    # 使用虚拟环境的pyinstaller提高兼容性
+    pyinstaller_path = os.path.join(VENV_DIR, "Scripts", "pyinstaller.exe")
     print(f"[GPXStudio] 使用pyinstaller路径: {pyinstaller_path}")
 
     # 在Windows中，--add-data参数使用分号分隔，需要正确处理路径
@@ -126,7 +187,24 @@ def main():
         pyinstaller_path,
         "--onefile",
         "--windowed",
-        f"--name={BUILD_NAME}",
+        "--clean",  # 强制清理，确保图标正确应用
+        "--noconfirm",  # 不询问覆盖
+        "--noupx",  # 禁用UPX压缩，加快打包速度
+        "--optimize=2",  # 优化级别2
+        f"--name={BUILD_NAME}"
+    ]
+
+    # 如果ICO文件存在，立即添加图标参数（在其他参数之前）
+    if os.path.exists(ICO_FILE):
+        abs_ico_path = os.path.abspath(ICO_FILE)
+        command.extend(["--icon", abs_ico_path])
+        print(f"[GPXStudio] 使用图标文件: {abs_ico_path}")
+    else:
+        print(f"[GPXStudio] 警告：未找到ICO图标文件，将使用默认图标")
+
+    # 继续添加其他参数
+    command.extend([
+        # 数据文件
         "--add-data", "src/services/config/config;services/config/config",
         "--add-data", "src/ui;ui",
         "--add-data", "src/modules;modules",
@@ -134,28 +212,43 @@ def main():
         "--add-data", "src/core;core",
         "--add-data", "src/app;app",
         "--add-data", "src/version.py;version.py",
+        "--add-data", "res;res",
         "--add-data", f"{XYZ_SERVICES_DATA};xyzservices/data",
+        # 排除不需要的模块减小体积
+        "--exclude-module", "tkinter",
+        "--exclude-module", "matplotlib",
+        "--exclude-module", "scipy",
+        "--exclude-module", "pandas",
+        "--exclude-module", "IPython",
+        "--exclude-module", "jupyter",
+        "--exclude-module", "notebook",
+        # 只添加必要的hidden-import
         "--hidden-import", "PyQt5.sip",
         "--hidden-import", "PyQt5.QtCore",
         "--hidden-import", "PyQt5.QtGui",
         "--hidden-import", "PyQt5.QtWidgets",
         "--hidden-import", "PyQt5.QtWebEngineWidgets",
         "--hidden-import", "PyQt5.QtWebEngineCore",
-        "--hidden-import", "logging.handlers",
+        "--hidden-import", "logging.handlers",  # 修复启动错误
+        "--hidden-import", "logging.config",
         "--hidden-import", "json",
         "--hidden-import", "requests",
-        "--hidden-import", "geopy",
+        "--hidden-import", "geopy.distance",
+        "--hidden-import", "geopy.geocoders",
         "--hidden-import", "gpxpy",
         "--hidden-import", "folium",
         "--hidden-import", "folium.plugins",
         "--hidden-import", "xyzservices",
         "--hidden-import", "jinja2",
-        "--hidden-import", "numpy",
         "--hidden-import", "branca",
+        "--hidden-import", "core.resource_path",
         "--hidden-import", "version",
-        "--hidden-import", "geopy.distance",
-        "main.py"
-    ]
+        "--hidden-import", "PyQt5.QtWebKit",
+        "--hidden-import", "winrt.windows.devices.geolocation"
+    ])
+
+    # 最后添加主文件
+    command.append("main.py")
 
     # 验证所有路径是否存在
     print("[GPXStudio] 验证路径是否存在...")
@@ -167,6 +260,7 @@ def main():
         "src/core",
         "src/app",
         "src/version.py",
+        "res",
         XYZ_SERVICES_DATA,
         "main.py"
     ]
@@ -177,6 +271,17 @@ def main():
         else:
             print(f"[GPXStudio] ❌ 路径不存在: {path}")
 
+    # 验证图标文件
+    if os.path.exists(ICON_FILE):
+        print(f"[GPXStudio] ✅ PNG图标文件存在: {ICON_FILE}")
+    else:
+        print(f"[GPXStudio] ❌ PNG图标文件不存在: {ICON_FILE}")
+
+    if os.path.exists(ICO_FILE):
+        print(f"[GPXStudio] ✅ ICO图标文件存在: {ICO_FILE}")
+    else:
+        print(f"[GPXStudio] ❌ ICO图标文件不存在: {ICO_FILE}")
+
     # 打印完整的命令
     print("[GPXStudio] 执行命令:")
     print(' '.join(command))
@@ -186,18 +291,20 @@ def main():
         print("[GPXStudio] 正在构建...")
 
         # PyInstaller构建步骤及对应进度百分比
-        build_steps = [
-            ("analyzing", 10),    # 分析脚本依赖
-            ("collecting", 30),   # 收集依赖文件
-            ("extracting", 50),   # 提取二进制文件
-            ("building", 70),     # 构建可执行文件
-            ("copying", 85),      # 复制资源文件
-            ("compressing", 95),  # 压缩文件
-            ("completed", 100)    # 构建完成
-        ]
+        build_steps = {
+            "analyzing": 10,
+            "collecting": 25,
+            "building exe": 40,
+            "building pkg": 55,
+            "copying": 70,
+            "extracting": 85,
+            "completed successfully": 100
+        }
 
         current_progress = 0
-        step_index = 0
+        max_progress = 0  # 防止进度回跳
+        start_time = time.time()
+        last_update_time = start_time
 
         process = subprocess.Popen(
             command,
@@ -209,31 +316,44 @@ def main():
 
         # 实时处理输出
         for line in iter(process.stdout.readline, ''):
-            line = line.strip()
+            line = line.strip().lower()
+            current_time = time.time()
 
-            # 解析PyInstaller输出，更新进度
-            for i, (step, percent) in enumerate(build_steps[step_index:], start=step_index):
-                if step in line.lower():
-                    current_progress = percent
-                    step_index = i
+            # 检查关键词匹配
+            matched_progress = 0
+            for keyword, progress in build_steps.items():
+                if keyword in line:
+                    matched_progress = progress
                     break
 
-            # 如果没有匹配到步骤，逐步增加进度
-            if current_progress < 95 and step_index < len(build_steps) - 1:
-                current_progress += 0.1
-                if current_progress > build_steps[step_index + 1][1]:
-                    current_progress = build_steps[step_index + 1][1]
+            # 如果匹配到关键词，更新进度
+            if matched_progress > 0:
+                current_progress = matched_progress
+            # 如果没有匹配到且距离上次更新超过2秒，小幅增加进度
+            elif current_time - last_update_time > 2 and current_progress < 90:
+                current_progress += 2
+                last_update_time = current_time
 
-            # 确保进度不超过100%
-            current_progress = min(current_progress, 100)
+            # 防止进度回跳，确保进度只能增加
+            if current_progress > max_progress:
+                max_progress = current_progress
+            else:
+                current_progress = max_progress
+
+            # 确保进度不超过99%（除非明确完成）
+            if "completed successfully" not in line:
+                current_progress = min(current_progress, 99)
 
             # 绘制进度条
             bar_length = 50
             filled_length = int(bar_length * current_progress // 100)
             bar = "█" * filled_length + "-" * (bar_length - filled_length)
 
-            # 显示进度条和百分比
-            sys.stdout.write(f"\r[GPXStudio] 构建中 [{bar}] {current_progress:.1f}% ")
+            # 计算用时
+            elapsed_time = current_time - start_time
+
+            # 显示进度条、百分比和用时
+            sys.stdout.write(f"\r[GPXStudio] 构建中 [{bar}] {current_progress:.0f}% ({elapsed_time:.0f}s) ")
             sys.stdout.flush()
 
         process.wait()

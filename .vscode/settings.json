@@ -17,5 +17,11 @@
     },
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.autoImportCompletions": true,
-    "python.analysis.indexing": true
+    "python.analysis.indexing": true,
+    "chat.tools.terminal.autoApprove": {
+        "/^cd \"d:\\\\Code\\\\GpxStudio\" ; python -c \"\nimport os\nimport subprocess\nimport time\n\n# 清理测试文件\ntest_exe = 'dist/QuickIconTest\\.exe'\nif os\\.path\\.exists\\(test_exe\\):\n    os\\.remove\\(test_exe\\)\n\n# 使用修复后的参数顺序进行快速测试\npyinstaller_path = '\\.venv/Scripts/pyinstaller\\.exe'\nico_file = os\\.path\\.abspath\\('res/GPXStudio\\.ico'\\)\n\ncommand = \\[\n    pyinstaller_path,\n    '--onefile', '--windowed', '--clean', '--noconfirm',\n    '--name=QuickIconTest',\n    '--icon', ico_file,  # 图标参数在前面\n    '--add-data', 'src/core;core',\n    '--hidden-import', 'core\\.resource_path',\n    'main\\.py'\n\\]\n\nprint\\('执行快速图标测试\\.\\.\\.'\\)\nstart = time\\.time\\(\\)\nresult = subprocess\\.run\\(command, capture_output=True, text=True\\)\nelapsed = time\\.time\\(\\) - start\n\nif result\\.returncode == 0:\n    print\\(f'✅ 快速测试成功! \\(\\{elapsed:\\.1f\\}秒\\)'\\)\n    if os\\.path\\.exists\\(test_exe\\):\n        size = os\\.path\\.getsize\\(test_exe\\) / \\(1024\\*1024\\)\n        print\\(f'测试文件: \\{test_exe\\} \\(\\{size:\\.1f\\}MB\\)'\\)\n        print\\('请检查文件管理器中的图标是否正确!'\\)\n    else:\n        print\\('❌ 测试文件未生成'\\)\nelse:\n    print\\(f'❌ 快速测试失败 \\(返回码: \\{result\\.returncode\\}\\)'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

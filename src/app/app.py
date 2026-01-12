@@ -6,8 +6,9 @@ GPX Studio 主应用窗口
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication, QDialog, QTimeEdit)
+                             QApplication, QDialog, QTimeEdit, QSystemTrayIcon, QMenu, QAction)
 from PyQt5.QtCore import Qt, QTimer, QTime
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
@@ -19,6 +20,7 @@ import core.logging_setup
 
 # 导入信号管理器
 from core.signals import SignalManager
+from core.resource_path import get_icon_path
 
 from modules.geolocation.geolocation import GeolocationHandler
 from modules.map.webengine import ConsoleWebEnginePage
@@ -55,44 +57,44 @@ class GpxStudio(QMainWindow):
         print("=" * 80)
         print("GPX Studio 程序启动开始")
         print("=" * 80)
-        
+
         # 先初始化基本组件，然后再初始化日志系统
         print("开始初始化窗口设置")
         self._init_window()
         print("窗口设置初始化完成")
-        
+
         print("开始初始化服务")
         self._init_services()
         print("服务初始化完成")
-        
+
         print("开始初始化数据状态")
         self._init_data_state()
         print("数据状态初始化完成")
-        
+
         print("开始初始化定位和信号系统")
         self._init_geolocation_and_signals()
         print("定位和信号系统初始化完成")
-        
+
         print("开始初始化UI")
         self._init_ui()
         print("UI初始化完成")
-        
+
         print("开始初始化日志系统")
         self._init_logging()
         print("日志系统初始化完成")
-        
+
         # 添加启动完成标记日志
         self.logger.info("=" * 80)
         self.logger.info("GPX Studio 程序启动完成")
         self.logger.info("=" * 80)
         self.logger.info("所有初始化步骤已完成")
-        
+
         # 记录初始化完成后的状态
         self.logger.debug("程序启动完成，开始记录初始化状态")
         self.logger.debug(f"窗口标题: {self.windowTitle()}")
         self.logger.debug(f"窗口大小: {self.size()}")
         self.logger.debug("程序启动状态: 正常")
-        
+
         # 标记首次启动完成，调整日志级别
         from core.logging_setup import mark_first_run_completed
         mark_first_run_completed()
@@ -101,35 +103,125 @@ class GpxStudio(QMainWindow):
         """初始化窗口设置"""
         print(f"设置窗口标题: {WINDOW_TITLE}")
         self.setWindowTitle(WINDOW_TITLE)
-        
+
         print(f"设置窗口大小: {WINDOW_SIZE}")
         self.resize(*WINDOW_SIZE)
+
+        # 设置窗口图标
+        print("设置窗口图标")
+        icon_path = get_icon_path()
+        print(f"图标路径: {icon_path}")
+        if os.path.exists(icon_path):
+            self.app_icon = QIcon(icon_path)
+            self.setWindowIcon(self.app_icon)
+            print("窗口图标设置成功")
+
+            # 初始化系统托盘图标
+            self._init_tray_icon()
+        else:
+            print(f"警告: 图标文件不存在 - {icon_path}")
+            self.app_icon = None
 
         # 窗口居中
         print("开始窗口居中操作")
         screen = QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
         print(f"屏幕几何信息: {screen_geometry}")
-        
+
         window_geometry = self.frameGeometry()
         center_point = screen_geometry.center()
         print(f"屏幕中心点: {center_point}")
-        
+
         window_geometry.moveCenter(center_point)
         print(f"窗口居中后的位置: {window_geometry.topLeft()}")
         self.move(window_geometry.topLeft())
         print("窗口居中操作完成")
 
+    def _init_tray_icon(self):
+        """初始化系统托盘图标"""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            print("系统不支持系统托盘")
+            return
+
+        print("初始化系统托盘图标")
+
+        # 创建系统托盘图标
+        self.tray_icon = QSystemTrayIcon(self)
+        if self.app_icon:
+            self.tray_icon.setIcon(self.app_icon)
+
+        # 创建托盘菜单
+        tray_menu = QMenu()
+
+        # 显示/隐藏窗口动作
+        show_action = QAction("显示窗口", self)
+        show_action.triggered.connect(self.show_window)
+        tray_menu.addAction(show_action)
+
+        hide_action = QAction("隐藏窗口", self)
+        hide_action.triggered.connect(self.hide)
+        tray_menu.addAction(hide_action)
+
+        tray_menu.addSeparator()
+
+        # 退出动作
+        quit_action = QAction("退出程序", self)
+        quit_action.triggered.connect(self.close_application)
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+
+        # 设置托盘图标工具提示
+        self.tray_icon.setToolTip("GPX Studio - GPS路线规划工具")
+
+        # 连接双击事件
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+
+        # 显示托盘图标
+        self.tray_icon.show()
+        print("系统托盘图标初始化完成")
+
+    def show_window(self):
+        """显示窗口"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def on_tray_icon_activated(self, reason):
+        """托盘图标激活事件处理"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window()
+
+    def close_application(self):
+        """关闭应用程序"""
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.hide()
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        """重写关闭事件，实现最小化到托盘"""
+        if hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
+            self.hide()
+            self.tray_icon.showMessage(
+                "GPX Studio",
+                "应用程序已最小化到系统托盘。双击托盘图标或右键菜单可以恢复窗口。",
+                QSystemTrayIcon.Information,
+                2000
+            )
+            event.ignore()
+        else:
+            event.accept()
+
     def _init_services(self):
         """初始化服务"""
         print("开始初始化服务")
-        
+
         # 获取配置信息
         api_key = map_config.get_api_key()
         security_key = map_config.get_security_key()
         print(f"API Key 配置: {'已配置' if api_key else '未配置'}")
         print(f"Security Key 配置: {'已配置' if security_key else '未配置'}")
-        
+
         # 初始化高德地理编码服务
         print("初始化高德地理编码服务")
         self.gaode_geocoding_service = GaodeGeocodingService(
@@ -137,7 +229,7 @@ class GpxStudio(QMainWindow):
             security_key=security_key,
             logger=self._log_to_geocoding
         )
-        
+
         # 初始化高德路线规划服务
         print("初始化高德路线规划服务")
         self.gaode_routing_service = GaodeRoutingService(
@@ -145,29 +237,29 @@ class GpxStudio(QMainWindow):
             security_key=security_key,
             logger=self._log_to_routing
         )
-        
+
         # 初始化OSM地理编码服务
         print("初始化OSM地理编码服务")
         self.osm_geocoding_service = OsmGeocodingService(
             logger=self._log_to_geocoding
         )
-        
+
         # 初始化OSM路线规划服务
         print("初始化OSM路线规划服务")
         self.osm_routing_service = OsmRoutingService(
             logger=self._log_to_routing
         )
-        
+
         # 初始化GPX导出服务
         print("初始化GPX导出服务")
         self.gpx_service = GpxExportService(logger=self._log_to_gpx)
-        
+
         print("服务初始化完成")
 
     def _init_data_state(self):
         """初始化数据状态"""
         print("开始初始化数据状态")
-        
+
         self.start_coords = None
         self.start_name = None
         self.end_coords = None
@@ -185,27 +277,27 @@ class GpxStudio(QMainWindow):
         self.last_selected_level = None
         self.last_selected_type = None
         self.last_selected_from_search = False
-        
+
         print("数据状态初始化完成")
         print(f"初始数据状态: start_coords={self.start_coords}, end_coords={self.end_coords}, waypoints_coords={self.waypoints_coords}")
 
     def _init_geolocation_and_signals(self):
         """初始化定位和信号系统"""
         print("开始初始化定位和信号系统")
-        
+
         print("创建地理定位处理器")
         self.geolocation_handler = GeolocationHandler()
-        
+
         print("创建信号管理器")
         self.signal_manager = SignalManager()
 
         # 使用信号管理器连接地理定位信号
         print("连接地理定位成功信号")
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
-        
+
         print("连接地理定位错误信号")
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
-        
+
         print("定位和信号系统初始化完成")
 
     def _init_ui(self):
@@ -229,7 +321,7 @@ class GpxStudio(QMainWindow):
             # 获取地图数据源
             map_source = map_config.get_map_source()
             self.logger.info(f"地图数据源已更新: {map_source}")
-            
+
             # 如果是高德地图，更新API Key
             if map_source == "gaode":
                 api_key = map_config.get_api_key()
@@ -239,13 +331,13 @@ class GpxStudio(QMainWindow):
                 self.gaode_routing_service.api_key = api_key
                 self.gaode_routing_service.security_key = security_key
                 self.logger.info("高德地图API配置已更新")
-            
+
             # 清空所有路线相关数据
             self.clear_route_data()
-            
+
             # 重新加载地图
             self.show_initial_map()
-    
+
     def clear_route_data(self):
         """清空所有路线相关数据"""
         # 清空起点终点数据
@@ -253,27 +345,27 @@ class GpxStudio(QMainWindow):
         self.start_name = None
         self.end_coords = None
         self.end_name = None
-        
+
         # 清空途径点数据
         self.waypoints_coords = []
         self.waypoints_names = []
-        
+
         # 清空路线数据
         self.current_route = None
         self.route_points = []
         self.estimated_duration_seconds = 0
-        
+
         # 清空搜索相关数据
         self.search_results = []
         self.searching_for = None
         self.selected_search_result_coords = None
-        
+
         # 清空最后选中位置数据
         self.last_selected_coords = None
         self.last_selected_level = None
         self.last_selected_type = None
         self.last_selected_from_search = False
-        
+
         # 清空UI显示
         if hasattr(self, 'start_list'):
             self.start_list.clear()
@@ -285,7 +377,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.clear()
         if hasattr(self, 'search_results_title'):
             self.search_results_title.setText("搜索结果")
-        
+
         self.logger.info("已清空所有路线相关数据")
 
     def _log_to_service(self, level: str, message: str):
@@ -516,12 +608,12 @@ class GpxStudio(QMainWindow):
     def _perform_search(self, search_text, location_type):
         """执行搜索"""
         map_source = map_config.get_map_source()
-        
+
         # 检查地图源是否已设置
         if not map_source:
             QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
             return
-        
+
         if map_source == "gaode":
             if map_config.is_gaode_configured():
                 locations = self.gaode_geocoding_service.search_location(search_text)
@@ -836,12 +928,12 @@ class GpxStudio(QMainWindow):
         self.logger.info("=" * 80)
         self.logger.info("开始执行路线规划")
         self.logger.info("=" * 80)
-        
+
         if not self.start_coords or not self.end_coords:
             self.logger.warning("路线规划失败：未设置起点或终点")
             QMessageBox.warning(self, "错误", "请先设置起点和终点")
             return
-        
+
         # 检查地图源是否已设置
         map_source = map_config.get_map_source()
         if not map_source:
@@ -856,7 +948,7 @@ class GpxStudio(QMainWindow):
         self.logger.debug(f"起点: {self.start_coords}, 终点: {self.end_coords}")
         self.logger.debug(f"途径点数量: {len(self.waypoints_coords)}")
         self.logger.debug(f"总点数: {len(points)}")
-        
+
         if self.waypoints_coords:
             self.logger.debug(f"途径点: {self.waypoints_coords}")
 
@@ -872,7 +964,7 @@ class GpxStudio(QMainWindow):
 
             self.logger.debug("正在调用路线规划服务...")
             map_source = map_config.get_map_source()
-            
+
             if map_source == "gaode":
                 if map_config.is_gaode_configured():
                     self.route_points, estimated_duration = self.gaode_routing_service.plan_route(points, transport_mode)
@@ -997,7 +1089,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("路线规划出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"路线规划出错: {str(e)}")
-        
+
         self.logger.info("路线规划流程完成")
         self.logger.info("=" * 80)
 
@@ -1060,7 +1152,7 @@ class GpxStudio(QMainWindow):
         self.logger.info("=" * 80)
         self.logger.info("开始执行GPX文件导出")
         self.logger.info("=" * 80)
-        
+
         if not self.route_points:
             self.logger.warning("GPX导出失败：未规划路线")
             QMessageBox.warning(self, "错误", "请先规划路线")
@@ -1143,7 +1235,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("导出出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"导出GPX文件出错: {str(e)}")
-        
+
         self.logger.info("GPX导出流程完成")
         self.logger.info("=" * 80)
 
@@ -1284,14 +1376,14 @@ class GpxStudio(QMainWindow):
         self.logger.info("=" * 80)
         self.logger.info("开始执行定位流程")
         self.logger.info("=" * 80)
-        
+
         # 检查地图源是否已设置
         map_source = map_config.get_map_source()
         if not map_source:
             self.logger.warning("定位失败：未设置地图数据源")
             QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
             return
-        
+
         self.logger.info("开始定位流程")
 
         try:
@@ -1405,7 +1497,7 @@ class GpxStudio(QMainWindow):
             self.search_results_list.addItem("定位出错")
             self.search_results_list.addItem(f"错误信息: {str(e)}")
             QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
-        
+
         self.logger.info("定位流程完成")
         self.logger.info("=" * 80)
 

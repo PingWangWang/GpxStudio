@@ -20,3 +20,6 @@ winrt-Windows.Devices.Geolocation>=3.2.1
 
 # Packaging Tool
 pyinstaller>=6.0.0
+
+# Image Processing for Icon Conversion
+Pillow>=10.0.0
