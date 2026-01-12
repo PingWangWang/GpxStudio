@@ -280,9 +280,11 @@ class MapRenderer:
                     ).add_to(map_obj)
                 route_segment = []
             else:
-                route_segment.append(point)
-
-        # 处理最后一个段
+                # 提取点的前两个元素（纬度和经度），忽略海拔数据
+                lat_lon_point = point[:2] if len(point) >= 2 else point
+                route_segment.append(lat_lon_point)
+        
+        # 添加最后一段路线
         if len(route_segment) > 1:
             folium.PolyLine(
                 locations=route_segment,
@@ -292,28 +294,92 @@ class MapRenderer:
             ).add_to(map_obj)
 
     @staticmethod
-    def save_and_get_url(map_obj, use_http_server=False):
+    def save_and_get_url(map_obj, use_http_server=True):
         """
         保存地图到临时文件并返回URL
 
         Args:
             map_obj: folium地图对象
-            use_http_server: 是否使用HTTP服务器（解决地理定位限制）
+            use_http_server: 是否使用HTTP服务器（解决地理定位限制和本地文件访问问题）
 
         Returns:
             QUrl: 本地文件URL或HTTP URL
         """
-        if use_http_server:
-            from .http_server import get_map_server
-            import uuid
-            server = get_map_server()
-            filename = f"map_{uuid.uuid4().hex[:8]}.html"
-            url_str = server.save_map(map_obj, filename)
-            return QUrl(url_str)
-        else:
-            html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
-            map_obj.save(html_file.name)
-            return QUrl.fromLocalFile(html_file.name)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            if use_http_server:
+                from .http_server import get_map_server
+                import uuid
+                import os
+                
+                server = get_map_server()
+                filename = f"map_{uuid.uuid4().hex[:8]}.html"
+                url_str = server.save_map(map_obj, filename)
+                
+                # 检查返回的是HTTP URL还是本地文件路径
+                if url_str.startswith('http://') or url_str.startswith('https://'):
+                    logger.debug(f"使用HTTP服务器提供地图: {url_str}")
+                    return QUrl(url_str)
+                else:
+                    # 返回的是本地文件路径，创建本地文件URL
+                    logger.debug(f"HTTP服务器返回本地文件路径: {url_str}")
+                    return QUrl.fromLocalFile(url_str)
+            else:
+                import os
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                temp_path = html_file.name
+                html_file.close()  # 关闭文件以避免锁定
+                
+                map_obj.save(temp_path)
+                logger.debug(f"保存地图到临时文件: {temp_path}")
+                
+                # 确保文件存在且可访问
+                if os.path.exists(temp_path):
+                    logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
+                    return QUrl.fromLocalFile(temp_path)
+                else:
+                    logger.error(f"临时文件创建失败: {temp_path}")
+                    # 回退到HTTP服务器方式
+                    from .http_server import get_map_server
+                    import uuid
+                    server = get_map_server()
+                    filename = f"map_{uuid.uuid4().hex[:8]}.html"
+                    url_str = server.save_map(map_obj, filename)
+                    
+                    # 检查返回的是HTTP URL还是本地文件路径
+                    if url_str.startswith('http://') or url_str.startswith('https://'):
+                        logger.debug(f"回退到HTTP服务器: {url_str}")
+                        return QUrl(url_str)
+                    else:
+                        logger.debug(f"HTTP服务器回退返回本地文件路径: {url_str}")
+                        return QUrl.fromLocalFile(url_str)
+        except Exception as e:
+            logger.error(f"保存地图失败: {str(e)}")
+            # 出错时回退到简单的本地文件
+            try:
+                import os
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                temp_path = html_file.name
+                html_file.close()  # 关闭文件以避免锁定
+                
+                map_obj.save(temp_path)
+                logger.debug(f"出错时回退到临时文件: {temp_path}")
+                
+                if os.path.exists(temp_path):
+                    logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
+                    return QUrl.fromLocalFile(temp_path)
+                else:
+                    logger.error(f"临时文件创建失败: {temp_path}")
+                    # 最后回退：创建一个简单的本地文件URL
+                    html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                    map_obj.save(html_file.name)
+                    return QUrl.fromLocalFile(html_file.name)
+            except Exception as fallback_error:
+                logger.error(f"最后回退也失败: {str(fallback_error)}")
+                # 最极端的情况：返回一个无效的URL，但至少不会崩溃
+                return QUrl()
 
     @staticmethod
     def calculate_zoom_level(points):

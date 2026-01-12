@@ -21,7 +21,7 @@ class IGpxExportService:
         """
         ...
 
-    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str) -> bool:
+    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str, start_name: Optional[str] = None, end_name: Optional[str] = None) -> bool:
         """
         导出路线为GPX文件
 
@@ -29,6 +29,8 @@ class IGpxExportService:
             route_points: 路线点列表 [(lat, lon), ...], None表示段分隔
             start_datetime: 起始时间 (QDateTime对象)
             file_path: 保存路径
+            start_name: 起点名称
+            end_name: 终点名称
 
         Returns:
             bool: 是否成功

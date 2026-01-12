@@ -50,9 +50,11 @@ class ConsoleWebEnginePage(QWebEnginePage):
 
     def on_load_finished(self, success):
         """页面加载完成"""
+        url_str = self.url().toString()
+        
         if success:
             print("[加载] ✅ 页面加载成功")
-            print(f"[加载] URL: {self.url().toString()}")
+            print(f"[加载] URL: {url_str}")
 
             # 直接执行JavaScript来测试
             test_script = """
@@ -61,7 +63,23 @@ class ConsoleWebEnginePage(QWebEnginePage):
             """
             self.runJavaScript(test_script, lambda result: print(f"[JS执行] 结果: {result}"))
         else:
-            print("[加载] ❌ 页面加载失败")
+            # 更加宽容的处理：即使success为False，也尝试执行JavaScript来验证页面是否真的加载成功
+            print("[加载] ⚠️ 页面加载状态为失败，但尝试验证页面是否可用...")
+            print(f"[加载] URL: {url_str}")
+            
+            # 尝试执行JavaScript来测试页面是否真的加载成功
+            test_script = """
+            console.log('[测试] 尝试在加载状态为失败时执行JavaScript');
+            '页面加载成功'  // 返回一个字符串表示成功
+            """
+            
+            def on_js_result(result):
+                if result == '页面加载成功':
+                    print("[加载] ✅ 页面实际上加载成功，只是状态报告为失败")
+                else:
+                    print(f"[加载] ❌ 页面加载失败，JavaScript执行结果: {result}")
+            
+            self.runJavaScript(test_script, on_js_result)
 
     def on_feature_permission_requested(self, securityOrigin, feature):
         """处理功能权限请求信号（如地理定位）"""

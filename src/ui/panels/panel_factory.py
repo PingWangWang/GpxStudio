@@ -43,17 +43,39 @@ class PanelFactory:
         search_layout.addWidget(search_button)
         layout.addLayout(search_layout)
 
-        # 结果列表
-        result_list = QListWidget()
-        result_list.setMaximumHeight(40)
-        result_list.itemClicked.connect(lambda item: parent.select_location(item, location_type))
-        layout.addWidget(result_list)
+        # 自定义地址展示控件，解决滚动条遮挡问题
+        address_display = QWidget()
+        address_display.setMaximumHeight(40)
+        address_layout = QHBoxLayout(address_display)
+        address_layout.setContentsMargins(0, 0, 0, 0)
+        address_layout.setSpacing(0)
+        
+        # 地址显示标签
+        address_label = QLabel()
+        address_label.setStyleSheet("""
+            QLabel {
+                background-color: #ffffff;
+                color: #000000;
+                border: 1px solid #cccccc;
+                padding: 5px 10px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        """)
+        address_layout.addWidget(address_label)
+        
+        # 保存到父对象
+        setattr(parent, f"{location_type}_label", address_label)
+        
+        layout.addWidget(address_display)
 
         group.setLayout(layout)
 
         # 保存到父对象
         setattr(parent, f"{location_type}_input", search_input)
-        setattr(parent, f"{location_type}_list", result_list)
+        setattr(parent, f"{location_type}_label", address_label)
+        setattr(parent, f"{location_type}_address_display", address_display)
 
         return group
 

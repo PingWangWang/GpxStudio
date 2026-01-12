@@ -25,6 +25,11 @@ class GaodeRoutingService(IRoutingService):
         "骑行": "bicycling",
         "驾车": "driving"
     }
+    
+    # 海拔API基础URL（使用Open-Elevation API）
+    ELEVATION_API_URL = "https://api.open-elevation.com/api/v1/lookup"
+    # 保存最近一次路线规划的带海拔的点列表
+    last_route_points_with_elevation = []
 
     def __init__(self, api_key: str = "", security_key: str = "", logger: Optional[Callable] = None):
         self.api_key = api_key
@@ -43,6 +48,55 @@ class GaodeRoutingService(IRoutingService):
         sorted_params = sorted(params.items())
         sign_str = self.security_key + ''.join(f"{k}{v}" for k, v in sorted_params)
         return hashlib.md5(sign_str.encode()).hexdigest()
+
+    def _get_elevation(self, points: List[Tuple[float, float]]) -> List[Tuple[float, float, float]]:
+        """
+        获取多个点的海拔数据
+
+        Args:
+            points: 坐标点列表 [(lat, lon), ...]
+
+        Returns:
+            List[Tuple[float, float, float]]: 带海拔的点列表 [(lat, lon, elevation), ...]
+        """
+        if not points:
+            return []
+
+        try:
+            # 构建请求数据
+            locations = [{"latitude": lat, "longitude": lon} for lat, lon in points]
+            payload = {"locations": locations}
+
+            def log_cb(level, message):
+                if self.logger:
+                    self.logger(level, message)
+
+            log_cb("DEBUG", f"请求海拔数据，点数: {len(points)}")
+
+            # 发送请求
+            response = requests.post(self.ELEVATION_API_URL, json=payload, timeout=30)
+            data = response.json()
+
+            if "results" in data:
+                results = data["results"]
+                points_with_elevation = []
+                for i, result in enumerate(results):
+                    lat, lon = points[i]
+                    elevation = result.get("elevation", 0.0)
+                    points_with_elevation.append((lat, lon, elevation))
+                
+                log_cb("INFO", f"成功获取 {len(points_with_elevation)} 个点的海拔数据")
+                return points_with_elevation
+            else:
+                log_cb("WARNING", "海拔API响应格式错误")
+                return [(lat, lon, 0.0) for lat, lon in points]
+        except Exception as e:
+            def log_cb(level, message):
+                if self.logger:
+                    self.logger(level, message)
+
+            log_cb("ERROR", f"获取海拔数据异常: {str(e)}")
+            return [(lat, lon, 0.0) for lat, lon in points]
 
     def plan_route(self, points: List[tuple], transport_mode: str = "驾车") -> tuple:
         """
@@ -130,6 +184,7 @@ class GaodeRoutingService(IRoutingService):
                     total_duration += segment_duration
 
                     # 处理路径点
+                    segment_points = []
                     for step in steps:
                         polyline = step.get('polyline', '')
                         if polyline:
@@ -137,7 +192,12 @@ class GaodeRoutingService(IRoutingService):
                             for coord in coords:
                                 parts = coord.split(',')
                                 if len(parts) == 2:
-                                    route_points.append((float(parts[1]), float(parts[0])))
+                                    segment_points.append((float(parts[1]), float(parts[0])))
+                    
+                    # 获取海拔数据
+                    if segment_points:
+                        segment_points_with_elevation = self._get_elevation(segment_points)
+                        route_points.extend(segment_points_with_elevation)
 
                     log_cb("INFO", f"路段 {i+1} 规划成功")
                 else:
@@ -152,10 +212,14 @@ class GaodeRoutingService(IRoutingService):
                     route_points.append(None)
 
             log_cb("INFO", f"路线规划完成，共 {len([p for p in route_points if p is not None])} 个坐标点，预估时间: {total_duration} 秒")
+            # 保存带海拔的点
+            self.last_route_points_with_elevation = route_points
             return route_points, total_duration
 
         except Exception as e:
             log_cb("ERROR", f"路线规划异常: {str(e)}")
+            # 重置带海拔的点
+            self.last_route_points_with_elevation = []
             return [], 0
 
     def calculate_distance(self, route_points: List[tuple]) -> float:
@@ -182,7 +246,10 @@ class GaodeRoutingService(IRoutingService):
 
             if prev_point:
                 from geopy.distance import geodesic
-                total_distance += geodesic(prev_point, point).kilometers
+                # 提取点的前两个元素（纬度和经度），忽略海拔数据
+                prev_point_coords = prev_point[:2] if len(prev_point) >= 2 else prev_point
+                current_point_coords = point[:2] if len(point) >= 2 else point
+                total_distance += geodesic(prev_point_coords, current_point_coords).kilometers
 
             prev_point = point
 

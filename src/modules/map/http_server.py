@@ -13,10 +13,13 @@ class MapServer:
         self.base_dir = tempfile.mkdtemp(prefix='gpx_studio_map_')
         self.server_address = ('', self.port)
 
+        # 保存当前实例的引用
+        server_instance = self
+
         # 创建自定义HTTP请求处理器
         class Handler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
-                super().__init__(*args, directory=self.base_dir, **kwargs)
+                super().__init__(*args, directory=server_instance.base_dir, **kwargs)
 
             def log_message(self, format, *args):
                 # 禁用日志输出
@@ -31,12 +34,71 @@ class MapServer:
             self.thread.start()
 
     def save_map(self, map_obj, filename):
-        if not self.httpd:
-            self.start()
-
-        file_path = os.path.join(self.base_dir, filename)
-        map_obj.save(file_path)
-        return f'http://localhost:{self.port}/{filename}'
+        """
+        保存地图到文件并返回HTTP URL
+        
+        Args:
+            map_obj: folium地图对象
+            filename: 文件名
+            
+        Returns:
+            str: HTTP URL
+        """
+        import logging
+        import os
+        import tempfile
+        import time
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # 确保服务器已启动
+            if not self.httpd:
+                logger.debug("HTTP服务器未启动，正在启动...")
+                self.start()
+                # 给服务器一点时间启动
+                time.sleep(0.1)
+            
+            # 确保端口已设置
+            if not self.port:
+                logger.error("HTTP服务器端口未设置")
+                # 回退到临时文件方式
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                temp_path = html_file.name
+                html_file.close()
+                map_obj.save(temp_path)
+                logger.debug(f"回退到临时文件: {temp_path}")
+                return temp_path
+            
+            # 保存地图文件
+            file_path = os.path.join(self.base_dir, filename)
+            logger.debug(f"保存地图到: {file_path}")
+            map_obj.save(file_path)
+            
+            # 验证文件存在
+            if not os.path.exists(file_path):
+                logger.error(f"地图文件创建失败: {file_path}")
+                # 回退到临时文件方式
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                temp_path = html_file.name
+                html_file.close()
+                map_obj.save(temp_path)
+                logger.debug(f"回退到临时文件: {temp_path}")
+                return temp_path
+            
+            # 构建URL
+            url_str = f'http://localhost:{self.port}/{filename}'
+            logger.debug(f"返回HTTP URL: {url_str}")
+            return url_str
+        except Exception as e:
+            logger.error(f"保存地图到HTTP服务器失败: {str(e)}")
+            # 出错时回退到临时文件方式
+            html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+            temp_path = html_file.name
+            html_file.close()
+            map_obj.save(temp_path)
+            logger.debug(f"出错时回退到临时文件: {temp_path}")
+            return temp_path
 
     def stop(self):
         if self.httpd:

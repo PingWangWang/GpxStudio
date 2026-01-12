@@ -22,7 +22,7 @@ class GpxExportService(IGpxExportService):
         if self.logger:
             self.logger(level, message)
 
-    def export_to_gpx(self, route_points, start_datetime, file_path):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None):
         """
         导出路线为GPX文件
 
@@ -30,6 +30,8 @@ class GpxExportService(IGpxExportService):
             route_points: 路线点列表 [(lat, lon), ...], None表示段分隔
             start_datetime: 起始时间 (QDateTime对象)
             file_path: 保存路径
+            start_name: 起点名称
+            end_name: 终点名称
 
         Returns:
             bool: 是否成功
@@ -44,8 +46,26 @@ class GpxExportService(IGpxExportService):
 
             gpx = gpxpy.gpx.GPX()
 
+            # 生成轨迹名称
+            import os
+            if start_name and end_name:
+                # 使用起点和终点名称生成轨迹名称，使用下划线作为连接符
+                track_name = f"{start_name}_{end_name}"
+            else:
+                # 从文件路径提取轨迹名称
+                track_name = os.path.splitext(os.path.basename(file_path))[0]
+
+            # 清理轨迹名称，移除不必要的字符
+            import re
+            track_name = re.sub(r'[\\/:*?"<>|]', '', track_name)
+
+            # 添加元数据
+            gpx.name = track_name
+            # gpxpy库使用不同的方式处理元数据，我们需要直接修改XML输出
+
             # 创建轨迹
             gpx_track = GPXTrack()
+            gpx_track.name = track_name
             gpx.tracks.append(gpx_track)
 
             # 创建轨迹段
@@ -74,11 +94,20 @@ class GpxExportService(IGpxExportService):
                     # 处理完一个段
                     if len(route_segment) > 1:
                         for coord in route_segment:
-                            gpx_point = GPXTrackPoint(
-                                latitude=coord[0],
-                                longitude=coord[1],
-                                time=current_time
-                            )
+                            # 检查点是否包含海拔数据
+                            if len(coord) >= 3:
+                                gpx_point = GPXTrackPoint(
+                                    latitude=coord[0],
+                                    longitude=coord[1],
+                                    elevation=coord[2],
+                                    time=current_time
+                                )
+                            else:
+                                gpx_point = GPXTrackPoint(
+                                    latitude=coord[0],
+                                    longitude=coord[1],
+                                    time=current_time
+                                )
                             gpx_segment.points.append(gpx_point)
                             current_time += timedelta(seconds=10)
                             point_count += 1
@@ -91,20 +120,56 @@ class GpxExportService(IGpxExportService):
             # 处理最后一个段
             if len(route_segment) > 1:
                 for coord in route_segment:
-                    gpx_point = GPXTrackPoint(
-                        latitude=coord[0],
-                        longitude=coord[1],
-                        time=current_time
-                    )
+                    # 检查点是否包含海拔数据
+                    if len(coord) >= 3:
+                        gpx_point = GPXTrackPoint(
+                            latitude=coord[0],
+                            longitude=coord[1],
+                            elevation=coord[2],
+                            time=current_time
+                        )
+                    else:
+                        gpx_point = GPXTrackPoint(
+                            latitude=coord[0],
+                            longitude=coord[1],
+                            time=current_time
+                        )
                     gpx_segment.points.append(gpx_point)
                     current_time += timedelta(seconds=10)
                     point_count += 1
 
             log_cb("DEBUG", f"共添加 {point_count} 个轨迹点")
 
+            # 生成XML并修改以添加所需的元数据结构
+            xml_output = gpx.to_xml()
+            
+            # 替换XML头部，添加完整的元数据
+            import re
+            # 找到第一个<gpx>标签的结束位置
+            gpx_start = xml_output.find('<gpx')
+            gpx_end = xml_output.find('>', gpx_start)
+            
+            if gpx_end > 0:
+                # 构建新的XML头部，包含完整的元数据
+                new_header = xml_output[:gpx_end+1]
+                metadata_section = f'''
+  <metadata>
+    <name>{track_name}</name>
+    <author>
+      <name>gpx.studio</name>
+      <link href="https://gpx.studio"/>
+    </author>
+  </metadata>'''
+                
+                # 找到第一个<track>或<trk>标签的开始位置
+                track_start = xml_output.find('<trk', gpx_end)
+                if track_start > 0:
+                    # 插入元数据
+                    xml_output = new_header + metadata_section + '\n' + xml_output[track_start:]
+            
             # 保存文件
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(gpx.to_xml())
+                f.write(xml_output)
 
             log_cb("INFO", "GPX文件导出成功")
             return True

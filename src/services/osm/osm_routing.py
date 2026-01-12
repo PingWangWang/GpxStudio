@@ -29,6 +29,10 @@ class OsmRoutingService(IRoutingService):
         self.base_url = "https://router.project-osrm.org/route/v1"
         # 保存最近一次路线规划的实际距离（公里）
         self.last_route_distance = 0.0
+        # 海拔API基础URL（使用Open-Elevation API）
+        self.elevation_api_url = "https://api.open-elevation.com/api/v1/lookup"
+        # 保存最近一次路线规划的带海拔的点列表
+        self.last_route_points_with_elevation = []
 
     def _log(self, level: str, message: str):
         """
@@ -40,6 +44,47 @@ class OsmRoutingService(IRoutingService):
         """
         if self.logger:
             self.logger(level, message)
+
+    def _get_elevation(self, points: List[Tuple[float, float]]) -> List[Tuple[float, float, float]]:
+        """
+        获取多个点的海拔数据
+
+        Args:
+            points: 坐标点列表 [(lat, lon), ...]
+
+        Returns:
+            List[Tuple[float, float, float]]: 带海拔的点列表 [(lat, lon, elevation), ...]
+        """
+        if not points:
+            return []
+
+        try:
+            # 构建请求数据
+            locations = [{"latitude": lat, "longitude": lon} for lat, lon in points]
+            payload = {"locations": locations}
+
+            self._log("DEBUG", f"请求海拔数据，点数: {len(points)}")
+
+            # 发送请求
+            response = requests.post(self.elevation_api_url, json=payload, timeout=30)
+            data = response.json()
+
+            if "results" in data:
+                results = data["results"]
+                points_with_elevation = []
+                for i, result in enumerate(results):
+                    lat, lon = points[i]
+                    elevation = result.get("elevation", 0.0)
+                    points_with_elevation.append((lat, lon, elevation))
+                
+                self._log("INFO", f"成功获取 {len(points_with_elevation)} 个点的海拔数据")
+                return points_with_elevation
+            else:
+                self._log("WARNING", "海拔API响应格式错误")
+                return [(lat, lon, 0.0) for lat, lon in points]
+        except Exception as e:
+            self._log("ERROR", f"获取海拔数据异常: {str(e)}")
+            return [(lat, lon, 0.0) for lat, lon in points]
 
     def plan_route(self, points: List[Tuple[float, float]], transport_mode: str = "驾车") -> Tuple[List[Tuple[float, float]], int]:
         """
@@ -108,9 +153,15 @@ class OsmRoutingService(IRoutingService):
                     route = data["routes"][0]
                     coordinates = route["geometry"]["coordinates"]
                     
-                    # 添加路线点（转换为(lat, lon)格式）
-                    for coord in coordinates:
-                        route_points.append((coord[1], coord[0]))
+                    # 转换为(lat, lon)格式
+                    segment_points = [(coord[1], coord[0]) for coord in coordinates]
+                    
+                    # 获取海拔数据
+                    segment_points_with_elevation = self._get_elevation(segment_points)
+                    
+                    # 添加路线点（带海拔）
+                    for point in segment_points_with_elevation:
+                        route_points.append(point)
 
                     # 提取预估时间（秒）
                     # OSRM返回的时间单位是秒
@@ -134,13 +185,15 @@ class OsmRoutingService(IRoutingService):
                     self._log("ERROR", f"路段 {i+1} 规划失败: {error_msg}")
 
             if route_points:
-                # 保存总距离
+                # 保存总距离和带海拔的点
                 self.last_route_distance = total_distance
+                self.last_route_points_with_elevation = route_points
                 self._log("INFO", f"OSM路线规划成功，路线点数量: {len([p for p in route_points if p is not None])}，总距离: {total_distance:.2f}公里，总预估时间: {estimated_duration}秒")
                 return route_points, estimated_duration
             else:
-                # 重置距离
+                # 重置距离和带海拔的点
                 self.last_route_distance = 0.0
+                self.last_route_points_with_elevation = []
                 self._log("WARNING", "OSM路线规划返回空路线")
                 return [], 0
         except Exception as e:
@@ -163,8 +216,9 @@ class OsmRoutingService(IRoutingService):
             total_distance = 0.0
             for i in range(1, len(route_points)):
                 if route_points[i-1] and route_points[i]:
-                    lat1, lon1 = route_points[i-1]
-                    lat2, lon2 = route_points[i]
+                    # 提取点的前两个元素（纬度和经度），忽略海拔数据
+                    lat1, lon1 = route_points[i-1][:2] if len(route_points[i-1]) >= 2 else route_points[i-1]
+                    lat2, lon2 = route_points[i][:2] if len(route_points[i]) >= 2 else route_points[i]
                     distance = self._haversine_distance(lat1, lon1, lat2, lon2)
                     total_distance += distance
             

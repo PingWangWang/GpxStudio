@@ -367,6 +367,10 @@ class GpxStudio(QMainWindow):
         self.last_selected_from_search = False
 
         # 清空UI显示
+        if hasattr(self, 'start_label'):
+            self.start_label.setText('')
+        if hasattr(self, 'end_label'):
+            self.end_label.setText('')
         if hasattr(self, 'start_list'):
             self.start_list.clear()
         if hasattr(self, 'end_list'):
@@ -701,16 +705,18 @@ class GpxStudio(QMainWindow):
             self.start_coords = coords
             self.start_name = name
             self.start_level = level
-            self.start_list.clear()
-            self.start_list.addItem(name)
-            self.start_list.item(0).setData(Qt.UserRole, data)
+            if hasattr(self, 'start_label'):
+                self.start_label.setText(name)
+                # 保存数据到标签的UserData
+                self.start_label.setProperty('userData', data)
         elif location_type == "end":
             self.end_coords = coords
             self.end_name = name
             self.end_level = level
-            self.end_list.clear()
-            self.end_list.addItem(name)
-            self.end_list.item(0).setData(Qt.UserRole, data)
+            if hasattr(self, 'end_label'):
+                self.end_label.setText(name)
+                # 保存数据到标签的UserData
+                self.end_label.setProperty('userData', data)
         elif location_type == "waypoint":
             waypoint_index = self.waypoint_list.row(item)
             if waypoint_index >= 0 and waypoint_index < len(self.waypoints_coords):
@@ -741,16 +747,24 @@ class GpxStudio(QMainWindow):
             self.start_coords = coords
             self.start_name = name
             self.start_level = level
-            self.start_list.clear()
-            self.start_list.addItem(name)
-            self.start_list.item(0).setData(Qt.UserRole, data)
+            if hasattr(self, 'start_label'):
+                self.start_label.setText(name)
+                self.start_label.setProperty('userData', data)
+            if hasattr(self, 'start_list'):
+                self.start_list.clear()
+                self.start_list.addItem(name)
+                self.start_list.item(0).setData(Qt.UserRole, data)
         elif self.searching_for == "end":
             self.end_coords = coords
             self.end_name = name
             self.end_level = level
-            self.end_list.clear()
-            self.end_list.addItem(name)
-            self.end_list.item(0).setData(Qt.UserRole, data)
+            if hasattr(self, 'end_label'):
+                self.end_label.setText(name)
+                self.end_label.setProperty('userData', data)
+            if hasattr(self, 'end_list'):
+                self.end_list.clear()
+                self.end_list.addItem(name)
+                self.end_list.item(0).setData(Qt.UserRole, data)
         elif self.searching_for == "waypoint":
             self.waypoints_coords.append(coords)
             self.waypoints_names.append(name)
@@ -1161,6 +1175,21 @@ class GpxStudio(QMainWindow):
         # 生成默认文件名
         start_name = self.start_name if self.start_name else "起点"
         end_name = self.end_name if self.end_name else "终点"
+        
+        # 提取城市名称，移除多余的地址信息
+        import re
+        def extract_city_name(full_name):
+            # 移除分号及其后的内容
+            city_name = full_name.split(';')[0]
+            # 移除逗号及其后的内容
+            city_name = city_name.split(',')[0]
+            # 清理空白字符
+            city_name = city_name.strip()
+            return city_name
+        
+        start_city = extract_city_name(start_name)
+        end_city = extract_city_name(end_name)
+        
         transport_mode = self.transport_combo.currentText()
         start_datetime = self.start_time_edit.dateTime()
         start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
@@ -1171,7 +1200,7 @@ class GpxStudio(QMainWindow):
         duration_str = f"{duration_hours}小时{duration_minutes}分钟"
 
         # 生成默认文件名
-        default_filename = f"{start_name}_{end_name}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
+        default_filename = f"{start_city}_{end_city}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
         self.logger.debug(f"生成默认文件名: {default_filename}")
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -1205,7 +1234,8 @@ class GpxStudio(QMainWindow):
 
             self.logger.debug("执行GPX导出操作...")
             success = self.gpx_service.export_to_gpx(
-                self.route_points, start_datetime, file_path
+                self.route_points, start_datetime, file_path, 
+                start_name=start_city, end_name=end_city
             )
 
             self.progress_bar.setMaximum(100)
