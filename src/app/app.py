@@ -49,36 +49,58 @@ from .constants import (
 
 
 class GpxStudio(QMainWindow):
-    """GPX Studio 主应用窗口"""
+    """
+    GPX Studio 主应用窗口类
+
+    这是应用程序的核心类，负责整合所有模块，实现完整的路线规划功能。
+    包含窗口初始化、服务管理、数据状态管理、UI布局和事件处理等功能。
+    """
 
     def __init__(self):
+        """
+        构造函数，初始化应用程序的所有组件
+
+        初始化流程：
+        1. 窗口设置初始化
+        2. 服务初始化（地理编码、路线规划、GPX导出等）
+        3. 数据状态初始化
+        4. 定位和信号系统初始化
+        5. UI界面初始化
+        6. 日志系统初始化
+        """
         super().__init__()
+
         # 添加启动标记日志
         print("=" * 80)
         print("GPX Studio 程序启动开始")
         print("=" * 80)
 
-        # 先初始化基本组件，然后再初始化日志系统
+        # 初始化窗口设置
         print("开始初始化窗口设置")
         self._init_window()
         print("窗口设置初始化完成")
 
+        # 初始化各种服务组件
         print("开始初始化服务")
         self._init_services()
         print("服务初始化完成")
 
+        # 初始化应用程序数据状态
         print("开始初始化数据状态")
         self._init_data_state()
         print("数据状态初始化完成")
 
+        # 初始化定位和信号系统
         print("开始初始化定位和信号系统")
         self._init_geolocation_and_signals()
         print("定位和信号系统初始化完成")
 
+        # 初始化用户界面
         print("开始初始化UI")
         self._init_ui()
         print("UI初始化完成")
 
+        # 初始化日志系统
         print("开始初始化日志系统")
         self._init_logging()
         print("日志系统初始化完成")
@@ -100,10 +122,17 @@ class GpxStudio(QMainWindow):
         mark_first_run_completed()
 
     def _init_window(self):
-        """初始化窗口设置"""
+        """
+        初始化窗口设置
+
+        设置窗口的基本属性，包括标题、大小、图标和位置。
+        同时初始化系统托盘图标（如果系统支持）。
+        """
+        # 设置窗口标题
         print(f"设置窗口标题: {WINDOW_TITLE}")
         self.setWindowTitle(WINDOW_TITLE)
 
+        # 设置窗口大小
         print(f"设置窗口大小: {WINDOW_SIZE}")
         self.resize(*WINDOW_SIZE)
 
@@ -122,59 +151,70 @@ class GpxStudio(QMainWindow):
             print(f"警告: 图标文件不存在 - {icon_path}")
             self.app_icon = None
 
-        # 窗口居中
+        # 将窗口居中显示
         print("开始窗口居中操作")
         screen = QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()
+        screen_geometry = screen.availableGeometry()  # 获取屏幕可用区域
         print(f"屏幕几何信息: {screen_geometry}")
 
-        window_geometry = self.frameGeometry()
-        center_point = screen_geometry.center()
+        window_geometry = self.frameGeometry()  # 获取窗口框架几何信息
+        center_point = screen_geometry.center()  # 计算屏幕中心点
         print(f"屏幕中心点: {center_point}")
 
-        window_geometry.moveCenter(center_point)
+        window_geometry.moveCenter(center_point)  # 将窗口中心移动到屏幕中心
         print(f"窗口居中后的位置: {window_geometry.topLeft()}")
-        self.move(window_geometry.topLeft())
+        self.move(window_geometry.topLeft())  # 设置窗口位置
         print("窗口居中操作完成")
 
     def _init_tray_icon(self):
-        """初始化系统托盘图标"""
+        """
+        初始化系统托盘图标
+
+        创建并配置系统托盘图标，包括图标、上下文菜单和事件处理。
+        系统托盘图标允许用户在不打开主窗口的情况下访问应用程序功能。
+        """
+        # 检查系统是否支持系统托盘
         if not QSystemTrayIcon.isSystemTrayAvailable():
             print("系统不支持系统托盘")
             return
 
         print("初始化系统托盘图标")
 
-        # 创建系统托盘图标
+        # 创建系统托盘图标实例
         self.tray_icon = QSystemTrayIcon(self)
+
+        # 设置托盘图标
         if self.app_icon:
             self.tray_icon.setIcon(self.app_icon)
 
-        # 创建托盘菜单
+        # 创建托盘上下文菜单
         tray_menu = QMenu()
 
-        # 显示/隐藏窗口动作
+        # 添加显示窗口动作
         show_action = QAction("显示窗口", self)
         show_action.triggered.connect(self.show_window)
         tray_menu.addAction(show_action)
 
+        # 添加隐藏窗口动作
         hide_action = QAction("隐藏窗口", self)
         hide_action.triggered.connect(self.hide)
         tray_menu.addAction(hide_action)
 
+        # 添加分隔线
         tray_menu.addSeparator()
 
-        # 退出动作
+        # 添加退出程序动作
         quit_action = QAction("退出程序", self)
         quit_action.triggered.connect(self.close_application)
         tray_menu.addAction(quit_action)
 
+        # 设置托盘上下文菜单
         self.tray_icon.setContextMenu(tray_menu)
 
         # 设置托盘图标工具提示
         self.tray_icon.setToolTip("GPX Studio - GPS路线规划工具")
 
-        # 连接双击事件
+        # 连接托盘图标激活事件
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
 
         # 显示托盘图标
@@ -182,41 +222,74 @@ class GpxStudio(QMainWindow):
         print("系统托盘图标初始化完成")
 
     def show_window(self):
-        """显示窗口"""
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        """
+        显示并激活主窗口
+
+        将窗口从隐藏状态显示出来，并将其置于顶层并激活，确保用户可以立即与窗口交互。
+        """
+        self.show()           # 显示窗口
+        self.raise_()         # 将窗口置于顶层
+        self.activateWindow() # 激活窗口，使其获得焦点
 
     def on_tray_icon_activated(self, reason):
-        """托盘图标激活事件处理"""
+        """
+        托盘图标激活事件处理函数
+
+        处理用户与系统托盘图标的交互事件。
+
+        参数:
+            reason: 激活原因（如双击、单击、右键菜单等）
+        """
+        # 当用户双击托盘图标时，显示主窗口
         if reason == QSystemTrayIcon.DoubleClick:
             self.show_window()
 
     def close_application(self):
-        """关闭应用程序"""
+        """
+        完全关闭应用程序
+
+        隐藏托盘图标并终止应用程序的所有进程。
+        """
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
         QApplication.quit()
 
     def closeEvent(self, event):
-        """重写关闭事件，实现最小化到托盘"""
+        """
+        重写窗口关闭事件，实现最小化到托盘功能
+
+        当用户点击窗口的关闭按钮时，不是直接关闭应用程序，而是将其最小化到系统托盘。
+
+        参数:
+            event: 关闭事件对象
+        """
         if hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
+            # 隐藏主窗口
             self.hide()
+
+            # 显示托盘通知消息
             self.tray_icon.showMessage(
                 "GPX Studio",
                 "应用程序已最小化到系统托盘。双击托盘图标或右键菜单可以恢复窗口。",
                 QSystemTrayIcon.Information,
-                2000
+                2000  # 消息显示时间（毫秒）
             )
+
+            # 忽略关闭事件，不关闭应用程序
             event.ignore()
         else:
+            # 接受关闭事件，关闭应用程序
             event.accept()
 
     def _init_services(self):
-        """初始化服务"""
+        """
+        初始化应用程序所需的各种服务
+
+        初始化地理编码服务、路线规划服务和GPX导出服务，这些服务是应用程序的核心功能模块。
+        """
         print("开始初始化服务")
 
-        # 获取配置信息
+        # 获取地图服务的API密钥配置
         api_key = map_config.get_api_key()
         security_key = map_config.get_security_key()
         print(f"API Key 配置: {'已配置' if api_key else '未配置'}")
@@ -227,7 +300,7 @@ class GpxStudio(QMainWindow):
         self.gaode_geocoding_service = GaodeGeocodingService(
             api_key=api_key,
             security_key=security_key,
-            logger=self._log_to_geocoding
+            logger=self._log_to_geocoding  # 设置日志记录回调
         )
 
         # 初始化高德路线规划服务
@@ -235,44 +308,64 @@ class GpxStudio(QMainWindow):
         self.gaode_routing_service = GaodeRoutingService(
             api_key=api_key,
             security_key=security_key,
-            logger=self._log_to_routing
+            logger=self._log_to_routing  # 设置日志记录回调
         )
 
         # 初始化OSM地理编码服务
         print("初始化OSM地理编码服务")
         self.osm_geocoding_service = OsmGeocodingService(
-            logger=self._log_to_geocoding
+            logger=self._log_to_geocoding  # 设置日志记录回调
         )
 
         # 初始化OSM路线规划服务
         print("初始化OSM路线规划服务")
         self.osm_routing_service = OsmRoutingService(
-            logger=self._log_to_routing
+            logger=self._log_to_routing  # 设置日志记录回调
         )
 
         # 初始化GPX导出服务
         print("初始化GPX导出服务")
-        self.gpx_service = GpxExportService(logger=self._log_to_gpx)
+        self.gpx_service = GpxExportService(logger=self._log_to_gpx)  # 设置日志记录回调
 
         print("服务初始化完成")
 
     def _init_data_state(self):
-        """初始化数据状态"""
+        """
+        初始化应用程序的数据状态
+
+        设置应用程序启动时的初始数据值，包括路线信息、位置信息、搜索结果等。
+        这些数据将在用户交互过程中被更新和使用。
+        """
         print("开始初始化数据状态")
 
+        # 起点坐标和名称
         self.start_coords = None
         self.start_name = None
+
+        # 终点坐标和名称
         self.end_coords = None
         self.end_name = None
+
+        # 途经点坐标和名称列表
         self.waypoints_coords = []
         self.waypoints_names = []
+
+        # 当前路线数据
         self.current_route = None
         self.route_points = []
+
+        # 当前位置信息
         self.current_location = None
+
+        # 搜索结果相关数据
         self.search_results = []
         self.searching_for = None
         self.selected_search_result_coords = None
+
+        # 路线估算时间（秒）
         self.estimated_duration_seconds = 0
+
+        # 最后选择的位置信息
         self.last_selected_coords = None
         self.last_selected_level = None
         self.last_selected_type = None
@@ -282,26 +375,38 @@ class GpxStudio(QMainWindow):
         print(f"初始数据状态: start_coords={self.start_coords}, end_coords={self.end_coords}, waypoints_coords={self.waypoints_coords}")
 
     def _init_geolocation_and_signals(self):
-        """初始化定位和信号系统"""
+        """
+        初始化定位和信号系统
+
+        创建地理定位处理器和信号管理器，并连接相关信号和槽函数。
+        信号系统用于模块间的通信，特别是地理定位功能的结果传递。
+        """
         print("开始初始化定位和信号系统")
 
+        # 创建地理定位处理器，用于获取设备的当前位置
         print("创建地理定位处理器")
         self.geolocation_handler = GeolocationHandler()
 
+        # 创建信号管理器，用于模块间的通信
         print("创建信号管理器")
         self.signal_manager = SignalManager()
 
-        # 使用信号管理器连接地理定位信号
+        # 连接地理定位成功信号到对应的处理函数
         print("连接地理定位成功信号")
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
 
+        # 连接地理定位错误信号到对应的处理函数
         print("连接地理定位错误信号")
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
 
         print("定位和信号系统初始化完成")
 
     def _init_ui(self):
-        """初始化UI"""
+        """
+        初始化用户界面
+
+        这是UI初始化的入口方法，它调用实际的init_ui方法来构建完整的用户界面。
+        """
         print("开始初始化UI")
         self.init_ui()
         print("UI初始化完成")
@@ -1175,7 +1280,7 @@ class GpxStudio(QMainWindow):
         # 生成默认文件名
         start_name = self.start_name if self.start_name else "起点"
         end_name = self.end_name if self.end_name else "终点"
-        
+
         # 提取城市名称，移除多余的地址信息
         import re
         def extract_city_name(full_name):
@@ -1186,10 +1291,10 @@ class GpxStudio(QMainWindow):
             # 清理空白字符
             city_name = city_name.strip()
             return city_name
-        
+
         start_city = extract_city_name(start_name)
         end_city = extract_city_name(end_name)
-        
+
         transport_mode = self.transport_combo.currentText()
         start_datetime = self.start_time_edit.dateTime()
         start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
@@ -1234,7 +1339,7 @@ class GpxStudio(QMainWindow):
 
             self.logger.debug("执行GPX导出操作...")
             success = self.gpx_service.export_to_gpx(
-                self.route_points, start_datetime, file_path, 
+                self.route_points, start_datetime, file_path,
                 start_name=start_city, end_name=end_city
             )
 

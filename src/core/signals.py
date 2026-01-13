@@ -129,12 +129,15 @@ class SignalManager(QObject):
 
     def emit(self, signal_name: str, *args, **kwargs):
         """
-        发射信号
+        发射指定名称的信号
 
-        Args:
-            signal_name: 信号名称
-            *args: 信号参数
-            **kwargs: 信号关键字参数
+        查找并发射指定名称的信号，同时记录信号发射日志。
+        如果信号不存在，则记录警告日志。
+
+        参数:
+            signal_name: 要发射的信号名称
+            *args: 传递给信号的参数列表
+            **kwargs: 传递给信号的关键字参数
         """
         if signal_name in self._signal_registry:
             signal = getattr(self, signal_name)
@@ -145,11 +148,14 @@ class SignalManager(QObject):
 
     def connect(self, signal_name: str, slot: callable):
         """
-        连接信号到槽函数
+        连接指定名称的信号到槽函数
 
-        Args:
-            signal_name: 信号名称
-            slot: 槽函数
+        将指定名称的信号连接到给定的槽函数，当信号被发射时，槽函数将被调用。
+        如果信号不存在，则记录警告日志。
+
+        参数:
+            signal_name: 要连接的信号名称
+            slot: 当信号发射时要调用的槽函数
         """
         if signal_name in self._signal_registry:
             signal = getattr(self, signal_name)
