@@ -1,16 +1,18 @@
 """
 路线管理器
 负责路线规划和GPX导出
+支持后台线程执行和进度展示
 """
 
 from typing import Optional
 from datetime import datetime
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QApplication
-from PyQt5.QtCore import QDateTime
+from PyQt5.QtCore import QDateTime, QObject, pyqtSlot
 from services.config.map_config import map_config
+from core.background_task import TaskPriority
 
 
-class RouteManager:
+class RouteManager(QObject):
     """路线管理器
 
     负责路线规划和GPX文件导出功能：
@@ -18,9 +20,11 @@ class RouteManager:
     - 计算并更新路线时间信息
     - 处理路线规划结果
     - 导出路线为GPX格式文件
+
+    支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger):
+    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None):
         """
         初始化路线管理器
 
@@ -29,11 +33,14 @@ class RouteManager:
             data_manager: 数据管理器实例，用于存储和获取路线数据
             ui_updater: UI更新回调函数字典，用于更新界面显示
             logger: 日志器，用于记录路线操作日志
+            task_manager: 任务管理器实例，用于后台任务管理
         """
+        super().__init__()
         self.service_manager = service_manager  # 服务管理器实例
         self.data_manager = data_manager  # 数据管理器实例
         self.ui_updater = ui_updater  # UI更新回调函数字典
         self.logger = logger  # 日志器
+        self.task_manager = task_manager  # 任务管理器
 
     def plan_route(self, transport_mode: str):
         """
@@ -67,15 +74,38 @@ class RouteManager:
         self.logger.debug(f"途径点数量: {len(self.data_manager.waypoints_coords)}")
         self.logger.debug(f"总点数: {len(points)}")
 
+        # 更新UI显示路线规划开始
+        self.ui_updater['set_progress_indeterminate']()
+        self.ui_updater['clear_results_list']()
+        result_text = f"正在规划路线...\n方式: {transport_mode}"
+        self.ui_updater['add_result'](result_text)
+
+        # 如果有任务管理器，使用后台线程执行
+        if self.task_manager:
+            self.logger.info("使用后台线程执行路线规划任务")
+            from .task_adapters import RouteTaskAdapter
+
+            # 获取路线规划服务
+            routing_service = self.service_manager.get_routing_service(map_source)
+
+            task_id = self.task_manager.submit_task(
+                task_type="routing",
+                task_func=RouteTaskAdapter.create_route_task,
+                priority=TaskPriority.HIGH,  # 用户操作优先级最高
+                routing_service=routing_service,
+                points=points,
+                transport_mode=transport_mode,
+                map_source=map_source
+            )
+
+            self.logger.debug(f"路线规划任务已提交: {task_id}")
+        else:
+            # 兼容模式：直接执行
+            self._perform_route_planning_sync(map_source, points, transport_mode)
+
+    def _perform_route_planning_sync(self, map_source: str, points: list, transport_mode: str):
+        """同步执行路线规划（兼容模式）"""
         try:
-            # 更新UI显示路线规划开始
-            self.ui_updater['set_progress_indeterminate']()
-            self.ui_updater['clear_results_list']()
-
-            # 合并为一条结果显示
-            result_text = f"正在规划路线...\n方式: {transport_mode}"
-            self.ui_updater['add_result'](result_text)
-
             self.logger.debug("正在调用路线规划服务...")
 
             # 获取对应的路线规划服务
@@ -120,6 +150,81 @@ class RouteManager:
 
         self.logger.info("路线规划流程完成")
         self.logger.info("=" * 80)
+
+    @pyqtSlot(str, object)
+    def on_route_task_completed(self, task_id: str, result):
+        """处理路线规划任务完成（槽函数）
+
+        参数:
+            task_id: 任务ID
+            result: 路线规划结果 {'route_points': [...], 'duration': seconds}
+        """
+        self.logger.info(f"路线规划任务完成: {task_id}")
+
+        self.ui_updater['set_progress_complete']()
+
+        if result and result.get('route_points'):
+            # 路线规划成功
+            route_points = result['route_points']
+            estimated_duration = result['duration']
+
+            # 保存路线数据
+            self.data_manager.set_route(route_points, estimated_duration)
+
+            # 更新路线时间信息
+            self._update_route_times(estimated_duration)
+
+            # 获取交通方式
+            transport_mode = self.ui_updater['get_transport_mode']()
+
+            # 处理成功
+            self._handle_route_success(transport_mode)
+        else:
+            # 路线规划失败
+            self._handle_route_failure()
+
+    @pyqtSlot(str, str)
+    def on_route_task_failed(self, task_id: str, error: str):
+        """处理路线规划任务失败（槽函数）
+
+        参数:
+            task_id: 任务ID
+            error: 错误信息
+        """
+        self.logger.error(f"路线规划任务失败: {task_id} - {error}")
+        self.ui_updater['set_progress_complete']()
+        self.ui_updater['clear_results_list']()
+        result_text = f"路线规划出错\n错误信息: {error}"
+        self.ui_updater['add_result'](result_text)
+        self.ui_updater['show_warning']("错误", f"路线规划出错: {error}")
+
+    @pyqtSlot(str, object)
+    def on_map_render_task_completed(self, task_id: str, result):
+        """处理地图渲染任务完成（槽函数）
+
+        参数:
+            task_id: 任务ID
+            result: 地图URL
+        """
+        self.logger.info(f"地图渲染任务完成: {task_id}")
+
+        if result:
+            # 在主线程中加载地图
+            self.ui_updater['load_map_url'](result)
+            self.logger.debug(f"已加载地图: {result}")
+        else:
+            self.logger.warning("地图渲染失败，URL为空")
+
+    @pyqtSlot(str, str)
+    def on_map_render_task_failed(self, task_id: str, error: str):
+        """处理地图渲染任务失败（槽函数）
+
+        参数:
+            task_id: 任务ID
+            error: 错误信息
+        """
+        self.logger.error(f"地图渲染任务失败: {task_id} - {error}")
+        self.ui_updater['show_warning']("警告", f"地图显示失败: {error}")
 
     def _update_route_times(self, estimated_duration: int):
         """更新路线时间信息（内部方法）
@@ -206,8 +311,26 @@ class RouteManager:
         # 先添加合并的结果
         self.ui_updater['add_result'](result_text)
 
-        # 在地图上显示路线
-        self.ui_updater['show_route_on_map']()
+        # 在地图上显示路线 - 使用后台线程渲染
+        if self.task_manager:
+            self.logger.info("使用后台线程渲染路线地图")
+            from .task_adapters import MapRenderTaskAdapter
+            from services.config.map_config import map_config
+
+            map_source = map_config.get_map_source()
+
+            task_id = self.task_manager.submit_task(
+                task_type="map_render",
+                task_func=MapRenderTaskAdapter.create_route_map_render_task,
+                priority=TaskPriority.HIGH,  # 用户操作优先级最高
+                data_manager=self.data_manager,
+                map_source=map_source
+            )
+
+            self.logger.debug(f"地图渲染任务已提交: {task_id}")
+        else:
+            # 兼容模式：直接渲染
+            self.ui_updater['show_route_on_map']()
 
     def _handle_route_failure(self):
         """处理路线规划失败（内部方法）

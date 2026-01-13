@@ -1,15 +1,18 @@
 """
 定位管理器
 负责各种定位功能（Windows原生、浏览器定位、IP定位）
+支持后台线程执行和进度展示
 """
 
 from typing import Optional, Callable
 from PyQt5.QtWidgets import QMessageBox, QApplication
+from PyQt5.QtCore import QObject, pyqtSlot
 from modules.geolocation.location_helper import LocationHelper
 from services.config.map_config import map_config
+from core.background_task import TaskPriority
 
 
-class LocationManager:
+class LocationManager(QObject):
     """定位管理器
 
     负责管理各种定位功能，提供多级别定位服务：
@@ -20,9 +23,11 @@ class LocationManager:
     - 公共IP定位（作为备选）
 
     定位优先级：Windows原生 → 浏览器定位 → 高德IP定位 → 公共IP定位
+
+    支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger):
+    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None):
         """
         初始化定位管理器
 
@@ -31,11 +36,14 @@ class LocationManager:
             data_manager: 数据管理器实例，用于存储定位结果
             ui_updater: UI更新回调函数字典，用于更新界面显示
             logger: 日志器，用于记录定位过程
+            task_manager: 任务管理器实例，用于后台任务管理
         """
+        super().__init__()
         self.service_manager = service_manager  # 服务管理器实例
         self.data_manager = data_manager  # 数据管理器实例
         self.ui_updater = ui_updater  # UI更新回调函数字典
         self.logger = logger  # 日志器
+        self.task_manager = task_manager  # 任务管理器
 
     def get_current_location(self):
         """获取当前位置（按优先级依次尝试各种定位方式）
@@ -45,6 +53,8 @@ class LocationManager:
         2. 浏览器Geolocation API定位
         3. 高德IP定位
         4. 公共IP定位
+
+        使用后台线程异步执行，避免阻塞主线程
         """
         self.logger.info("=" * 80)
         self.logger.info("开始执行定位流程")
@@ -57,6 +67,126 @@ class LocationManager:
             self.ui_updater['show_warning']("警告", "请先在地图配置中设置地图数据源")
             return
 
+        # 如果有任务管理器，使用后台线程执行
+        if self.task_manager:
+            self.logger.info("使用后台线程执行定位任务")
+            task_id = self.task_manager.submit_task(
+                task_type="location",
+                task_func=self._location_task_wrapper,
+                priority=TaskPriority.HIGH,  # 用户操作优先级最高
+                service_manager=self.service_manager,
+                map_source=map_source
+            )
+            self.logger.debug(f"定位任务已提交: {task_id}")
+        else:
+            # 兼容模式：直接执行（不使用后台线程）
+            self.logger.info("直接执行定位（兼容模式）")
+            self._perform_location_sync()
+
+    def _location_task_wrapper(self, service_manager, map_source,
+                               progress_callback, log_callback, cancel_check):
+        """定位任务包装器（用于后台线程执行）
+
+        参数:
+            service_manager: 服务管理器
+            map_source: 地图源
+            progress_callback: 进度回调函数 (percent, message)
+            log_callback: 日志回调函数 (level, message)
+            cancel_check: 取消检查函数，返回True表示需要取消
+
+        返回:
+            定位结果字典
+        """
+        try:
+            log_callback("INFO", "开始定位流程")
+            progress_callback(0, "正在初始化定位服务...")
+
+            # 检查是否取消
+            if cancel_check():
+                log_callback("WARNING", "定位任务已取消")
+                return None
+
+            # 获取Windows位置服务
+            windows_location = service_manager.windows_location_service
+            log_callback("DEBUG", f"Windows位置服务可用: {windows_location.is_available()}")
+
+            # 尝试 Windows 原生定位（优先级最高）
+            if windows_location.is_available():
+                progress_callback(10, "正在使用Windows原生定位...")
+                log_callback("INFO", "尝试使用Windows原生位置服务...")
+
+                # 检查是否取消
+                if cancel_check():
+                    log_callback("WARNING", "定位任务已取消")
+                    return None
+
+                # 获取Windows原生定位信息
+                location_info = windows_location.get_location(timeout=10)
+                if location_info:
+                    progress_callback(100, "Windows原生定位成功")
+                    log_callback("INFO", "Windows原生定位成功")
+                    return {
+                        'type': 'native',
+                        'data': location_info
+                    }
+
+            # Windows定位不可用，尝试其他方式
+            log_callback("INFO", "Windows定位不可用，尝试其他方式")
+            progress_callback(30, "Windows定位不可用，尝试其他方式...")
+
+            # 检查是否取消
+            if cancel_check():
+                log_callback("WARNING", "定位任务已取消")
+                return None
+
+            # 只有当当前地图源是高德时，才使用高德在线定位（浏览器定位）
+            if map_source == "gaode" and map_config.is_gaode_configured():
+                progress_callback(50, "正在使用高德地图在线定位...")
+                log_callback("INFO", "尝试使用高德地图在线定位（浏览器定位）...")
+
+                # 浏览器定位需要在主线程触发，所以这里返回特殊标记
+                return {
+                    'type': 'browser',
+                    'data': None
+                }
+
+            # 尝试公共IP定位（最后备选）
+            progress_callback(60, "正在使用公共IP定位...")
+            log_callback("INFO", "尝试使用公共IP定位...")
+
+            # 检查是否取消
+            if cancel_check():
+                log_callback("WARNING", "定位任务已取消")
+                return None
+
+            # 定义IP定位的日志回调函数
+            def ip_log(level: str, message: str):
+                log_callback(level, f"[公共IP定位] {message}")
+
+            # 调用LocationHelper获取公共IP定位信息
+            location_info = LocationHelper.get_ip_location(logger=ip_log)
+
+            if location_info:
+                progress_callback(100, "公共IP定位成功")
+                log_callback("INFO", "公共IP定位成功")
+                return {
+                    'type': 'ip',
+                    'data': location_info,
+                    'source': '公共IP定位'
+                }
+            else:
+                progress_callback(100, "定位失败")
+                log_callback("ERROR", "所有定位方式均失败")
+                return None
+
+        except Exception as e:
+            log_callback("ERROR", f"定位任务异常: {str(e)}")
+            import traceback
+            log_callback("DEBUG", traceback.format_exc())
+            return None
+
+    def _perform_location_sync(self):
+        """同步执行定位（兼容模式，不使用后台线程）"""
         self.logger.info("开始定位流程")
 
         try:
@@ -106,6 +236,56 @@ class LocationManager:
 
         self.logger.info("定位流程完成")
         self.logger.info("=" * 80)
+
+    @pyqtSlot(str, object)
+    def on_location_task_completed(self, task_id: str, result):
+        """处理定位任务完成（槽函数）
+
+        参数:
+            task_id: 任务ID
+            result: 定位结果
+        """
+        self.logger.info(f"定位任务完成: {task_id}")
+
+        if not result:
+            # 定位失败
+            self.ui_updater['clear_results']()
+            self.ui_updater['add_result']("定位失败\n无法获取您的位置信息")
+            self.logger.error("定位失败：无法获取您的位置信息")
+            self.ui_updater['show_warning']("定位失败",
+                "无法获取您的位置信息\n\n建议：\n1. 检查网络连接\n2. 确认Windows位置服务已开启（如适用）")
+            return
+
+        # 根据定位类型处理结果
+        location_type = result.get('type')
+        location_data = result.get('data')
+
+        if location_type == 'native':
+            # Windows原生定位成功
+            self.handle_native_location_success(location_data)
+        elif location_type == 'browser':
+            # 需要触发浏览器定位
+            self.ui_updater['clear_results']()
+            self.ui_updater['add_result']("正在使用高德地图在线定位...")
+            self.logger.info("触发浏览器定位...")
+            self.ui_updater['trigger_browser_location']()
+        elif location_type == 'ip':
+            # IP定位成功
+            source = result.get('source', 'IP地址定位')
+            self.handle_ip_location_success(location_data, source)
+        else:
+            self.logger.error(f"未知的定位类型: {location_type}")
+
+    @pyqtSlot(str, str)
+    def on_location_task_failed(self, task_id: str, error: str):
+        """处理定位任务失败（槽函数）
+
+        参数:
+            task_id: 任务ID
+            error: 错误信息
+        """
+        self.logger.error(f"定位任务失败: {task_id} - {error}")
+        self._handle_location_error(error)
 
     def _try_ip_location(self):
         """尝试公共IP定位（备选方案）

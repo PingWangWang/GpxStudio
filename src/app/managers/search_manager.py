@@ -1,15 +1,17 @@
 """
 搜索管理器
 负责地点搜索功能
+支持后台线程执行和进度展示
 """
 
 from typing import List, Optional
 from PyQt5.QtWidgets import QMessageBox, QListWidgetItem, QApplication
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QObject, pyqtSlot
 from services.config.map_config import map_config
+from core.background_task import TaskPriority
 
 
-class SearchManager:
+class SearchManager(QObject):
     """搜索管理器
 
     负责地点搜索和地理编码功能：
@@ -17,9 +19,11 @@ class SearchManager:
     - 处理搜索结果的展示和选择
     - 管理搜索结果与地图的交互
     - 根据搜索类型（起点/终点/途径点）处理搜索结果
+
+    支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger):
+    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None):
         """
         初始化搜索管理器
 
@@ -28,11 +32,14 @@ class SearchManager:
             data_manager: 数据管理器实例，用于存储和获取搜索相关数据
             ui_updater: UI更新回调函数字典，用于更新界面显示
             logger: 日志器，用于记录搜索操作日志
+            task_manager: 任务管理器实例，用于后台任务管理
         """
+        super().__init__()
         self.service_manager = service_manager
         self.data_manager = data_manager
         self.ui_updater = ui_updater
         self.logger = logger
+        self.task_manager = task_manager
 
     def search_location(self, search_text: str, location_type: str):
         """
@@ -57,8 +64,64 @@ class SearchManager:
         self.ui_updater['set_progress_indeterminate']()
         QApplication.processEvents()
 
-        # 执行搜索
-        self._perform_search(search_text, location_type, map_source)
+        # 如果有任务管理器，使用后台线程执行
+        if self.task_manager:
+            self.logger.info(f"使用后台线程执行搜索任务: {search_text}")
+            from .task_adapters import SearchTaskAdapter
+
+            # 获取地理编码服务
+            geocoding_service = self.service_manager.get_geocoding_service(map_source)
+
+            task_id = self.task_manager.submit_task(
+                task_type="search",
+                task_func=SearchTaskAdapter.create_search_task,
+                priority=TaskPriority.HIGH,  # 用户操作优先级最高
+                geocoding_service=geocoding_service,
+                search_text=search_text,
+                map_source=map_source
+            )
+
+            # 保存location_type用于后续处理
+            self.data_manager.searching_for = location_type
+
+            self.logger.debug(f"搜索任务已提交: {task_id}")
+        else:
+            # 兼容模式：直接执行
+            self._perform_search(search_text, location_type, map_source)
+
+    @pyqtSlot(str, object)
+    def on_search_task_completed(self, task_id: str, result):
+        """处理搜索任务完成（槽函数）
+
+        参数:
+            task_id: 任务ID
+            result: 搜索结果列表
+        """
+        self.logger.info(f"搜索任务完成: {task_id}")
+
+        self.ui_updater['set_progress_complete']()
+        QApplication.processEvents()
+
+        if result is not None and len(result) > 0:
+            # 搜索成功
+            location_type = self.data_manager.searching_for
+            self._handle_search_success(result, location_type)
+        else:
+            # 搜索失败或无结果
+            search_text = "未知"  # 由于是异步，无法直接获取search_text
+            self._handle_search_failure(search_text)
+
+    @pyqtSlot(str, str)
+    def on_search_task_failed(self, task_id: str, error: str):
+        """处理搜索任务失败（槽函数）
+
+        参数:
+            task_id: 任务ID
+            error: 错误信息
+        """
+        self.logger.error(f"搜索任务失败: {task_id} - {error}")
+        self.ui_updater['set_progress_complete']()
+        self.ui_updater['show_warning']("搜索失败", f"搜索出错: {error}")
 
     def _perform_search(self, search_text: str, location_type: str, map_source: str):
         """执行搜索（内部方法）

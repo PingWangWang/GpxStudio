@@ -27,6 +27,10 @@ class OsmRoutingService(IRoutingService):
         self.logger = logger
         # OSRM公共API基础URL，不需要API密钥
         self.base_url = "https://router.project-osrm.org/route/v1"
+        # 添加合适的请求头
+        self.headers = {
+            "User-Agent": "GPXStudio/1.2.0 (Route Planning Application; https://github.com/gpxstudio)"
+        }
         # 保存最近一次路线规划的实际距离（公里）
         self.last_route_distance = 0.0
         # 海拔API基础URL（使用Open-Elevation API）
@@ -76,7 +80,7 @@ class OsmRoutingService(IRoutingService):
                     lat, lon = points[i]
                     elevation = result.get("elevation", 0.0)
                     points_with_elevation.append((lat, lon, elevation))
-                
+
                 self._log("INFO", f"成功获取 {len(points_with_elevation)} 个点的海拔数据")
                 return points_with_elevation
             else:
@@ -104,10 +108,10 @@ class OsmRoutingService(IRoutingService):
             if len(points) < 2:
                 self._log("WARNING", f"OSM路线规划点数量不足: {len(points)}，至少需要2个点")
                 return [], 0
-            
+
             # 转换交通方式为OSRM支持的类型
             vehicle = self._get_vehicle_type(transport_mode)
-            
+
             route_points = []
             estimated_duration = 0
             total_distance = 0.0
@@ -129,18 +133,18 @@ class OsmRoutingService(IRoutingService):
                 self._log("DEBUG", f"请求OSRM API: {url}")
 
                 # 发送请求
-                response = requests.get(url, timeout=30)
-                
+                response = requests.get(url, headers=self.headers, timeout=30)
+
                 # 检查响应状态
                 self._log("DEBUG", f"OSRM API响应状态: {response.status_code}")
-                
+
                 # 打印完整的响应URL（用于调试）
                 self._log("DEBUG", f"完整响应URL: {response.url}")
-                
+
                 # 解析响应
                 data = response.json()
                 self._log("DEBUG", f"OSRM API响应代码: {data.get('code')}")
-                
+
                 # 打印完整的响应内容（仅用于调试）
                 if 'routes' in data and data['routes']:
                     route = data['routes'][0]
@@ -152,13 +156,13 @@ class OsmRoutingService(IRoutingService):
                 if data.get("code") == "Ok":
                     route = data["routes"][0]
                     coordinates = route["geometry"]["coordinates"]
-                    
+
                     # 转换为(lat, lon)格式
                     segment_points = [(coord[1], coord[0]) for coord in coordinates]
-                    
+
                     # 获取海拔数据
                     segment_points_with_elevation = self._get_elevation(segment_points)
-                    
+
                     # 添加路线点（带海拔）
                     for point in segment_points_with_elevation:
                         route_points.append(point)
@@ -221,7 +225,7 @@ class OsmRoutingService(IRoutingService):
                     lat2, lon2 = route_points[i][:2] if len(route_points[i]) >= 2 else route_points[i]
                     distance = self._haversine_distance(lat1, lon1, lat2, lon2)
                     total_distance += distance
-            
+
             self._log("INFO", f"使用Haversine公式计算路线距离: {total_distance:.2f}公里")
             return total_distance
         except Exception as e:
@@ -260,21 +264,21 @@ class OsmRoutingService(IRoutingService):
         """
         # 地球半径（公里）
         R = 6371.0
-        
+
         # 转换为弧度
         lat1_rad = math.radians(lat1)
         lon1_rad = math.radians(lon1)
         lat2_rad = math.radians(lat2)
         lon2_rad = math.radians(lon2)
-        
+
         # 差值
         dlat = lat2_rad - lat1_rad
         dlon = lon2_rad - lon1_rad
-        
+
         # Haversine公式
         a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        
+
         # 距离（公里）
         distance = R * c
         return distance

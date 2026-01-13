@@ -98,6 +98,9 @@ class GpxStudio(QMainWindow):
         # UI更新器回调（稍后在UI初始化后连接）
         self.ui_updater = {}
 
+        # 任务管理器（延迟初始化，需要logger）
+        self.task_manager = None
+
         print("管理器初始化完成")
 
     def _init_window(self):
@@ -130,7 +133,14 @@ class GpxStudio(QMainWindow):
     def _init_logging(self):
         """初始化日志系统"""
         print("开始初始化日志系统")
-        self.logger = setup_logger(self.log_panel, "GpxStudio")
+        self.logger = setup_logger(None, "GpxStudio")  # 不使用UI日志面板，只输出到文件
+
+        # 初始化任务管理器（需要logger）
+        from core.background_task import TaskManager
+        self.task_manager = TaskManager(self.logger)
+
+        # 连接任务管理器信号
+        self._connect_task_manager_signals()
 
         # 初始化Windows定位服务（需要logger）
         self.service_manager.initialize_windows_location_service()
@@ -153,7 +163,7 @@ class GpxStudio(QMainWindow):
         # 初始化各个功能管理器
         self.location_manager = LocationManager(
             self.service_manager, self.data_manager,
-            self.ui_updater, self.logger
+            self.ui_updater, self.logger, self.task_manager
         )
 
         self.map_manager = MapManager(
@@ -162,12 +172,12 @@ class GpxStudio(QMainWindow):
 
         self.search_manager = SearchManager(
             self.service_manager, self.data_manager,
-            self.ui_updater, self.logger
+            self.ui_updater, self.logger, self.task_manager
         )
 
         self.route_manager = RouteManager(
             self.service_manager, self.data_manager,
-            self.ui_updater, self.logger
+            self.ui_updater, self.logger, self.task_manager
         )
 
         self.time_manager = TimeManager(
@@ -210,6 +220,7 @@ class GpxStudio(QMainWindow):
             'preview_search_result': self._preview_search_result,
             'show_location_on_map': self._show_location_on_map,
             'show_route_on_map': self._show_route_on_map,
+            'load_map_url': self._load_map_url,  # 新增：直接加载地图URL
 
             # 定位
             'trigger_browser_location': self._trigger_browser_location,
@@ -240,6 +251,21 @@ class GpxStudio(QMainWindow):
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
         self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
+
+    def _connect_task_manager_signals(self):
+        """连接任务管理器信号"""
+        # 任务开始
+        self.task_manager.task_started.connect(self._on_task_started)
+        # 任务进度
+        self.task_manager.task_progress.connect(self._on_task_progress)
+        # 任务完成
+        self.task_manager.task_completed.connect(self._on_task_completed)
+        # 任务失败
+        self.task_manager.task_failed.connect(self._on_task_failed)
+        # 任务取消
+        self.task_manager.task_cancelled.connect(self._on_task_cancelled)
+        # 任务日志
+        self.task_manager.task_log.connect(self._on_task_log)
 
     # ==================== 日志回调方法 ====================
 
@@ -375,15 +401,18 @@ class GpxStudio(QMainWindow):
         middle_widget = QWidget()
         middle_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[1])
         layout = QVBoxLayout(middle_widget)
+        layout.setSpacing(10)  # 设置组件间距
+        layout.setContentsMargins(5, 5, 5, 5)  # 设置边距
 
         # 标题
         self.search_results_title = QLabel("搜索结果")
         self.search_results_title.setStyleSheet(UIStyles.TITLE_LABEL)
         layout.addWidget(self.search_results_title)
 
-        # 搜索结果列表
+        # 搜索结果列表 - 设置更大的高度
         self.search_results_list = QListWidget()
         self.search_results_list.itemClicked.connect(self.on_search_result_clicked)
+        self.search_results_list.setMinimumHeight(300)  # 增加最小高度
         # 设置列表项支持多行显示
         self.search_results_list.setWordWrap(True)
         self.search_results_list.setSpacing(2)
@@ -405,9 +434,12 @@ class GpxStudio(QMainWindow):
             }
             QListWidget {
                 outline: none;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                background-color: white;
             }
         """)
-        layout.addWidget(self.search_results_list)
+        layout.addWidget(self.search_results_list, 1)  # 设置伸展因子，占据更多空间
 
         # 清空按钮
         clear_button = QPushButton("清空搜索结果")
@@ -415,9 +447,11 @@ class GpxStudio(QMainWindow):
         clear_button.setStyleSheet(UIStyles.CLEAR_BUTTON)
         layout.addWidget(clear_button)
 
-        # 日志显示面板
-        self.log_panel = LogPanel()
-        layout.addWidget(self.log_panel)
+        # 任务进度面板
+        from ui.panels.task_progress_panel import TaskInfoPanel
+        self.task_progress_panel = TaskInfoPanel()
+        self.task_progress_panel.cancel_task_requested.connect(self._on_cancel_task_requested)
+        layout.addWidget(self.task_progress_panel)
 
         # 地图缩放比例尺显示面板
         self.scale_panel = ScalePanel()
@@ -615,6 +649,16 @@ class GpxStudio(QMainWindow):
     def _show_route_on_map(self):
         """在地图上显示路线"""
         self.map_manager.show_route_on_map()
+
+    def _load_map_url(self, url: str):
+        """直接加载地图URL（用于后台渲染完成后）
+
+        参数:
+            url: 地图HTML的URL
+        """
+        from PyQt5.QtCore import QUrl
+        self.logger.debug(f"加载地图URL: {url}")
+        self.map_view.setUrl(QUrl(url))
 
     def _trigger_browser_location(self):
         """触发浏览器定位"""
@@ -860,6 +904,106 @@ class GpxStudio(QMainWindow):
     def closeEvent(self, event):
         """重写关闭事件"""
         self.window_manager.handle_close_event(event)
+
+    # ==================== 任务管理器事件处理方法 ====================
+
+    def _on_task_started(self, task_id: str, task_type: str):
+        """任务开始事件"""
+        self.logger.info(f"[任务] 开始: {task_id} ({task_type})")
+
+        # 任务类型到显示名称的映射
+        task_name_map = {
+            'location': '定位',
+            'search': '搜索',
+            'routing': '路线规划',
+            'map_render': '地图渲染'
+        }
+        task_name = task_name_map.get(task_type, task_type)
+
+        # 在任务进度面板显示任务开始
+        self.task_progress_panel.start_task(task_id, task_type, task_name)
+
+    def _on_task_progress(self, task_id: str, percent: int, message: str):
+        """任务进度更新事件"""
+        # 更新任务进度面板
+        self.task_progress_panel.update_progress(percent, message)
+
+    def _on_task_completed(self, task_id: str, result):
+        """任务完成事件"""
+        self.logger.info(f"[任务] 完成: {task_id}")
+
+        # 根据任务ID判断任务类型并处理结果
+        if task_id.startswith('location_'):
+            self.location_manager.on_location_task_completed(task_id, result)
+            self.task_progress_panel.task_completed("定位完成")
+        elif task_id.startswith('search_'):
+            self.search_manager.on_search_task_completed(task_id, result)
+            self.task_progress_panel.task_completed("搜索完成")
+        elif task_id.startswith('routing_'):
+            self.route_manager.on_route_task_completed(task_id, result)
+            self.task_progress_panel.task_completed("路线规划完成")
+        elif task_id.startswith('map_render_'):
+            self.route_manager.on_map_render_task_completed(task_id, result)
+            self.task_progress_panel.task_completed("地图渲染完成")
+        else:
+            self.task_progress_panel.task_completed("任务完成")
+
+        # 延迟重置任务进度面板
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(3000, self.task_progress_panel.reset)
+
+    def _on_task_failed(self, task_id: str, error: str):
+        """任务失败事件"""
+        self.logger.error(f"[任务] 失败: {task_id} - {error}")
+
+        # 根据任务ID判断任务类型并处理错误
+        if task_id.startswith('location_'):
+            self.location_manager.on_location_task_failed(task_id, error)
+        elif task_id.startswith('search_'):
+            self.search_manager.on_search_task_failed(task_id, error)
+        elif task_id.startswith('routing_'):
+            self.route_manager.on_route_task_failed(task_id, error)
+        elif task_id.startswith('map_render_'):
+            self.route_manager.on_map_render_task_failed(task_id, error)
+
+        # 在任务进度面板显示失败
+        self.task_progress_panel.task_failed(error)
+
+        # 延迟重置任务进度面板
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(5000, self.task_progress_panel.reset)
+
+    def _on_task_cancelled(self, task_id: str):
+        """任务取消事件"""
+        self.logger.warning(f"[任务] 已取消: {task_id}")
+
+        # 在任务进度面板显示取消
+        self.task_progress_panel.task_cancelled()
+
+        # 延迟重置任务进度面板
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(2000, self.task_progress_panel.reset)
+
+    def _on_task_log(self, task_id: str, level: str, message: str):
+        """任务日志事件"""
+        # 转发到任务进度面板
+        self.task_progress_panel.add_log(level, message)
+
+        # 同时记录到主日志
+        level_map = {
+            "DEBUG": self.logger.debug,
+            "INFO": self.logger.info,
+            "WARNING": self.logger.warning,
+            "ERROR": self.logger.error,
+            "CRITICAL": self.logger.critical
+        }
+        log_func = level_map.get(level, self.logger.info)
+        log_func(f"[任务 {task_id}] {message}")
+
+    def _on_cancel_task_requested(self, task_id: str):
+        """请求取消任务"""
+        self.logger.info(f"[任务] 用户请求取消: {task_id}")
+        self.task_manager.cancel_task(task_id)
 
 
 if __name__ == "__main__":

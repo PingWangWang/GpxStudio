@@ -25,12 +25,15 @@ class OsmGeocodingService(IGeocodingService):
         """
         self.logger = logger
         self.base_url = "https://nominatim.openstreetmap.org"
+        # Nominatim要求提供有效的User-Agent，包含应用名称和联系方式
+        # 参考：https://operations.osmfoundation.org/policies/nominatim/
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 GPXStudio/1.0"
+            "User-Agent": "GPXStudio/1.2.0 (Route Planning Application; https://github.com/gpxstudio)",
+            "Referer": "https://github.com/gpxstudio"
         }
         import time
         self.last_request_time = 0
-        self.min_request_interval = 1.0  # 最小请求间隔，单位秒
+        self.min_request_interval = 1.5  # 最小请求间隔，单位秒，增加到1.5秒更安全
 
     def _log(self, level: str, message: str):
         """
@@ -90,7 +93,7 @@ class OsmGeocodingService(IGeocodingService):
                         f"{self.base_url}/search",
                         params=params,
                         headers=self.headers,
-                        timeout=10
+                        timeout=15
                     )
 
                     if response.status_code == 200:
@@ -101,11 +104,11 @@ class OsmGeocodingService(IGeocodingService):
                                 name = item.get('display_name', '')
                                 lat = float(item.get('lat', 0))
                                 lon = float(item.get('lon', 0))
-                                
+
                                 # 构建地址信息
                                 address_parts = []
                                 address = item.get('address', {})
-                                
+
                                 # 优先获取具体地点名称
                                 if 'name' in address:
                                     name = address['name']
@@ -119,22 +122,22 @@ class OsmGeocodingService(IGeocodingService):
                                     name = address['amenity']
                                     address_parts.append(address.get('house_number', ''))
                                     address_parts.append(address.get('road', ''))
-                                
+
                                 # 添加其他地址信息
                                 address_parts.append(address.get('suburb', ''))
                                 address_parts.append(address.get('city', ''))
                                 address_parts.append(address.get('county', ''))
                                 address_parts.append(address.get('state', ''))
                                 address_parts.append(address.get('country', ''))
-                                
+
                                 # 过滤空值
                                 address_parts = [part for part in address_parts if part]
                                 full_address = ", ".join(address_parts)
-                                
+
                                 # 如果没有具体名称，使用完整地址作为名称
                                 if not name:
                                     name = full_address
-                                
+
                                 formatted_results.append({
                                     'name': name,
                                     'address': full_address,
@@ -143,9 +146,20 @@ class OsmGeocodingService(IGeocodingService):
                                     'level': self._get_location_level(address),
                                     'type': self._get_location_type(address)
                                 })
-                            
+
                             self._log("INFO", f"OSM搜索成功，找到{len(formatted_results)}个结果")
                             return formatted_results
+                    elif response.status_code == 418:
+                        # 418 I'm a teapot - Nominatim的速率限制或User-Agent问题
+                        # 参考：https://operations.osmfoundation.org/policies/nominatim/
+                        self._log("WARNING", f"OSM搜索被限流(418) - Nominatim要求每秒最多1个请求")
+                        self._log("INFO", f"当前User-Agent: {self.headers.get('User-Agent')}")
+                        self._log("INFO", "等待5秒后重试...")
+                        # 增加等待时间到5秒
+                        time.sleep(5)
+                        # 更新最后请求时间
+                        self.last_request_time = time.time()
+                        continue
                     else:
                         self._log("WARNING", f"OSM搜索请求失败: {response.status_code}")
                         # 继续尝试下一个策略
@@ -195,7 +209,7 @@ class OsmGeocodingService(IGeocodingService):
                 f"{self.base_url}/reverse",
                 params=params,
                 headers=self.headers,
-                timeout=10
+                timeout=15
             )
 
             if response.status_code == 200:
@@ -203,7 +217,7 @@ class OsmGeocodingService(IGeocodingService):
                 if result:
                     address = result.get('address', {})
                     name = result.get('display_name', '')
-                    
+
                     # 构建地址信息
                     address_parts = []
                     address_parts.append(address.get('house_number', ''))
@@ -213,15 +227,15 @@ class OsmGeocodingService(IGeocodingService):
                     address_parts.append(address.get('county', ''))
                     address_parts.append(address.get('state', ''))
                     address_parts.append(address.get('country', ''))
-                    
+
                     # 过滤空值
                     address_parts = [part for part in address_parts if part]
                     full_address = ", ".join(address_parts)
-                    
+
                     # 如果没有具体名称，使用完整地址作为名称
                     if not name:
                         name = full_address
-                    
+
                     return {
                         'name': name,
                         'address': full_address,
@@ -233,6 +247,11 @@ class OsmGeocodingService(IGeocodingService):
                 else:
                     self._log("INFO", "OSM反向地理编码无结果")
                     return None
+            elif response.status_code == 418:
+                self._log("WARNING", f"OSM反向地理编码被限流(418) - Nominatim要求每秒最多1个请求")
+                self._log("INFO", f"当前User-Agent: {self.headers.get('User-Agent')}")
+                self._log("INFO", "请稍后再试，或检查网络连接")
+                return None
             else:
                 self._log("ERROR", f"OSM反向地理编码请求失败: {response.status_code}")
                 return None

@@ -17,7 +17,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
 # 读取项目版本号
-VERSION_FILE = os.path.join(PROJECT_ROOT, "src", "version.py")
+VERSION_FILE = os.path.join(PROJECT_ROOT, "version.py")
 with open(VERSION_FILE, "r", encoding="utf-8") as f:
     exec(f.read())
 
