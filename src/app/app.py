@@ -348,11 +348,11 @@ class GpxStudio(QMainWindow):
 
         # 创建三个主面板
         left_panel = self.create_left_panel()
-        middle_panel = self.create_middle_panel()
+        self.middle_panel = self.create_middle_panel()
         right_panel = self.create_right_panel()
 
         splitter.addWidget(left_panel)
-        splitter.addWidget(middle_panel)
+        splitter.addWidget(self.middle_panel)
         splitter.addWidget(right_panel)
 
         # 使用布局管理器设置布局
@@ -762,17 +762,17 @@ class GpxStudio(QMainWindow):
 
     def _show_date_panel(self, current_date):
         """显示日期面板"""
-        log_rect = self.log_panel.rect()
-        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
-        log_size = self.log_panel.size()
-        self.date_panel.show_panel(current_date, log_pos, 0, log_size)
+        panel_rect = self.middle_panel.rect()
+        panel_pos = self.middle_panel.mapToGlobal(panel_rect.topLeft())
+        panel_size = self.middle_panel.size()
+        self.date_panel.show_panel(current_date, panel_pos, 0, panel_size)
 
     def _show_time_panel(self, current_time):
         """显示时间面板"""
-        log_rect = self.log_panel.rect()
-        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
-        log_size = self.log_panel.size()
-        self.time_panel.show_panel(current_time, log_pos, 0, log_size)
+        panel_rect = self.middle_panel.rect()
+        panel_pos = self.middle_panel.mapToGlobal(panel_rect.topLeft())
+        panel_size = self.middle_panel.size()
+        self.time_panel.show_panel(current_time, panel_pos, 0, panel_size)
 
     def _add_route_time_info(self):
         """添加路线时间信息到结果列表"""
