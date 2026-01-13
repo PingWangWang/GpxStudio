@@ -51,19 +51,40 @@ from .managers import (
 class GpxStudio(QMainWindow):
     """GPX Studio 主应用窗口（重构版）"""
 
-    def __init__(self):
+    def __init__(self, splash_screen=None):
+        """
+        初始化主窗口
+
+        Args:
+            splash_screen: 启动画面实例，用于更新加载进度
+        """
         super().__init__()
+        self.splash_screen = splash_screen
+
         print("=" * 80)
         print("GPX Studio 程序启动开始（重构版）")
         print("=" * 80)
 
-        # 初始化各个部分
+        # 初始化各个部分（进度范围：10-95，为启动和完成阶段留出空间）
+        self._update_splash(15, "正在初始化管理器...")
         self._init_managers()
+
+        self._update_splash(30, "正在设置窗口...")
         self._init_window()
+
+        self._update_splash(45, "正在初始化服务...")
         self._init_services()
+
+        self._update_splash(60, "正在初始化信号系统...")
         self._init_signals()
+
+        self._update_splash(75, "正在加载用户界面...")
         self._init_ui()
+
+        self._update_splash(90, "正在初始化日志系统...")
         self._init_logging()
+
+        self._update_splash(95, "准备就绪...")
 
         # 启动完成
         self.logger.info("=" * 80)
@@ -73,6 +94,20 @@ class GpxStudio(QMainWindow):
         # 标记首次启动完成
         from core.logging_setup import mark_first_run_completed
         mark_first_run_completed()
+
+    def _update_splash(self, progress: int, message: str = ""):
+        """
+        更新启动画面进度
+
+        Args:
+            progress: 进度值 (0-100)
+            message: 状态消息
+        """
+        if self.splash_screen:
+            self.splash_screen.update_progress(progress, message)
+            # 强制处理事件，确保界面更新
+            from PyQt5.QtWidgets import QApplication
+            QApplication.processEvents()
 
     def _init_managers(self):
         """初始化所有管理器"""

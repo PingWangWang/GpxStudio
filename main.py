@@ -15,35 +15,64 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(current_dir, 'src')
 sys.path.insert(0, src_dir)
 
-# 导入PyQt5的QApplication类，用于创建应用程序实例
-from PyQt5.QtWidgets import QApplication
-
-# 导入日志配置模块，确保应用程序的日志系统正常工作
-import core.logging_setup
-
-# 导入主窗口类GpxStudio，这是应用程序的核心界面类
-from app.app import GpxStudio
-
 
 def main():
     """
     主函数，负责启动应用程序
-    
+
     流程：
-    1. 创建QApplication实例，这是PyQt5应用程序的基础
-    2. 创建GpxStudio主窗口实例
-    3. 显示主窗口
-    4. 进入应用程序的事件循环
+    1. 设置Qt属性（必须在创建QApplication之前）
+    2. 创建QApplication实例
+    3. 立即显示启动画面
+    4. 延迟导入重量级模块
+    5. 创建并显示主窗口
+    6. 进入事件循环
     """
-    # 创建应用程序实例，传入命令行参数
+    # 第一步：导入PyQt5核心模块，并设置必要的Qt属性
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtCore import Qt, QCoreApplication
+
+    # 必须在创建QApplication之前设置此属性，以支持QtWebEngine
+    QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+
+    # 创建应用程序实例
     app = QApplication(sys.argv)
-    
-    # 创建主窗口实例
-    window = GpxStudio()
-    
+
+    # 第二步：立即导入并显示启动画面（轻量级，不依赖重模块）
+    from ui.dialogs.splash_screen import SplashScreen
+    splash = SplashScreen()
+    splash.show()
+    splash.update_progress(0, "正在启动 GPX Studio...")
+
+    # 强制处理事件，确保启动画面立即显示
+    app.processEvents()
+
+    # 第三步：在启动画面显示后，开始导入重量级模块
+    splash.update_progress(5, "正在加载核心模块...")
+    app.processEvents()
+
+    # 导入日志配置模块
+    import core.logging_setup
+
+    splash.update_progress(8, "正在加载应用模块...")
+    app.processEvents()
+
+    # 导入主窗口类（这是最耗时的导入，包含所有依赖）
+    from app.app import GpxStudio
+
+    # 第四步：创建主窗口实例（在初始化过程中会更新进度）
+    window = GpxStudio(splash_screen=splash)
+
+    # 第五步：主窗口初始化完成，显示它
+    splash.update_progress(100, "启动完成！")
+    app.processEvents()
+
     # 显示主窗口
     window.show()
-    
+
+    # 关闭启动画面
+    splash.finish(window)
+
     # 进入应用程序的事件循环，等待用户交互
     sys.exit(app.exec_())
 
@@ -51,7 +80,7 @@ def main():
 if __name__ == "__main__":
     """
     程序入口点
-    
+
     使用try-except块捕获所有可能的异常，确保应用程序在出现错误时能够优雅地退出
     并提供详细的错误信息
     """
@@ -61,7 +90,7 @@ if __name__ == "__main__":
     except Exception as e:
         # 导入traceback模块，用于获取详细的错误堆栈信息
         import traceback
-        
+
         # 构建错误信息字符串
         error_msg = f"应用程序启动失败: {e}\n"
         error_msg += "详细错误信息:\n"

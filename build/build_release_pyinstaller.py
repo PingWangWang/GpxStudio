@@ -211,7 +211,7 @@ def main():
         "--add-data", "src/services;services",
         "--add-data", "src/core;core",
         "--add-data", "src/app;app",
-        "--add-data", "src/version.py;version.py",
+        "--add-data", "version.py;version.py",
         "--add-data", "res;res",
         "--add-data", f"{XYZ_SERVICES_DATA};xyzservices/data",
         # 排除不需要的模块减小体积
@@ -259,7 +259,7 @@ def main():
         "src/services",
         "src/core",
         "src/app",
-        "src/version.py",
+        "version.py",
         "res",
         XYZ_SERVICES_DATA,
         "main.py"
