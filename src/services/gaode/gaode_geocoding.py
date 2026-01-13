@@ -135,7 +135,8 @@ class GaodeGeocodingService(IGeocodingService):
                 'citylimit': 'false',                 # 是否限制在指定城市内搜索
                 'output': 'json',                     # 返回格式为JSON
                 'offset': 10,                         # 每页结果数
-                'page': 1                             # 页码
+                'page': 1,                            # 页码
+                'extensions': 'all'                   # 获取详细信息（包含边界、入口等）
             }
 
             # 如果配置了安全密钥，生成签名
@@ -156,6 +157,26 @@ class GaodeGeocodingService(IGeocodingService):
                     # 解析经纬度信息（格式："lon,lat"）
                     location = poi.get('location', '').split(',')
                     if len(location) == 2:
+                        # 解析入口坐标（用于计算POI范围）
+                        entr_location_str = poi.get('entr_location', '')
+                        entr_lat, entr_lon = None, None
+                        if entr_location_str and ',' in entr_location_str:
+                            entr_parts = entr_location_str.split(',')
+                            if len(entr_parts) == 2:
+                                try:
+                                    entr_lon = float(entr_parts[0])
+                                    entr_lat = float(entr_parts[1])
+                                except ValueError:
+                                    pass
+
+                        # 计算POI半径（中心到入口的距离，单位：米）
+                        poi_radius = None
+                        if entr_lat is not None and entr_lon is not None:
+                            poi_radius = self._calculate_distance(
+                                float(location[1]), float(location[0]),
+                                entr_lat, entr_lon
+                            )
+
                         # 构造结果字典
                         results.append({
                             'name': poi.get('name', ''),                      # 地点名称
@@ -163,7 +184,8 @@ class GaodeGeocodingService(IGeocodingService):
                             'lat': float(location[1]),                          # 纬度
                             'lon': float(location[0]),                          # 经度
                             'type': poi.get('type', ''),                        # 地点类型
-                            'level': poi.get('typecode', '')                    # 地点类型编码
+                            'level': poi.get('typecode', ''),                   # 地点类型编码
+                            'radius': poi_radius                                # POI半径（米）
                         })
 
                 log_cb("INFO", f"搜索成功，找到 {len(results)} 个结果")
@@ -178,6 +200,44 @@ class GaodeGeocodingService(IGeocodingService):
             # 捕获网络异常、JSON解析异常等
             log_cb("ERROR", f"搜索异常: {str(e)}")
             return None
+
+    @staticmethod
+    def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """
+        使用Haversine公式计算两点之间的距离（单位：米）
+
+        Args:
+            lat1: 第一个点的纬度
+            lon1: 第一个点的经度
+            lat2: 第二个点的纬度
+            lon2: 第二个点的经度
+
+        Returns:
+            float: 两点之间的距离（米）
+        """
+        from math import radians, sin, cos, sqrt, atan2
+
+        # 地球平均半径（千米）
+        R = 6371.0
+
+        # 将角度转换为弧度
+        lat1_rad = radians(lat1)
+        lon1_rad = radians(lon1)
+        lat2_rad = radians(lat2)
+        lon2_rad = radians(lon2)
+
+        # 计算差值
+        dlat = lat2_rad - lat1_rad
+        dlon = lon2_rad - lon1_rad
+
+        # Haversine公式
+        a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        # 计算距离（米）
+        distance = R * c * 1000
+
+        return distance
 
     def reverse_geocode(self, lat: float, lon: float) -> Optional[dict]:
         """

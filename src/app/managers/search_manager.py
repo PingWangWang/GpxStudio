@@ -230,11 +230,14 @@ class SearchManager(QObject):
         if not data:
             return
 
-        # 提取数据
+        # 添加调试日志
+        self.logger.info(f"[调试] select_search_result 收到的 data: {data}")
+        # 提取数据（数据结构：name, lat, lon, level, type_info, radius）
         full_name = data[0]
         coords = (data[1], data[2])
         level = data[3] if len(data) > 3 else None
         type_info = data[4] if len(data) > 4 else None
+        radius = data[5] if len(data) > 5 else None  # 提取POI半径
 
         # 提取纯地址名称（去除地址后缀）
         # 格式如 "name (address)" 只保留 name 部分
@@ -256,11 +259,10 @@ class SearchManager(QObject):
             self.data_manager.add_waypoint(coords, clean_name)
             self.ui_updater['add_waypoint_to_list'](clean_name, data, level)
 
-        # 预览选中的搜索结果
-        self.ui_updater['preview_search_result'](coords, clean_name, level)
-
-        # 更新地图
-        self.ui_updater['update_map_preview']()
+        # 预览选中的搜索结果，传递type_info和radius以便根据地址类型和实际范围进行缩放
+        # preview_search_result 方法已经完整渲染并显示了地图，包含选中点和搜索结果
+        # 因此不需要再调用 update_map_preview
+        self.ui_updater['preview_search_result'](coords, clean_name, level, type_info, radius)
 
     def clear_search_results(self):
         """清空搜索结果

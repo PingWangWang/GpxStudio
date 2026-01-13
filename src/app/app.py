@@ -576,6 +576,7 @@ class GpxStudio(QMainWindow):
                 lon = location.get('lon', 0)
                 level = location.get('level', None)
                 type_info = location.get('type', None)
+                radius = location.get('radius', None)  # 提取POI半径
 
                 # 构建详细的显示文本
                 display_parts = []
@@ -606,6 +607,7 @@ class GpxStudio(QMainWindow):
                 lon = location.longitude
                 level = None
                 type_info = location.type if hasattr(location, 'type') else None
+                radius = None  # OSM暂不支持半径
 
                 display_parts = []
                 display_parts.append(f"{i+1}. {name}")
@@ -619,8 +621,8 @@ class GpxStudio(QMainWindow):
                 full_name = name
 
             item = QListWidgetItem(item_text)
-            # 保存完整名称用于后续选择
-            item.setData(Qt.UserRole, (full_name, lat, lon, level, type_info))
+            # 保存完整名称用于后续选择，包含radius信息
+            item.setData(Qt.UserRole, (full_name, lat, lon, level, type_info, radius))
             self.search_results_list.addItem(item)
 
     def _show_search_results_on_map(self, locations: list, location_type: str):
@@ -671,9 +673,9 @@ class GpxStudio(QMainWindow):
         """更新地图预览"""
         self.map_manager.update_map_preview()
 
-    def _preview_search_result(self, coords, name, level=None):
+    def _preview_search_result(self, coords, name, level=None, type_info=None, radius=None):
         """预览搜索结果"""
-        self.map_manager.preview_search_result(coords, name, level)
+        self.map_manager.preview_search_result(coords, name, level, type_info, radius)
 
     def _show_location_on_map(self, lat: float, lon: float, popup_text: str):
         """在地图上显示位置"""

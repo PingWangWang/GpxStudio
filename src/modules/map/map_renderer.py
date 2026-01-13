@@ -26,42 +26,173 @@ class MapRenderer:
     }
 
     @staticmethod
-    def get_zoom_by_level(level_info: str = None, type_info: str = None) -> int:
+    def _calculate_zoom_from_radius(radius: float) -> int:
+        """
+        根据POI半径计算合适的缩放级别
+
+        策略：确保POI在视野中占据合理比例（约50-70%）
+
+        高德地图缩放级别对应的地面距离参考（赤道附近）：
+        - zoom 3:  40,000 km (全球视野)
+        - zoom 4:  20,000 km (洲级)
+        - zoom 5:  10,000 km
+        - zoom 6:  5,000 km
+        - zoom 7:  2,500 km (省级)
+        - zoom 8:  1,250 km
+        - zoom 9:  625 km
+        - zoom 10: 312 km (市级)
+        - zoom 11: 156 km
+        - zoom 12: 78 km (区级)
+        - zoom 13: 39 km
+        - zoom 14: 19.5 km
+        - zoom 15: 10 km (街道级)
+        - zoom 16: 5 km (POI级)
+        - zoom 17: 2.5 km (社区级)
+        - zoom 18: 1.25 km (建筑级)
+        - zoom 19: 625 m
+        - zoom 20: 312 m
+
+        Args:
+            radius: POI半径（米）
+
+        Returns:
+            int: 建议的缩放级别
+        """
+        if radius is None or radius <= 0:
+            return 16  # 默认POI级别
+
+        # 为了让POI占据合理视野（约60%），视野范围应为POI直径的1.5-2倍
+        # 视野半径 = POI半径 * 1.5 (留出适当空间)
+        view_radius = radius * 1.5
+
+        # 根据视野半径选择缩放级别（单位：米）
+        # 每级缩放，视野缩小约一半
+        if view_radius >= 20000000:  # > 20000 km
+            return 4
+        elif view_radius >= 10000000:  # > 10000 km
+            return 5
+        elif view_radius >= 5000000:   # > 5000 km
+            return 6
+        elif view_radius >= 2500000:   # > 2500 km
+            return 7
+        elif view_radius >= 1250000:   # > 1250 km
+            return 8
+        elif view_radius >= 625000:    # > 625 km
+            return 9
+        elif view_radius >= 312000:    # > 312 km
+            return 10
+        elif view_radius >= 156000:    # > 156 km
+            return 11
+        elif view_radius >= 78000:     # > 78 km
+            return 12
+        elif view_radius >= 39000:     # > 39 km
+            return 13
+        elif view_radius >= 19500:     # > 19.5 km
+            return 14
+        elif view_radius >= 10000:     # > 10 km
+            return 15
+        elif view_radius >= 5000:      # > 5 km
+            return 16
+        elif view_radius >= 2500:      # > 2.5 km
+            return 17
+        elif view_radius >= 1250:      # > 1.25 km
+            return 18
+        elif view_radius >= 625:       # > 625 m
+            return 19
+        else:
+            return 20
+
+    @staticmethod
+    def get_zoom_by_level(level_info: str = None, type_info: str = None, radius: float = None) -> int:
         """
         根据地址类型获取合适的缩放级别
 
+        优化策略：
+        1. 优先检查type_info（中文描述），因为它包含更详细的类型信息
+        2. 其次检查level_info（类型编码）
+        3. 使用更精确的关键词匹配
+        4. 对于住宅类地址，优先使用高缩放级别以显示细节
+
         Args:
-            level_info: 高德返回的地址级别信息
-            type_info: POI类型信息
+            level_info: 高德返回的地址级别信息（typecode）
+            type_info: POI类型信息（中文描述）
+            radius: POI半径（米），如果提供则优先使用
 
         Returns:
             int: 缩放级别
         """
+        # 优先级1：如果提供了POI半径，基于实际范围计算缩放级别
+        if radius is not None and radius > 0:
+            zoom = MapRenderer._calculate_zoom_from_radius(radius)
+            return zoom
+
         if not level_info and not type_info:
             return 12
 
         level_lower = (level_info or '').lower()
         type_lower = (type_info or '').lower()
 
-        if any(kw in level_lower for kw in ['国家', 'country']):
-            return MapRenderer.ZOOM_LEVELS['country']
-        elif any(kw in level_lower for kw in ['省', 'province']):
-            return MapRenderer.ZOOM_LEVELS['province']
-        elif any(kw in level_lower for kw in ['市', 'city', '自治区']):
-            return MapRenderer.ZOOM_LEVELS['city']
-        elif any(kw in level_lower for kw in ['区', '县', 'district', 'county']):
-            return MapRenderer.ZOOM_LEVELS['district']
-        elif any(kw in level_lower for kw in ['街道', '路', 'street', 'road']):
-            return MapRenderer.ZOOM_LEVELS['street']
-        elif any(kw in level_lower for kw in ['社区', '小区', 'community', 'residential']):
-            return MapRenderer.ZOOM_LEVELS['community']
-        elif any(kw in level_lower for kw in ['楼', '建筑', 'building']):
-            return MapRenderer.ZOOM_LEVELS['building']
-        elif any(kw in type_lower for kw in ['兴趣点', 'poi', '餐饮', '购物', '酒店', '医院', '学校']):
-            return MapRenderer.ZOOM_LEVELS['poi']
-        elif any(kw in type_lower for kw in ['住宅', '住宅区', 'community']):
-            return MapRenderer.ZOOM_LEVELS['community']
+        # 第一优先级：检查type_info（中文描述），因为它更准确
+        # 住宅类（最高优先级，需要看清小区布局）
+        if any(kw in type_lower for kw in ['住宅小区', '住宅区', '商务住宅', '别墅', '公寓']):
+            return MapRenderer.ZOOM_LEVELS['community']  # 17
 
+        # 商业POI（需要看清周边环境）
+        if any(kw in type_lower for kw in ['餐饮', '购物', '酒店', '宾馆', '商场', '超市', '便利店']):
+            return MapRenderer.ZOOM_LEVELS['poi']  # 16
+
+        # 公共服务设施（需要看清位置）
+        if any(kw in type_lower for kw in ['医院', '诊所', '学校', '幼儿园', '大学', '银行', '邮局']):
+            return MapRenderer.ZOOM_LEVELS['poi']  # 16
+
+        # 交通设施（需要看清站点）
+        if any(kw in type_lower for kw in ['地铁站', '公交站', '停车场', '加油站']):
+            return MapRenderer.ZOOM_LEVELS['poi']  # 16
+
+        # 办公楼宇
+        if any(kw in type_lower for kw in ['写字楼', '商务楼', '办公楼', '科技园']):
+            return MapRenderer.ZOOM_LEVELS['poi']  # 16
+
+        # 建筑物和特定场所（营销中心、售楼处等）
+        if any(kw in type_lower for kw in ['生活服务场所', '房地产', '中介', '物业']):
+            return MapRenderer.ZOOM_LEVELS['building']  # 18
+
+        # 风景名胜和景点（优先于行政区划检查）
+        if any(kw in type_lower for kw in ['风景名胜', '景点', '兴趣点', 'poi', '公园', '广场', '纪念', '博物馆', '展览']):
+            return MapRenderer.ZOOM_LEVELS['poi']  # 16
+
+        # 第二优先级：检查level_info和type_info中的行政区划关键词
+        combined = level_lower + ' ' + type_lower
+
+        # 国家级（但排除"国家级景点"这类POI）
+        if any(kw in combined for kw in ['国家', 'country']) and '景点' not in type_lower and '风景' not in type_lower:
+            return MapRenderer.ZOOM_LEVELS['country']  # 4
+
+        # 省级
+        if any(kw in combined for kw in ['省', 'province']):
+            return MapRenderer.ZOOM_LEVELS['province']  # 7
+
+        # 市级（注意：要在"社区"、"小区"之后检查）
+        if any(kw in combined for kw in ['市', 'city', '自治区']):
+            return MapRenderer.ZOOM_LEVELS['city']  # 10
+
+        # 街道级
+        if any(kw in combined for kw in ['街道', '街', '路', 'street', 'road', '巷', '弄']):
+            return MapRenderer.ZOOM_LEVELS['street']  # 15
+
+        # 社区/小区（要在"区"之前检查）
+        if any(kw in combined for kw in ['社区', '小区', 'community', 'residential']):
+            return MapRenderer.ZOOM_LEVELS['community']  # 17
+
+        # 区/县级
+        if any(kw in combined for kw in ['区', '县', 'district', 'county']):
+            return MapRenderer.ZOOM_LEVELS['district']  # 12
+
+        # 建筑级
+        if any(kw in combined for kw in ['楼', '栋', '建筑', 'building', '大厦']):
+            return MapRenderer.ZOOM_LEVELS['building']  # 18
+
+        # 默认返回14（介于区级12和街道级15之间）
         return 14
 
     @staticmethod
@@ -171,10 +302,10 @@ class MapRenderer:
             var map = null;
             var initAttempts = 0;
             var maxInitAttempts = 30;
-            
+
             function initMapListener() {
                 initAttempts++;
-                
+
                 // 尝试获取地图对象
                 // 方法1: 通过leaflet-container元素
                 var mapElement = document.querySelector('.leaflet-container');
@@ -184,10 +315,10 @@ class MapRenderer:
                     setupZoomListener();
                     return;
                 }
-                
+
                 // 方法2: 查找所有可能的地图对象
                 for (var key in window) {
-                    if (window[key] && typeof window[key] === 'object' && 
+                    if (window[key] && typeof window[key] === 'object' &&
                         window[key].getZoom && typeof window[key].getZoom === 'function' &&
                         window[key].on && typeof window[key].on === 'function') {
                         map = window[key];
@@ -196,7 +327,7 @@ class MapRenderer:
                         return;
                     }
                 }
-                
+
                 // 如果还是没找到，继续尝试
                 if (initAttempts < maxInitAttempts) {
                     setTimeout(initMapListener, 200);
@@ -204,27 +335,27 @@ class MapRenderer:
                     console.log('[地图缩放] 初始化失败，无法找到地图对象');
                 }
             }
-            
+
             function setupZoomListener() {
                 if (!map) return;
-                
+
                 console.log('[地图缩放] 开始设置缩放监听器');
-                
+
                 // 立即发送当前缩放级别
                 var currentZoom = map.getZoom();
                 console.log('[地图缩放] 当前缩放级别: ' + currentZoom);
                 console.log('缩放变化:' + currentZoom);
-                
+
                 // 监听缩放事件
                 map.on('zoomend', function() {
                     var zoomLevel = map.getZoom();
                     console.log('[地图缩放] 缩放级别变化: ' + zoomLevel);
                     console.log('缩放变化:' + zoomLevel);
                 });
-                
+
                 console.log('[地图缩放] 缩放监听器设置完成');
             }
-            
+
             // 页面加载完成后初始化
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', initMapListener);
@@ -283,7 +414,7 @@ class MapRenderer:
                 # 提取点的前两个元素（纬度和经度），忽略海拔数据
                 lat_lon_point = point[:2] if len(point) >= 2 else point
                 route_segment.append(lat_lon_point)
-        
+
         # 添加最后一段路线
         if len(route_segment) > 1:
             folium.PolyLine(
@@ -307,17 +438,17 @@ class MapRenderer:
         """
         import logging
         logger = logging.getLogger(__name__)
-        
+
         try:
             if use_http_server:
                 from .http_server import get_map_server
                 import uuid
                 import os
-                
+
                 server = get_map_server()
                 filename = f"map_{uuid.uuid4().hex[:8]}.html"
                 url_str = server.save_map(map_obj, filename)
-                
+
                 # 检查返回的是HTTP URL还是本地文件路径
                 if url_str.startswith('http://') or url_str.startswith('https://'):
                     logger.debug(f"使用HTTP服务器提供地图: {url_str}")
@@ -331,10 +462,10 @@ class MapRenderer:
                 html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
                 temp_path = html_file.name
                 html_file.close()  # 关闭文件以避免锁定
-                
+
                 map_obj.save(temp_path)
                 logger.debug(f"保存地图到临时文件: {temp_path}")
-                
+
                 # 确保文件存在且可访问
                 if os.path.exists(temp_path):
                     logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
@@ -347,7 +478,7 @@ class MapRenderer:
                     server = get_map_server()
                     filename = f"map_{uuid.uuid4().hex[:8]}.html"
                     url_str = server.save_map(map_obj, filename)
-                    
+
                     # 检查返回的是HTTP URL还是本地文件路径
                     if url_str.startswith('http://') or url_str.startswith('https://'):
                         logger.debug(f"回退到HTTP服务器: {url_str}")
@@ -363,10 +494,10 @@ class MapRenderer:
                 html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
                 temp_path = html_file.name
                 html_file.close()  # 关闭文件以避免锁定
-                
+
                 map_obj.save(temp_path)
                 logger.debug(f"出错时回退到临时文件: {temp_path}")
-                
+
                 if os.path.exists(temp_path):
                     logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
                     return QUrl.fromLocalFile(temp_path)
