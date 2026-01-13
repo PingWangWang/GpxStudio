@@ -8,6 +8,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont
 from typing import Optional
 
+# 导入版本信息
+from version import __version__
+
 
 class SplashScreen(QSplashScreen):
     """启动画面类，显示应用加载进度"""
@@ -83,7 +86,7 @@ class SplashScreen(QSplashScreen):
         layout.addWidget(self.progress_bar)
 
         # 版本标签
-        self.version_label = QLabel("版本 1.3.0")
+        self.version_label = QLabel(f"版本 {__version__}")
         self.version_label.setAlignment(Qt.AlignCenter)
         version_font = QFont()
         version_font.setPointSize(8)
