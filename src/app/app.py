@@ -1,14 +1,13 @@
 """
-GPX Studio 主应用窗口
-整合所有模块，实现完整的路线规划功能
+GPX Studio 主应用窗口 (重构版)
+使用管理器模式，提高代码的可复用性、可维护性、可扩展性
 """
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication, QDialog, QTimeEdit, QSystemTrayIcon, QMenu, QAction)
-from PyQt5.QtCore import Qt, QTimer, QTime
-from PyQt5.QtGui import QIcon
+                             QApplication, QDialog, QTimeEdit)
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
@@ -20,19 +19,14 @@ import core.logging_setup
 
 # 导入信号管理器
 from core.signals import SignalManager
-from core.resource_path import get_icon_path
 
+# 导入模块
 from modules.geolocation.geolocation import GeolocationHandler
 from modules.map.webengine import ConsoleWebEnginePage
-from services.gaode.gaode_geocoding import GaodeGeocodingService
-from services.gaode.gaode_routing import GaodeRoutingService
-from services.osm.osm_geocoding import OsmGeocodingService
-from services.osm.osm_routing import OsmRoutingService
-from modules.gpx.gpx_export import GpxExportService
-from modules.geolocation.windows_location import WindowsLocationService
-from services.config.map_config import map_config
 from modules.map.map_renderer import MapRenderer
-from modules.geolocation.location_helper import LocationHelper
+from services.config.map_config import map_config
+
+# 导入UI组件
 from ui.styles import UIStyles
 from ui.panels.panel_factory import PanelFactory
 from ui.panels.log_panel import LogPanel, setup_logger
@@ -40,373 +34,95 @@ from ui.panels.scale_panel import ScalePanel
 from ui.dialogs.map_config_dialog import MapConfigDialog
 from ui.dialogs.about_dialog import AboutDialog
 from ui.layout.layout_manager import LayoutManager
+
+# 导入常量
 from .constants import (
-    WINDOW_TITLE, WINDOW_SIZE, SEARCH_TYPE_START, SEARCH_TYPE_END, SEARCH_TYPE_WAYPOINT,
-    COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_ORANGE, ICON_INFO, ICON_SUCCESS,
-    ICON_WARNING, ICON_ERROR, GEOLOCATION_ERROR_MESSAGES,
-    MAP_LOAD_DELAY_MS, SEARCH_RESULTS_TITLE, SEARCH_LIST_TITLES
+    WINDOW_TITLE, WINDOW_SIZE, MAP_LOAD_DELAY_MS
+)
+
+# 导入管理器
+from .managers import (
+    WindowManager, ServiceManager, DataManager,
+    LocationManager, SearchManager, MapManager,
+    RouteManager, TimeManager
 )
 
 
 class GpxStudio(QMainWindow):
-    """
-    GPX Studio 主应用窗口类
-
-    这是应用程序的核心类，负责整合所有模块，实现完整的路线规划功能。
-    包含窗口初始化、服务管理、数据状态管理、UI布局和事件处理等功能。
-    """
+    """GPX Studio 主应用窗口（重构版）"""
 
     def __init__(self):
-        """
-        构造函数，初始化应用程序的所有组件
-
-        初始化流程：
-        1. 窗口设置初始化
-        2. 服务初始化（地理编码、路线规划、GPX导出等）
-        3. 数据状态初始化
-        4. 定位和信号系统初始化
-        5. UI界面初始化
-        6. 日志系统初始化
-        """
         super().__init__()
-
-        # 添加启动标记日志
         print("=" * 80)
-        print("GPX Studio 程序启动开始")
+        print("GPX Studio 程序启动开始（重构版）")
         print("=" * 80)
 
-        # 初始化窗口设置
-        print("开始初始化窗口设置")
+        # 初始化各个部分
+        self._init_managers()
         self._init_window()
-        print("窗口设置初始化完成")
-
-        # 初始化各种服务组件
-        print("开始初始化服务")
         self._init_services()
-        print("服务初始化完成")
-
-        # 初始化应用程序数据状态
-        print("开始初始化数据状态")
-        self._init_data_state()
-        print("数据状态初始化完成")
-
-        # 初始化定位和信号系统
-        print("开始初始化定位和信号系统")
-        self._init_geolocation_and_signals()
-        print("定位和信号系统初始化完成")
-
-        # 初始化用户界面
-        print("开始初始化UI")
+        self._init_signals()
         self._init_ui()
-        print("UI初始化完成")
-
-        # 初始化日志系统
-        print("开始初始化日志系统")
         self._init_logging()
-        print("日志系统初始化完成")
 
-        # 添加启动完成标记日志
+        # 启动完成
         self.logger.info("=" * 80)
         self.logger.info("GPX Studio 程序启动完成")
         self.logger.info("=" * 80)
-        self.logger.info("所有初始化步骤已完成")
 
-        # 记录初始化完成后的状态
-        self.logger.debug("程序启动完成，开始记录初始化状态")
-        self.logger.debug(f"窗口标题: {self.windowTitle()}")
-        self.logger.debug(f"窗口大小: {self.size()}")
-        self.logger.debug("程序启动状态: 正常")
-
-        # 标记首次启动完成，调整日志级别
+        # 标记首次启动完成
         from core.logging_setup import mark_first_run_completed
         mark_first_run_completed()
 
+    def _init_managers(self):
+        """初始化所有管理器"""
+        print("开始初始化管理器")
+
+        # 数据管理器（独立，最先初始化）
+        self.data_manager = DataManager()
+
+        # 准备日志回调（稍后在logger初始化后连接）
+        self.logger_callbacks = {
+            'geocoding': self._log_to_geocoding,
+            'routing': self._log_to_routing,
+            'gpx': self._log_to_gpx,
+            'service': self._log_to_service
+        }
+
+        # 服务管理器
+        self.service_manager = ServiceManager(self.logger_callbacks)
+
+        # 窗口管理器
+        self.window_manager = WindowManager(self, WINDOW_TITLE, WINDOW_SIZE)
+
+        # UI更新器回调（稍后在UI初始化后连接）
+        self.ui_updater = {}
+
+        print("管理器初始化完成")
+
     def _init_window(self):
-        """
-        初始化窗口设置
-
-        设置窗口的基本属性，包括标题、大小、图标和位置。
-        同时初始化系统托盘图标（如果系统支持）。
-        """
-        # 设置窗口标题
-        print(f"设置窗口标题: {WINDOW_TITLE}")
-        self.setWindowTitle(WINDOW_TITLE)
-
-        # 设置窗口大小
-        print(f"设置窗口大小: {WINDOW_SIZE}")
-        self.resize(*WINDOW_SIZE)
-
-        # 设置窗口图标
-        print("设置窗口图标")
-        icon_path = get_icon_path()
-        print(f"图标路径: {icon_path}")
-        if os.path.exists(icon_path):
-            self.app_icon = QIcon(icon_path)
-            self.setWindowIcon(self.app_icon)
-            print("窗口图标设置成功")
-
-            # 初始化系统托盘图标
-            self._init_tray_icon()
-        else:
-            print(f"警告: 图标文件不存在 - {icon_path}")
-            self.app_icon = None
-
-        # 将窗口居中显示
-        print("开始窗口居中操作")
-        screen = QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()  # 获取屏幕可用区域
-        print(f"屏幕几何信息: {screen_geometry}")
-
-        window_geometry = self.frameGeometry()  # 获取窗口框架几何信息
-        center_point = screen_geometry.center()  # 计算屏幕中心点
-        print(f"屏幕中心点: {center_point}")
-
-        window_geometry.moveCenter(center_point)  # 将窗口中心移动到屏幕中心
-        print(f"窗口居中后的位置: {window_geometry.topLeft()}")
-        self.move(window_geometry.topLeft())  # 设置窗口位置
-        print("窗口居中操作完成")
-
-    def _init_tray_icon(self):
-        """
-        初始化系统托盘图标
-
-        创建并配置系统托盘图标，包括图标、上下文菜单和事件处理。
-        系统托盘图标允许用户在不打开主窗口的情况下访问应用程序功能。
-        """
-        # 检查系统是否支持系统托盘
-        if not QSystemTrayIcon.isSystemTrayAvailable():
-            print("系统不支持系统托盘")
-            return
-
-        print("初始化系统托盘图标")
-
-        # 创建系统托盘图标实例
-        self.tray_icon = QSystemTrayIcon(self)
-
-        # 设置托盘图标
-        if self.app_icon:
-            self.tray_icon.setIcon(self.app_icon)
-
-        # 创建托盘上下文菜单
-        tray_menu = QMenu()
-
-        # 添加显示窗口动作
-        show_action = QAction("显示窗口", self)
-        show_action.triggered.connect(self.show_window)
-        tray_menu.addAction(show_action)
-
-        # 添加隐藏窗口动作
-        hide_action = QAction("隐藏窗口", self)
-        hide_action.triggered.connect(self.hide)
-        tray_menu.addAction(hide_action)
-
-        # 添加分隔线
-        tray_menu.addSeparator()
-
-        # 添加退出程序动作
-        quit_action = QAction("退出程序", self)
-        quit_action.triggered.connect(self.close_application)
-        tray_menu.addAction(quit_action)
-
-        # 设置托盘上下文菜单
-        self.tray_icon.setContextMenu(tray_menu)
-
-        # 设置托盘图标工具提示
-        self.tray_icon.setToolTip("GPX Studio - GPS路线规划工具")
-
-        # 连接托盘图标激活事件
-        self.tray_icon.activated.connect(self.on_tray_icon_activated)
-
-        # 显示托盘图标
-        self.tray_icon.show()
-        print("系统托盘图标初始化完成")
-
-    def show_window(self):
-        """
-        显示并激活主窗口
-
-        将窗口从隐藏状态显示出来，并将其置于顶层并激活，确保用户可以立即与窗口交互。
-        """
-        self.show()           # 显示窗口
-        self.raise_()         # 将窗口置于顶层
-        self.activateWindow() # 激活窗口，使其获得焦点
-
-    def on_tray_icon_activated(self, reason):
-        """
-        托盘图标激活事件处理函数
-
-        处理用户与系统托盘图标的交互事件。
-
-        参数:
-            reason: 激活原因（如双击、单击、右键菜单等）
-        """
-        # 当用户双击托盘图标时，显示主窗口
-        if reason == QSystemTrayIcon.DoubleClick:
-            self.show_window()
-
-    def close_application(self):
-        """
-        完全关闭应用程序
-
-        隐藏托盘图标并终止应用程序的所有进程。
-        """
-        if hasattr(self, 'tray_icon'):
-            self.tray_icon.hide()
-        QApplication.quit()
-
-    def closeEvent(self, event):
-        """
-        重写窗口关闭事件，实现最小化到托盘功能
-
-        当用户点击窗口的关闭按钮时，不是直接关闭应用程序，而是将其最小化到系统托盘。
-
-        参数:
-            event: 关闭事件对象
-        """
-        if hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
-            # 隐藏主窗口
-            self.hide()
-
-            # 显示托盘通知消息
-            self.tray_icon.showMessage(
-                "GPX Studio",
-                "应用程序已最小化到系统托盘。双击托盘图标或右键菜单可以恢复窗口。",
-                QSystemTrayIcon.Information,
-                2000  # 消息显示时间（毫秒）
-            )
-
-            # 忽略关闭事件，不关闭应用程序
-            event.ignore()
-        else:
-            # 接受关闭事件，关闭应用程序
-            event.accept()
+        """初始化窗口设置"""
+        print("开始初始化窗口设置")
+        self.window_manager.setup_window()
+        print("窗口设置初始化完成")
 
     def _init_services(self):
-        """
-        初始化应用程序所需的各种服务
-
-        初始化地理编码服务、路线规划服务和GPX导出服务，这些服务是应用程序的核心功能模块。
-        """
+        """初始化服务"""
         print("开始初始化服务")
-
-        # 获取地图服务的API密钥配置
-        api_key = map_config.get_api_key()
-        security_key = map_config.get_security_key()
-        print(f"API Key 配置: {'已配置' if api_key else '未配置'}")
-        print(f"Security Key 配置: {'已配置' if security_key else '未配置'}")
-
-        # 初始化高德地理编码服务
-        print("初始化高德地理编码服务")
-        self.gaode_geocoding_service = GaodeGeocodingService(
-            api_key=api_key,
-            security_key=security_key,
-            logger=self._log_to_geocoding  # 设置日志记录回调
-        )
-
-        # 初始化高德路线规划服务
-        print("初始化高德路线规划服务")
-        self.gaode_routing_service = GaodeRoutingService(
-            api_key=api_key,
-            security_key=security_key,
-            logger=self._log_to_routing  # 设置日志记录回调
-        )
-
-        # 初始化OSM地理编码服务
-        print("初始化OSM地理编码服务")
-        self.osm_geocoding_service = OsmGeocodingService(
-            logger=self._log_to_geocoding  # 设置日志记录回调
-        )
-
-        # 初始化OSM路线规划服务
-        print("初始化OSM路线规划服务")
-        self.osm_routing_service = OsmRoutingService(
-            logger=self._log_to_routing  # 设置日志记录回调
-        )
-
-        # 初始化GPX导出服务
-        print("初始化GPX导出服务")
-        self.gpx_service = GpxExportService(logger=self._log_to_gpx)  # 设置日志记录回调
-
+        self.service_manager.initialize_services()
         print("服务初始化完成")
 
-    def _init_data_state(self):
-        """
-        初始化应用程序的数据状态
-
-        设置应用程序启动时的初始数据值，包括路线信息、位置信息、搜索结果等。
-        这些数据将在用户交互过程中被更新和使用。
-        """
-        print("开始初始化数据状态")
-
-        # 起点坐标和名称
-        self.start_coords = None
-        self.start_name = None
-
-        # 终点坐标和名称
-        self.end_coords = None
-        self.end_name = None
-
-        # 途经点坐标和名称列表
-        self.waypoints_coords = []
-        self.waypoints_names = []
-
-        # 当前路线数据
-        self.current_route = None
-        self.route_points = []
-
-        # 当前位置信息
-        self.current_location = None
-
-        # 搜索结果相关数据
-        self.search_results = []
-        self.searching_for = None
-        self.selected_search_result_coords = None
-
-        # 路线估算时间（秒）
-        self.estimated_duration_seconds = 0
-
-        # 最后选择的位置信息
-        self.last_selected_coords = None
-        self.last_selected_level = None
-        self.last_selected_type = None
-        self.last_selected_from_search = False
-
-        print("数据状态初始化完成")
-        print(f"初始数据状态: start_coords={self.start_coords}, end_coords={self.end_coords}, waypoints_coords={self.waypoints_coords}")
-
-    def _init_geolocation_and_signals(self):
-        """
-        初始化定位和信号系统
-
-        创建地理定位处理器和信号管理器，并连接相关信号和槽函数。
-        信号系统用于模块间的通信，特别是地理定位功能的结果传递。
-        """
-        print("开始初始化定位和信号系统")
-
-        # 创建地理定位处理器，用于获取设备的当前位置
-        print("创建地理定位处理器")
-        self.geolocation_handler = GeolocationHandler()
-
-        # 创建信号管理器，用于模块间的通信
-        print("创建信号管理器")
+    def _init_signals(self):
+        """初始化信号系统"""
+        print("开始初始化信号系统")
         self.signal_manager = SignalManager()
+        self.geolocation_handler = GeolocationHandler(signal_manager=self.signal_manager)
 
-        # 连接地理定位成功信号到对应的处理函数
-        print("连接地理定位成功信号")
-        self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
-
-        # 连接地理定位错误信号到对应的处理函数
-        print("连接地理定位错误信号")
-        self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
-
-        print("定位和信号系统初始化完成")
+        # 连接信号（稍后在各管理器初始化后连接具体处理）
+        print("信号系统初始化完成")
 
     def _init_ui(self):
-        """
-        初始化用户界面
-
-        这是UI初始化的入口方法，它调用实际的init_ui方法来构建完整的用户界面。
-        """
+        """初始化用户界面"""
         print("开始初始化UI")
         self.init_ui()
         print("UI初始化完成")
@@ -415,79 +131,117 @@ class GpxStudio(QMainWindow):
         """初始化日志系统"""
         print("开始初始化日志系统")
         self.logger = setup_logger(self.log_panel, "GpxStudio")
-        self.logger.debug("创建Windows定位服务")
-        self.windows_location_service = WindowsLocationService(logger=self._log_to_service)
+
+        # 初始化Windows定位服务（需要logger）
+        self.service_manager.initialize_windows_location_service()
+
+        # 初始化其他管理器（需要logger和UI组件）
+        self._init_functional_managers()
+
+        # 连接信号
+        self._connect_signals()
+
         self.logger.debug("日志系统初始化完成")
 
-    def show_map_config(self):
-        """显示地图配置对话框"""
-        dialog = MapConfigDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            # 获取地图数据源
-            map_source = map_config.get_map_source()
-            self.logger.info(f"地图数据源已更新: {map_source}")
+    def _init_functional_managers(self):
+        """初始化功能管理器（需要在UI和logger之后）"""
+        print("开始初始化功能管理器")
 
-            # 如果是高德地图，更新API Key
-            if map_source == "gaode":
-                api_key = map_config.get_api_key()
-                security_key = map_config.get_security_key()
-                self.gaode_geocoding_service.api_key = api_key
-                self.gaode_geocoding_service.security_key = security_key
-                self.gaode_routing_service.api_key = api_key
-                self.gaode_routing_service.security_key = security_key
-                self.logger.info("高德地图API配置已更新")
+        # 构建UI更新器回调
+        self._build_ui_updater()
 
-            # 清空所有路线相关数据
-            self.clear_route_data()
+        # 初始化各个功能管理器
+        self.location_manager = LocationManager(
+            self.service_manager, self.data_manager,
+            self.ui_updater, self.logger
+        )
 
-            # 重新加载地图
-            self.show_initial_map()
+        self.map_manager = MapManager(
+            self.data_manager, self.map_view, self.logger
+        )
 
-    def clear_route_data(self):
-        """清空所有路线相关数据"""
-        # 清空起点终点数据
-        self.start_coords = None
-        self.start_name = None
-        self.end_coords = None
-        self.end_name = None
+        self.search_manager = SearchManager(
+            self.service_manager, self.data_manager,
+            self.ui_updater, self.logger
+        )
 
-        # 清空途径点数据
-        self.waypoints_coords = []
-        self.waypoints_names = []
+        self.route_manager = RouteManager(
+            self.service_manager, self.data_manager,
+            self.ui_updater, self.logger
+        )
 
-        # 清空路线数据
-        self.current_route = None
-        self.route_points = []
-        self.estimated_duration_seconds = 0
+        self.time_manager = TimeManager(
+            self.data_manager, self.ui_updater, self.logger
+        )
 
-        # 清空搜索相关数据
-        self.search_results = []
-        self.searching_for = None
-        self.selected_search_result_coords = None
+        print("功能管理器初始化完成")
 
-        # 清空最后选中位置数据
-        self.last_selected_coords = None
-        self.last_selected_level = None
-        self.last_selected_type = None
-        self.last_selected_from_search = False
+    def _build_ui_updater(self):
+        """构建UI更新器回调字典"""
+        self.ui_updater = {
+            # 窗口和对话框
+            'main_window': self,
+            'show_warning': self._show_warning,
+            'show_info': self._show_info,
 
-        # 清空UI显示
-        if hasattr(self, 'start_label'):
-            self.start_label.setText('')
-        if hasattr(self, 'end_label'):
-            self.end_label.setText('')
-        if hasattr(self, 'start_list'):
-            self.start_list.clear()
-        if hasattr(self, 'end_list'):
-            self.end_list.clear()
-        if hasattr(self, 'waypoint_list'):
-            self.waypoint_list.clear()
-        if hasattr(self, 'search_results_list'):
-            self.search_results_list.clear()
-        if hasattr(self, 'search_results_title'):
-            self.search_results_title.setText("搜索结果")
+            # 进度条
+            'set_progress_indeterminate': self._set_progress_indeterminate,
+            'set_progress_complete': self._set_progress_complete,
+            'set_progress': self._set_progress,
 
-        self.logger.info("已清空所有路线相关数据")
+            # 结果列表
+            'clear_results': self._clear_results,
+            'clear_results_list': self._clear_results_list,
+            'add_result': self._add_result,
+            'set_results_title': self._set_results_title,
+
+            # 搜索结果显示
+            'show_search_results': self._show_search_results,
+            'show_search_results_on_map': self._show_search_results_on_map,
+
+            # 位置显示
+            'update_location_display': self._update_location_display,
+            'update_start_from_search': self._update_start_from_search,
+            'update_end_from_search': self._update_end_from_search,
+            'add_waypoint_to_list': self._add_waypoint_to_list,
+
+            # 地图
+            'update_map_preview': self._update_map_preview,
+            'preview_search_result': self._preview_search_result,
+            'show_location_on_map': self._show_location_on_map,
+            'show_route_on_map': self._show_route_on_map,
+
+            # 定位
+            'trigger_browser_location': self._trigger_browser_location,
+
+            # 时间
+            'get_start_time': lambda: self.start_time_edit.dateTime(),
+            'set_start_time': lambda dt: self.start_time_edit.setDateTime(dt),
+            'get_end_time': lambda: self.end_time_edit.dateTime(),
+            'set_end_time': lambda dt: self.end_time_edit.setDateTime(dt),
+            'get_duration': lambda: self.duration_time_edit.text(),
+            'set_duration': lambda text: self.duration_time_edit.setText(text),
+            'get_transport_mode': lambda: self.transport_combo.currentText(),
+
+            # 时间面板
+            'hide_time_panel': lambda: self.time_panel.hide() if hasattr(self, 'time_panel') and self.time_panel.isVisible() else None,
+            'hide_date_panel': lambda: self.date_panel.hide() if hasattr(self, 'date_panel') and self.date_panel.isVisible() else None,
+            'setup_date_panel_callback': self._setup_date_panel_callback,
+            'setup_time_panel_callback': self._setup_time_panel_callback,
+            'show_date_panel': self._show_date_panel,
+            'show_time_panel': self._show_time_panel,
+
+            # 路线信息
+            'add_route_time_info': self._add_route_time_info,
+        }
+
+    def _connect_signals(self):
+        """连接信号"""
+        self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
+        self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
+        self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
+
+    # ==================== 日志回调方法 ====================
 
     def _log_to_service(self, level: str, message: str):
         """将日志转发到WindowsLocationService"""
@@ -507,6 +261,8 @@ class GpxStudio(QMainWindow):
 
     def _log_with_prefix(self, prefix: str, level: str, message: str):
         """通用日志转发方法"""
+        if not hasattr(self, 'logger'):
+            return
         level_map = {
             "DEBUG": self.logger.debug,
             "INFO": self.logger.info,
@@ -517,7 +273,9 @@ class GpxStudio(QMainWindow):
         log_func = level_map.get(level, self.logger.info)
         log_func(f"[{prefix}] {message}")
 
-    def _init_ui(self):
+    # ==================== UI初始化方法 ====================
+
+    def init_ui(self):
         """初始化用户界面"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -535,13 +293,14 @@ class GpxStudio(QMainWindow):
         splitter.addWidget(left_panel)
         splitter.addWidget(middle_panel)
         splitter.addWidget(right_panel)
+
         # 使用布局管理器设置布局
         LayoutManager.setup_layout(splitter)
 
         main_layout.addWidget(splitter)
 
-        # 延迟加载初始地图，确保UI完全初始化后再显示地图
-        QTimer.singleShot(MAP_LOAD_DELAY_MS, self.show_initial_map)
+        # 延迟加载初始地图
+        QTimer.singleShot(MAP_LOAD_DELAY_MS, self._show_initial_map)
 
     def create_left_panel(self):
         """创建左侧控制面板"""
@@ -549,11 +308,11 @@ class GpxStudio(QMainWindow):
         left_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[0])
         left_layout = QVBoxLayout(left_widget)
 
-        # 顶部按钮布局
+        # 顶部按钮
         top_button_layout = QHBoxLayout()
 
         locate_button = QPushButton("📍 定位")
-        locate_button.clicked.connect(self.get_current_location)
+        locate_button.clicked.connect(self.on_locate_clicked)
         locate_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
         top_button_layout.addWidget(locate_button)
 
@@ -598,11 +357,11 @@ class GpxStudio(QMainWindow):
         # 底部按钮
         button_layout = QHBoxLayout()
         self.plan_button = QPushButton("规划路线")
-        self.plan_button.clicked.connect(self.plan_route)
+        self.plan_button.clicked.connect(self.on_plan_route_clicked)
         self.plan_button.setStyleSheet(UIStyles.PLAN_BUTTON)
 
         self.export_button = QPushButton("导出GPX")
-        self.export_button.clicked.connect(self.export_gpx)
+        self.export_button.clicked.connect(self.on_export_gpx_clicked)
         self.export_button.setStyleSheet(UIStyles.EXPORT_BUTTON)
 
         button_layout.addWidget(self.plan_button)
@@ -624,12 +383,35 @@ class GpxStudio(QMainWindow):
 
         # 搜索结果列表
         self.search_results_list = QListWidget()
-        self.search_results_list.itemClicked.connect(self.select_search_result)
+        self.search_results_list.itemClicked.connect(self.on_search_result_clicked)
+        # 设置列表项支持多行显示
+        self.search_results_list.setWordWrap(True)
+        self.search_results_list.setSpacing(2)
+        # 设置合适的最小项高度以显示多行文本
+        self.search_results_list.setStyleSheet("""
+            QListWidget::item {
+                padding: 5px;
+                min-height: 60px;
+                color: #333333;
+            }
+            QListWidget::item:selected {
+                background-color: #4A90E2;
+                color: white;
+                border: none;
+            }
+            QListWidget::item:hover {
+                background-color: #E8F4FD;
+                color: #333333;
+            }
+            QListWidget {
+                outline: none;
+            }
+        """)
         layout.addWidget(self.search_results_list)
 
         # 清空按钮
         clear_button = QPushButton("清空搜索结果")
-        clear_button.clicked.connect(self.clear_search_results)
+        clear_button.clicked.connect(self.on_clear_search_clicked)
         clear_button.setStyleSheet(UIStyles.CLEAR_BUTTON)
         layout.addWidget(clear_button)
 
@@ -657,10 +439,6 @@ class GpxStudio(QMainWindow):
         self.map_view = QWebEngineView()
         self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
         self.web_page.set_geolocation_handler(self.geolocation_handler)
-
-        # 使用信号管理器连接地图缩放信号
-        self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
-
         self.map_view.setPage(self.web_page)
 
         # 设置User Agent
@@ -669,998 +447,177 @@ class GpxStudio(QMainWindow):
 
         layout.addWidget(self.map_view)
 
-        # 注意：初始地图现在通过定时器延迟加载，确保UI完全初始化
-
         return right_widget
 
-    def show_initial_map(self):
-        """显示初始地图（北京中心）"""
-        map_source = map_config.get_map_source()
-        m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10, map_source=map_source)
-        url = MapRenderer.save_and_get_url(m)
-        self.map_view.setUrl(url)
-        # 初始化比例尺显示
-        self.scale_panel.update_zoom(10)
+    # ==================== UI更新回调方法 ====================
 
-    def on_map_zoom_changed(self, zoom_level: int):
-        """处理地图缩放变化事件"""
-        self.logger.info(f"地图缩放级别变化: {zoom_level}")
-        self.scale_panel.update_zoom(zoom_level)
+    def _show_warning(self, title: str, message: str):
+        """显示警告对话框"""
+        QMessageBox.warning(self, title, message)
 
-    # ========== 搜索相关方法 ==========
+    def _show_info(self, title: str, message: str):
+        """显示信息对话框"""
+        QMessageBox.information(self, title, message)
 
-    def search_location(self, location_type):
-        """搜索地点（起点/终点）"""
-        search_text = getattr(self, f"{location_type}_input").text()
-        self._perform_generic_search(search_text, location_type)
-
-    def search_waypoint(self):
-        """搜索途径点"""
-        search_text = self.waypoint_input.text()
-        self._perform_generic_search(search_text, "waypoint")
-
-    def _perform_generic_search(self, search_text, location_type):
-        """执行通用搜索"""
-        if not search_text:
-            return
-
-        # 恢复信息展示框标题
-        self.search_results_title.setText("搜索结果")
-        self.search_results_list.clear()
+    def _set_progress_indeterminate(self):
+        """设置进度条为不确定模式"""
         self.progress_bar.setMaximum(0)
         self.progress_bar.setMinimum(0)
         self.progress_bar.setValue(0)
         QApplication.processEvents()
 
-        self._perform_search(search_text, location_type)
-
-    def _perform_search(self, search_text, location_type):
-        """执行搜索"""
-        map_source = map_config.get_map_source()
-
-        # 检查地图源是否已设置
-        if not map_source:
-            QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
-            return
-
-        if map_source == "gaode":
-            if map_config.is_gaode_configured():
-                locations = self.gaode_geocoding_service.search_location(search_text)
-            else:
-                locations = []
-                self.logger.warning("高德地图API未配置，无法进行地点搜索。请先配置高德地图API密钥。")
-        else:
-            # OSM地图使用OSM搜索服务
-            locations = self.osm_geocoding_service.search_location(search_text)
-
+    def _set_progress_complete(self):
+        """设置进度条为完成状态"""
         self.progress_bar.setMaximum(100)
         self.progress_bar.setMinimum(0)
         self.progress_bar.setValue(100)
         QApplication.processEvents()
 
-        if locations:
-            self.search_results = locations
-            self.searching_for = location_type
+    def _set_progress(self, value: int):
+        """设置进度条值"""
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setValue(value)
+        QApplication.processEvents()
 
-            self.search_results_title.setText(SEARCH_LIST_TITLES.get(location_type, SEARCH_RESULTS_TITLE))
+    def _clear_results(self):
+        """清空搜索结果"""
+        self.search_results_list.clear()
+        QApplication.processEvents()
 
-            for i, location in enumerate(locations):
-                if isinstance(location, dict):
-                    name = location.get('name', '')
-                    address = location.get('address', '')
-                    level = location.get('level', '')
-                    type_info = location.get('type', '')
+    def _clear_results_list(self):
+        """清空搜索结果列表"""
+        self.search_results_list.clear()
 
-                    display_text = f"{i+1}. {name}"
-                    if address and address != name:
-                        display_text += f"\n    地址: {address}"
-                    if level:
-                        display_text += f"\n    地点类型: {level}"
-                    if type_info:
-                        display_text += f"\n    POI分类: {type_info}"
+    def _add_result(self, text: str):
+        """添加结果项"""
+        self.search_results_list.addItem(text)
 
-                    item = QListWidgetItem(display_text)
-                    item.setData(Qt.UserRole, (
-                        name,
-                        location.get('lat'),
-                        location.get('lon'),
-                        level,
-                        type_info
-                    ))
-                else:
-                    name = getattr(location, 'name', location.address)
-                    address = location.address
-                    display_text = f"{i+1}. {name}"
-                    if address and address != name:
-                        display_text += f"\n    地址: {address}"
-                    item = QListWidgetItem(display_text)
-                    item.setData(Qt.UserRole, (name, location.latitude, location.longitude, None, None))
-                self.search_results_list.addItem(item)
+    def _set_results_title(self, title: str):
+        """设置结果标题"""
+        self.search_results_title.setText(title)
 
-            self.show_search_results_on_map(locations, location_type)
-        else:
-            QMessageBox.warning(
-                self,
-                "搜索失败",
-                f"未找到: {search_text}\n\n建议：\n"
-                "1. 尝试使用更具体的地址（如：陕西省西安市）\n"
-                "2. 尝试使用英文搜索（如：Xi'an）\n"
-                "3. 检查网络连接\n"
-                "4. 稍后再试（可能是服务暂时不可用）\n\n"
-                "提示：某些城市名可能需要加上省份名称才能找到更多结果"
-            )
+    def _show_search_results(self, locations: list):
+        """显示搜索结果"""
+        for i, location in enumerate(locations):
+            if isinstance(location, dict):
+                name = location.get('name', '')
+                address = location.get('address', '')
+                lat = location.get('lat', 0)
+                lon = location.get('lon', 0)
+                level = location.get('level', None)
+                type_info = location.get('type', None)
 
-    def select_location(self, item, location_type):
-        """选择地点（从下拉框或地图点击）"""
-        data = item.data(Qt.UserRole)
-        if not data:
-            return
+                # 构建详细的显示文本
+                display_parts = []
+                display_parts.append(f"{i+1}. {name}")
 
-        name = data[0]
-        coords = (data[1], data[2])
-        level = data[3] if len(data) > 3 else None
-        type_info = data[4] if len(data) > 4 else None
+                # 如果有地址信息且与名称不同，添加地址
+                if address and address != name:
+                    display_parts.append(f"   地址: {address}")
 
-        self.last_selected_coords = coords
-        self.last_selected_level = level
-        self.last_selected_type = type_info
-        self.last_selected_from_search = False
+                # 如果有类型信息，添加类型
+                if type_info:
+                    display_parts.append(f"   类型: {type_info}")
 
+                # 添加坐标信息（可选，让用户知道精确位置）
+                display_parts.append(f"   坐标: {lat:.6f}, {lon:.6f}")
+
+                item_text = "\n".join(display_parts)
+
+                # 用于选择的完整名称（包含地址）
+                full_name = f"{name}"
+                if address and address != name:
+                    full_name = f"{name} ({address})"
+
+            else:
+                # OSM数据结构
+                name = location.address
+                lat = location.latitude
+                lon = location.longitude
+                level = None
+                type_info = location.type if hasattr(location, 'type') else None
+
+                display_parts = []
+                display_parts.append(f"{i+1}. {name}")
+
+                if type_info:
+                    display_parts.append(f"   类型: {type_info}")
+
+                display_parts.append(f"   坐标: {lat:.6f}, {lon:.6f}")
+
+                item_text = "\n".join(display_parts)
+                full_name = name
+
+            item = QListWidgetItem(item_text)
+            # 保存完整名称用于后续选择
+            item.setData(Qt.UserRole, (full_name, lat, lon, level, type_info))
+            self.search_results_list.addItem(item)
+
+    def _show_search_results_on_map(self, locations: list, location_type: str):
+        """在地图上显示搜索结果"""
+        self.map_manager.show_search_results_on_map(locations, location_type)
+
+    def _update_location_display(self, location_type: str, name: str, data: tuple):
+        """更新位置显示"""
         if location_type == "start":
-            self.start_coords = coords
-            self.start_name = name
-            self.start_level = level
             if hasattr(self, 'start_label'):
                 self.start_label.setText(name)
-                # 保存数据到标签的UserData
                 self.start_label.setProperty('userData', data)
         elif location_type == "end":
-            self.end_coords = coords
-            self.end_name = name
-            self.end_level = level
-            if hasattr(self, 'end_label'):
-                self.end_label.setText(name)
-                # 保存数据到标签的UserData
-                self.end_label.setProperty('userData', data)
-        elif location_type == "waypoint":
-            waypoint_index = self.waypoint_list.row(item)
-            if waypoint_index >= 0 and waypoint_index < len(self.waypoints_coords):
-                self.waypoints_coords[waypoint_index] = coords
-                self.waypoints_names[waypoint_index] = name
-
-        self.update_map_preview()
-
-    def select_search_result(self, item):
-        """从搜索结果中选择"""
-        data = item.data(Qt.UserRole)
-        if not data:
-            return
-        name = data[0]
-        coords = (data[1], data[2])
-        level = data[3] if len(data) > 3 else None
-        type_info = data[4] if len(data) > 4 else None
-
-        self.last_selected_coords = coords
-        self.last_selected_level = level
-        self.last_selected_type = type_info
-        self.last_selected_from_search = True
-
-        # 设置选中的搜索结果坐标，用于在地图上区分
-        self.selected_search_result_coords = coords
-
-        if self.searching_for == "start":
-            self.start_coords = coords
-            self.start_name = name
-            self.start_level = level
-            if hasattr(self, 'start_label'):
-                self.start_label.setText(name)
-                self.start_label.setProperty('userData', data)
-            if hasattr(self, 'start_list'):
-                self.start_list.clear()
-                self.start_list.addItem(name)
-                self.start_list.item(0).setData(Qt.UserRole, data)
-        elif self.searching_for == "end":
-            self.end_coords = coords
-            self.end_name = name
-            self.end_level = level
             if hasattr(self, 'end_label'):
                 self.end_label.setText(name)
                 self.end_label.setProperty('userData', data)
-            if hasattr(self, 'end_list'):
-                self.end_list.clear()
-                self.end_list.addItem(name)
-                self.end_list.item(0).setData(Qt.UserRole, data)
-        elif self.searching_for == "waypoint":
-            self.waypoints_coords.append(coords)
-            self.waypoints_names.append(name)
-            waypoint_item = QListWidgetItem(
-                f"{len(self.waypoints_coords)}. {name}"
-            )
-            waypoint_item.setData(Qt.UserRole, (name, coords[0], coords[1], level, None))
-            self.waypoint_list.addItem(waypoint_item)
 
-        self.update_map_preview()
-
-    def clear_search_results(self):
-        """清空搜索结果"""
-        self.search_results = []
-        self.searching_for = None
-        self.selected_search_result_coords = None
-        self.search_results_list.clear()
-        self.search_results_title.setText("搜索结果")
-
-    def remove_waypoint(self):
-        """删除途径点"""
-        current_row = self.waypoint_list.currentRow()
-
-        if current_row >= 0:
-            self.waypoint_list.takeItem(current_row)
-            self.waypoints_coords.pop(current_row)
-            self.waypoints_names.pop(current_row)
-
-            # 重新编号
-            for i in range(self.waypoint_list.count()):
-                item = self.waypoint_list.item(i)
-                data = item.data(Qt.UserRole)
-                if len(data) == 3:
-                    name = data[0]
-                    item.setText(f"{i + 1}. {name}")
-                else:
-                    coords = data
-                    item.setText(f"{i + 1}. {coords[0]:.4f}, {coords[1]:.4f}")
-
-            self.update_map_preview()
-
-    def clear_all_waypoints(self):
-        """清空所有途径点"""
-        # 清空列表
-        self.waypoint_list.clear()
-        # 清空数据
-        self.waypoints_coords.clear()
-        self.waypoints_names.clear()
-        # 更新地图预览
-        self.update_map_preview()
-
-    # ========== 地图显示相关方法 ==========
-
-    def show_search_results_on_map(self, locations, location_type):
-        """在地图上显示搜索结果"""
-        if not locations:
-            return
-
-        def get_lat(loc):
-            return loc.get('lat') if isinstance(loc, dict) else loc.latitude
-        def get_lon(loc):
-            return loc.get('lon') if isinstance(loc, dict) else loc.longitude
-        def get_address(loc):
-            return loc.get('address', '') if isinstance(loc, dict) else loc.address
-
-        center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
-        center_lon = sum(get_lon(loc) for loc in locations) / len(locations)
-
-        map_source = map_config.get_map_source()
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_source=map_source)
-
-        colors = {"start": "green", "end": "red", "waypoint": "blue"}
-        color = colors.get(location_type, "orange")
-
-        for i, location in enumerate(locations):
-            MapRenderer.add_marker(
-                m, [get_lat(location), get_lon(location)],
-                f"{i+1}. {get_address(location)}",
-                color=color, icon='info-sign'
-            )
-
-        self._add_selected_points_to_map(m)
-
-        if self.route_points:
-            MapRenderer.add_route(m, self.route_points)
-
-        url = MapRenderer.save_and_get_url(m)
-        self.map_view.setUrl(url)
-
-    def update_map_preview(self):
-        """更新地图预览"""
-        center_lat, center_lon = 39.9042, 116.4074
-        center_level = None
-        center_type = None
-
-        if hasattr(self, 'last_selected_coords') and self.last_selected_coords:
-            center_lat, center_lon = self.last_selected_coords
-            center_level = getattr(self, 'last_selected_level', None)
-            center_type = getattr(self, 'last_selected_type', None)
-        elif self.start_coords:
-            center_lat, center_lon = self.start_coords
-            center_level = getattr(self, 'start_level', None)
-        elif self.end_coords:
-            center_lat, center_lon = self.end_coords
-            center_level = getattr(self, 'end_level', None)
-        elif self.waypoints_coords:
-            center_lat, center_lon = self.waypoints_coords[0]
-
-        zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
-        map_source = map_config.get_map_source()
-
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_source=map_source)
-
-        # 添加已选择的点
-        self._add_selected_points_to_map(m)
-
-        # 添加搜索结果
-        if self.search_results and self.searching_for:
-            colors = {"start": "green", "end": "red", "waypoint": "blue"}
-            color = colors.get(self.searching_for, "orange")
-
-            for i, location in enumerate(self.search_results):
-                def get_lat(loc):
-                    return loc.get('lat') if isinstance(loc, dict) else loc.latitude
-                def get_lon(loc):
-                    return loc.get('lon') if isinstance(loc, dict) else loc.longitude
-                def get_address(loc):
-                    return loc.get('address', '') if isinstance(loc, dict) else loc.address
-
-                is_selected = (self.selected_search_result_coords and
-                              abs(get_lat(location) - self.selected_search_result_coords[0]) < 0.0001 and
-                              abs(get_lon(location) - self.selected_search_result_coords[1]) < 0.0001)
-                MapRenderer.add_marker(
-                    m, [get_lat(location), get_lon(location)],
-                    f"{i+1}. {get_address(location)}",
-                    color=color, icon='info-sign'
-                )
-                if is_selected:
-                    MapRenderer.add_marker(
-                        m, [get_lat(location), get_lon(location)],
-                        "已选择",
-                        color=COLOR_WARNING, icon=ICON_WARNING
-                    )
-
-        url = MapRenderer.save_and_get_url(m)
-        self.map_view.setUrl(url)
-
-    def _add_selected_points_to_map(self, map_obj):
-        """添加已选择的点到地图"""
-        start_name = self.start_name if self.start_name else "起点"
-        if self.start_coords:
-            MapRenderer.add_marker(
-                map_obj, self.start_coords, start_name,
-                color=COLOR_SUCCESS, icon=ICON_SUCCESS
-            )
-
-        for i, (waypoint, name) in enumerate(zip(self.waypoints_coords, self.waypoints_names)):
-            display_name = name if name else f"途径点 {i + 1}"
-            MapRenderer.add_marker(
-                map_obj, waypoint, display_name,
-                color=COLOR_INFO, icon=ICON_INFO
-            )
-
-        end_name = self.end_name if self.end_name else "终点"
-        if self.end_coords:
-            MapRenderer.add_marker(
-                map_obj, self.end_coords, end_name,
-                color=COLOR_ERROR, icon=ICON_ERROR
-            )
-
-    # ========== 路线规划相关方法 ==========
-
-    def plan_route(self):
-        """规划路线"""
-        self.logger.info("=" * 80)
-        self.logger.info("开始执行路线规划")
-        self.logger.info("=" * 80)
-
-        if not self.start_coords or not self.end_coords:
-            self.logger.warning("路线规划失败：未设置起点或终点")
-            QMessageBox.warning(self, "错误", "请先设置起点和终点")
-            return
-
-        # 检查地图源是否已设置
-        map_source = map_config.get_map_source()
-        if not map_source:
-            self.logger.warning("路线规划失败：未设置地图数据源")
-            QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
-            return
-
-        transport_mode = self.transport_combo.currentText()
-        points = [self.start_coords] + self.waypoints_coords + [self.end_coords]
-
-        self.logger.info(f"开始规划路线，方式: {transport_mode}")
-        self.logger.debug(f"起点: {self.start_coords}, 终点: {self.end_coords}")
-        self.logger.debug(f"途径点数量: {len(self.waypoints_coords)}")
-        self.logger.debug(f"总点数: {len(points)}")
-
-        if self.waypoints_coords:
-            self.logger.debug(f"途径点: {self.waypoints_coords}")
-
-        try:
-            self.progress_bar.setMaximum(0)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(0)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("正在规划路线...")
-            self.search_results_list.addItem(f"方式: {transport_mode}")
-
-            self.logger.debug("正在调用路线规划服务...")
-            map_source = map_config.get_map_source()
-
-            if map_source == "gaode":
-                if map_config.is_gaode_configured():
-                    self.route_points, estimated_duration = self.gaode_routing_service.plan_route(points, transport_mode)
-                    self.estimated_duration_seconds = estimated_duration
-
-                    from datetime import datetime
-                    current_time = datetime.now()
-                    current_time_zero_sec = current_time.replace(second=0)
-
-                    from PyQt5.QtCore import QDateTime
-                    qt_current_datetime = QDateTime.fromString(current_time_zero_sec.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
-                    self.start_time_edit.setDateTime(qt_current_datetime)
-
-                    # 计算途径时间（小时，支持小数）
-                    duration_hours = estimated_duration / 3600
-                    self.duration_time_edit.setText(f"{duration_hours:.1f}")
-
-                    end_time = current_time_zero_sec.timestamp() + estimated_duration
-                    end_datetime = datetime.fromtimestamp(end_time)
-                    qt_end_datetime = QDateTime.fromString(end_datetime.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
-                    self.end_time_edit.setDateTime(qt_end_datetime)
-
-                    duration_minutes = (estimated_duration % 3600) // 60
-                    self.search_results_list.addItem(f"预估时间: {int(duration_hours)}小时{duration_minutes}分钟")
-                else:
-                    self.route_points = []
-                    self.logger.warning("高德地图API未配置，无法进行路线规划。请先配置高德地图API密钥。")
-            else:
-                # OSM地图使用OSM路线规划服务
-                self.route_points, estimated_duration = self.osm_routing_service.plan_route(points, transport_mode)
-                self.estimated_duration_seconds = estimated_duration
-
-                from datetime import datetime
-                current_time = datetime.now()
-                current_time_zero_sec = current_time.replace(second=0)
-
-                from PyQt5.QtCore import QDateTime
-                qt_current_datetime = QDateTime.fromString(current_time_zero_sec.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
-                self.start_time_edit.setDateTime(qt_current_datetime)
-
-                # 计算途径时间（小时，支持小数）
-                duration_hours = estimated_duration / 3600
-                self.duration_time_edit.setText(f"{duration_hours:.1f}")
-
-                end_time = current_time_zero_sec.timestamp() + estimated_duration
-                end_datetime = datetime.fromtimestamp(end_time)
-                qt_end_datetime = QDateTime.fromString(end_datetime.strftime("%Y-%m-%d %H:%M:%S"), "yyyy-MM-dd hh:mm:ss")
-                self.end_time_edit.setDateTime(qt_end_datetime)
-
-                duration_minutes = (estimated_duration % 3600) // 60
-                self.search_results_list.addItem(f"预估时间: {int(duration_hours)}小时{duration_minutes}分钟")
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            if self.route_points:
-                self.logger.info(f"路线规划成功，共 {len(self.route_points)} 个点")
-                self.search_results_list.clear()
-
-                # 修改信息展示框标题
-                self.search_results_title.setText("路线信息")
-
-                # 显示路线详细信息
-                self.search_results_list.addItem("路线规划成功！")
-                self.search_results_list.addItem("=" * 30)
-
-                # 起点、途径点、终点
-                self.search_results_list.addItem(f"起点: {self.start_name or '未命名'}")
-
-                # 显示途径点
-                if self.waypoints_coords:
-                    for i, waypoint in enumerate(self.waypoints_coords):
-                        if waypoint and i < len(self.waypoints_names):
-                            waypoint_name = self.waypoints_names[i] or f"途径点{i+1}"
-                            self.search_results_list.addItem(f"途径点{i+1}: {waypoint_name}")
-
-                self.search_results_list.addItem(f"终点: {self.end_name or '未命名'}")
-                self.search_results_list.addItem("=" * 30)
-
-                # 交通方式
-                transport_mode = self.transport_combo.currentText()
-                self.search_results_list.addItem(f"交通方式: {transport_mode}")
-
-                # 起始时间
-                start_datetime = self.start_time_edit.dateTime()
-                start_time_str = start_datetime.toString("yyyy-MM-dd HH:mm")
-                self.search_results_list.addItem(f"起始时间: {start_time_str}")
-
-                # 途径时间
-                duration_hours = self.estimated_duration_seconds // 3600
-                duration_minutes = (self.estimated_duration_seconds % 3600) // 60
-                self.search_results_list.addItem(f"途径时间: {int(duration_hours)}小时{duration_minutes}分钟")
-
-                # 结束时间
-                end_datetime = self.end_time_edit.dateTime()
-                end_time_str = end_datetime.toString("yyyy-MM-dd HH:mm")
-                self.search_results_list.addItem(f"结束时间: {end_time_str}")
-
-                # 总距离
-                if self.gaode_routing_service:
-                    total_distance = self.gaode_routing_service.calculate_distance(self.route_points)
-                    self.search_results_list.addItem(f"总距离: {total_distance:.2f} 公里")
-
-                self.search_results_list.addItem("=" * 30)
-
-                self.show_route_on_map()
-            else:
-                self.logger.warning("路线规划失败，未返回路线点")
-                self.search_results_list.clear()
-                self.search_results_list.addItem("路线规划失败")
-                QMessageBox.warning(self, "错误", "路线规划失败")
-
-        except Exception as e:
-            self.logger.exception(f"路线规划出错: {str(e)}")
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-            self.search_results_list.clear()
-            self.search_results_list.addItem("路线规划出错")
-            self.search_results_list.addItem(f"错误信息: {str(e)}")
-            QMessageBox.warning(self, "错误", f"路线规划出错: {str(e)}")
-
-        self.logger.info("路线规划流程完成")
-        self.logger.info("=" * 80)
-
-    def show_route_on_map(self):
-        """在地图上显示路线"""
-        if not self.route_points:
-            return
-
-        valid_points = [p for p in self.route_points if p is not None]
-
-        if not valid_points:
-            return
-
-        all_coords = []
-        if self.start_coords:
-            all_coords.append(self.start_coords)
-        all_coords.extend(valid_points)
-        if self.end_coords:
-            all_coords.append(self.end_coords)
-        for wp in self.waypoints_coords:
-            if wp:
-                all_coords.append(wp)
-
-        # 确保所有路线点都包含在边界计算中，避免遗漏
-        all_route_points = [p for p in self.route_points if p is not None]
-
-        # 创建一个包含所有相关点的列表
-        combined_coords = []
-        # 添加起点、终点和途径点
-        if self.start_coords and self.start_coords not in combined_coords:
-            combined_coords.append(self.start_coords)
-        for wp in self.waypoints_coords:
-            if wp and wp not in combined_coords:
-                combined_coords.append(wp)
-        if self.end_coords and self.end_coords not in combined_coords:
-            combined_coords.append(self.end_coords)
-        # 添加所有路线点
-        for rp in all_route_points:
-            if rp and rp not in combined_coords:
-                combined_coords.append(rp)
-
-        # 更新地图显示，使用MapRenderer的fit_bounds方法进行边界计算和调整
-        map_source = map_config.get_map_source()
-        m = MapRenderer.create_base_map(self.start_coords or combined_coords[0], zoom_start=12, map_source=map_source)  # 使用适中的初始缩放
-
-        self._add_selected_points_to_map(m)
-
-        MapRenderer.add_route(m, self.route_points)
-
-        # 使用所有坐标点进行边界调整，确保完整显示
-        MapRenderer.fit_bounds(m, combined_coords)
-
-        url = MapRenderer.save_and_get_url(m)
-        self.map_view.setUrl(url)
-
-    # ========== GPX导出相关方法 ==========
-
-    def export_gpx(self):
-        """导出GPX文件"""
-        self.logger.info("=" * 80)
-        self.logger.info("开始执行GPX文件导出")
-        self.logger.info("=" * 80)
-
-        if not self.route_points:
-            self.logger.warning("GPX导出失败：未规划路线")
-            QMessageBox.warning(self, "错误", "请先规划路线")
-            return
-
-        # 生成默认文件名
-        start_name = self.start_name if self.start_name else "起点"
-        end_name = self.end_name if self.end_name else "终点"
-
-        # 提取城市名称，移除多余的地址信息
-        import re
-        def extract_city_name(full_name):
-            # 移除分号及其后的内容
-            city_name = full_name.split(';')[0]
-            # 移除逗号及其后的内容
-            city_name = city_name.split(',')[0]
-            # 清理空白字符
-            city_name = city_name.strip()
-            return city_name
-
-        start_city = extract_city_name(start_name)
-        end_city = extract_city_name(end_name)
-
-        transport_mode = self.transport_combo.currentText()
-        start_datetime = self.start_time_edit.dateTime()
-        start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
-
-        # 格式化途径时间（小时和分钟）
-        duration_hours = self.estimated_duration_seconds // 3600
-        duration_minutes = (self.estimated_duration_seconds % 3600) // 60
-        duration_str = f"{duration_hours}小时{duration_minutes}分钟"
-
-        # 生成默认文件名
-        default_filename = f"{start_city}_{end_city}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
-        self.logger.debug(f"生成默认文件名: {default_filename}")
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "保存GPX文件", default_filename, "GPX文件 (*.gpx);;所有文件 (*.*)"
+    def _update_start_from_search(self, name: str, data: tuple):
+        """从搜索结果更新起点"""
+        if hasattr(self, 'start_label'):
+            self.start_label.setText(name)
+            self.start_label.setProperty('userData', data)
+        if hasattr(self, 'start_list'):
+            self.start_list.clear()
+            self.start_list.addItem(name)
+            self.start_list.item(0).setData(Qt.UserRole, data)
+
+    def _update_end_from_search(self, name: str, data: tuple):
+        """从搜索结果更新终点"""
+        if hasattr(self, 'end_label'):
+            self.end_label.setText(name)
+            self.end_label.setProperty('userData', data)
+        if hasattr(self, 'end_list'):
+            self.end_list.clear()
+            self.end_list.addItem(name)
+            self.end_list.item(0).setData(Qt.UserRole, data)
+
+    def _add_waypoint_to_list(self, name: str, data: tuple, level: Optional[str]):
+        """添加途径点到列表"""
+        waypoint_item = QListWidgetItem(
+            f"{len(self.data_manager.waypoints_coords)}. {name}"
         )
-
-        if not file_path:
-            self.logger.info("GPX导出取消：用户未选择文件路径")
-            return
-
-        self.logger.info(f"开始导出GPX文件: {file_path}")
-        self.logger.debug(f"路线点数量: {len(self.route_points)}")
-        self.logger.debug(f"起始时间: {start_datetime.toString()}")
-
-        try:
-            self.progress_bar.setMaximum(0)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(0)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("正在导出GPX文件...")
-
-            self.logger.debug("正在调用GPX导出服务...")
-            start_datetime = self.start_time_edit.dateTime()
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(50)
-            QApplication.processEvents()
-
-            self.logger.debug("执行GPX导出操作...")
-            success = self.gpx_service.export_to_gpx(
-                self.route_points, start_datetime, file_path,
-                start_name=start_city, end_name=end_city
-            )
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            if success:
-                self.logger.info("GPX文件导出成功")
-                self.search_results_list.clear()
-                self.search_results_list.addItem("导出成功！")
-                self.search_results_list.addItem(f"文件: {file_path}")
-                QMessageBox.information(self, "成功", f"GPX文件已导出到: {file_path}")
-            else:
-                self.logger.warning("GPX文件导出失败")
-                self.search_results_list.clear()
-                self.search_results_list.addItem("导出失败")
-                QMessageBox.warning(self, "错误", "导出GPX文件失败")
-
-        except Exception as e:
-            self.logger.exception(f"导出GPX文件出错: {str(e)}")
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-            self.search_results_list.clear()
-            self.search_results_list.addItem("导出出错")
-            self.search_results_list.addItem(f"错误信息: {str(e)}")
-            QMessageBox.warning(self, "错误", f"导出GPX文件出错: {str(e)}")
-
-        self.logger.info("GPX导出流程完成")
-        self.logger.info("=" * 80)
-
-    # ========== 时间计算相关方法 ==========
-
-    def show_date_panel(self, time_type):
-        """显示日期选择面板
-
-        Args:
-            time_type: "start"，表示起始时间
-        """
-        # 自动关闭已打开的时间选择面板
-        if self.time_panel.isVisible():
-            self.time_panel.hide()
-
-        self.time_type = time_type
-        # 连接日期选择信号
-        try:
-            self.date_panel.date_selected.disconnect()
-        except TypeError:
-            pass  # 没有连接时忽略错误
-        self.date_panel.date_selected.connect(self.on_date_selected)
-
-        # 设置当前选中的日期（只处理起始时间）
-        current_date = self.start_time_edit.dateTime().date()
-
-        # 获取日志面板的全局位置和大小
-        log_rect = self.log_panel.rect()
-        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
-        log_size = self.log_panel.size()
-
-        self.date_panel.show_panel(current_date, log_pos, 0, log_size)
-
-    def on_date_selected(self, selected_date):
-        """日期选择回调
-
-        Args:
-            selected_date: 选择的日期（datetime对象）
-        """
-        from PyQt5.QtCore import QDateTime, QTime
-
-        # 只处理起始时间
-        if hasattr(self, 'time_type') and self.time_type == "start":
-            # 更新起始日期
-            current_time = self.start_time_edit.dateTime().time()
-            new_datetime = QDateTime(
-                selected_date.year, selected_date.month, selected_date.day,
-                current_time.hour(), current_time.minute()
-            )
-            self.start_time_edit.setDateTime(new_datetime)
-
-            # 自动计算结束时间
-            self.calculate_times()
-
-    def show_time_panel(self, time_type):
-        """显示时间选择面板
-
-        Args:
-            time_type: "start"，表示起始时间
-        """
-        # 自动关闭已打开的日期选择面板
-        if self.date_panel.isVisible():
-            self.date_panel.hide()
-
-        self.time_type = time_type
-        # 连接时间选择信号
-        try:
-            self.time_panel.time_selected.disconnect()
-        except TypeError:
-            pass  # 没有连接时忽略错误
-        self.time_panel.time_selected.connect(self.on_time_selected)
-
-        # 设置当前选中的时间（只处理起始时间）
-        current_time = self.start_time_edit.dateTime().time()
-
-        # 获取日志面板的全局位置和大小
-        log_rect = self.log_panel.rect()
-        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
-        log_size = self.log_panel.size()
-
-        self.time_panel.show_panel(current_time, log_pos, 0, log_size)
-
-    def on_time_selected(self, selected_time):
-        """时间选择回调
-
-        Args:
-            selected_time: 选择的时间（datetime对象）
-        """
-        from PyQt5.QtCore import QDateTime, QTime
-
-        # 只处理起始时间
-        if hasattr(self, 'time_type') and self.time_type == "start":
-            # 更新起始时间
-            current_date = self.start_time_edit.dateTime().date()
-            new_datetime = QDateTime(
-                current_date.year(), current_date.month(), current_date.day(),
-                selected_time.hour, selected_time.minute
-            )
-            self.start_time_edit.setDateTime(new_datetime)
-
-            # 自动计算结束时间
-            self.calculate_times()
-
-    def calculate_times(self):
-        """计算时间（根据起始时间和经历时间自动计算结束时间）"""
-        from PyQt5.QtCore import QDateTime
-
-        try:
-            # 获取起始时间
-            start_datetime = self.start_time_edit.dateTime()
-
-            # 从文本框获取经历小时数
-            duration_text = self.duration_time_edit.text().strip()
-            if not duration_text:
-                duration_hours = 1  # 默认1小时
-            else:
-                try:
-                    duration_hours = float(duration_text)
-                    if duration_hours < 0:
-                        duration_hours = 0
-                except ValueError:
-                    duration_hours = 1  # 无效输入时默认1小时
-
-            # 计算结束时间（支持小数小时）
-            duration_seconds = int(duration_hours * 3600)
-            end_datetime = start_datetime.addSecs(duration_seconds)
-
-            # 更新结束时间显示
-            self.end_time_edit.setDateTime(end_datetime)
-
-        except Exception as e:
-            self.logger.warning(f"计算时间时出错: {str(e)}")
-
-    # ========== 定位相关方法 ==========
-
-    def get_current_location(self):
-        """获取当前位置（优先使用：Windows原生 → 高德在线定位 → 高德IP定位 → 公共IP定位）"""
-        self.logger.info("=" * 80)
-        self.logger.info("开始执行定位流程")
-        self.logger.info("=" * 80)
-
-        # 检查地图源是否已设置
-        map_source = map_config.get_map_source()
-        if not map_source:
-            self.logger.warning("定位失败：未设置地图数据源")
-            QMessageBox.warning(self, "警告", "请先在地图配置中设置地图数据源")
-            return
-
-        self.logger.info("开始定位流程")
-
-        try:
-            self.progress_bar.setMaximum(0)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(0)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("正在定位...")
-
-            self.logger.debug(f"Windows位置服务可用: {self.windows_location_service.is_available()}")
-
-            if self.windows_location_service.is_available():
-                self.search_results_list.addItem("正在使用Windows原生定位...")
-                self.logger.info("尝试使用Windows原生位置服务...")
-
-                location_info = self.windows_location_service.get_location(timeout=10)
-
-                if location_info:
-                    self.handle_native_location_success(location_info)
-                    return
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("Windows定位不可用")
-
-            if map_config.is_gaode_configured():
-                self.search_results_list.addItem("正在使用高德地图在线定位...")
-                self.logger.info("尝试使用高德地图在线定位...")
-
-                location_info = self.get_gaode_online_location()
-
-                if location_info:
-                    self.handle_gaode_online_location_success(location_info)
-                    return
-
-                self.search_results_list.clear()
-                self.search_results_list.addItem("高德在线定位不可用")
-                self.search_results_list.addItem("正在使用高德地图IP定位...")
-                self.logger.warning("高德地图在线定位失败，尝试高德IP定位")
-
-                def gaode_ip_log(level: str, message: str):
-                    level_map = {
-                        "DEBUG": self.logger.debug,
-                        "INFO": self.logger.info,
-                        "WARNING": self.logger.warning,
-                        "ERROR": self.logger.error,
-                        "CRITICAL": self.logger.critical
-                    }
-                    log_func = level_map.get(level, self.logger.info)
-                    log_func(f"[高德IP定位] {message}")
-
-                location_info = LocationHelper.get_ip_location(
-                    use_gaode=True,
-                    api_key=map_config.get_api_key() if map_config.is_gaode_configured() else None,
-                    logger=gaode_ip_log
-                )
-
-                if location_info:
-                    self.progress_bar.setMaximum(100)
-                    self.progress_bar.setMinimum(0)
-                    self.progress_bar.setValue(100)
-                    QApplication.processEvents()
-                    self.handle_ip_location_success(location_info, source="高德IP定位")
-                    return
-
-                self.search_results_list.clear()
-                self.search_results_list.addItem("高德IP定位不可用")
-                self.logger.warning("高德IP定位失败，尝试公共IP定位")
-
-            self.search_results_list.addItem("正在使用公共IP定位...")
-
-            self.logger.warning("所有定位方式不可使用，使用公共IP定位作为备选方案")
-
-            def ip_log(level: str, message: str):
-                level_map = {
-                    "DEBUG": self.logger.debug,
-                    "INFO": self.logger.info,
-                    "WARNING": self.logger.warning,
-                    "ERROR": self.logger.error,
-                    "CRITICAL": self.logger.critical
-                }
-                log_func = level_map.get(level, self.logger.info)
-                log_func(f"[公共IP定位] {message}")
-
-            location_info = LocationHelper.get_ip_location(logger=ip_log)
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            if location_info:
-                self.handle_ip_location_success(location_info, source="公共IP定位")
-            else:
-                self.search_results_list.clear()
-                self.search_results_list.addItem("定位失败")
-                self.search_results_list.addItem("无法获取您的位置信息")
-                self.logger.error("定位失败：无法获取您的位置信息")
-                QMessageBox.warning(self, "定位失败", "无法获取您的位置信息\n\n建议：\n1. 检查网络连接\n2. 确认Windows位置服务已开启（如适用）")
-
-        except Exception as e:
-            self.logger.exception(f"定位流程异常: {str(e)}")
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("定位出错")
-            self.search_results_list.addItem(f"错误信息: {str(e)}")
-            QMessageBox.warning(self, "错误", f"定位出错: {str(e)}\n\n请检查网络连接")
-
-        self.logger.info("定位流程完成")
-        self.logger.info("=" * 80)
-
-    def get_gaode_online_location(self) -> Optional[dict]:
-        """
-        使用浏览器Geolocation API + 高德逆地理编码获取当前位置
-
-        Returns:
-            dict: 定位信息 {'lat': float, 'lon': float, 'city': str, 'source': str}
-        """
-        def log_cb(level, message):
-            if self.logger:
-                level_map = {
-                    "DEBUG": self.logger.debug,
-                    "INFO": self.logger.info,
-                    "WARNING": self.logger.warning,
-                    "ERROR": self.logger.error,
-                    "CRITICAL": self.logger.critical
-                }
-                log_func = level_map.get(level, self.logger.info)
-                log_func(message)
-
-        if not map_config.is_gaode_configured():
-            log_cb("WARNING", "高德API未配置，无法使用在线定位")
-            return None
-
-        log_cb("DEBUG", "正在通过浏览器Geolocation API获取位置...")
-
+        level_data = level if level else None
+        waypoint_item.setData(Qt.UserRole, (name, data[1], data[2], level_data, None))
+        self.waypoint_list.addItem(waypoint_item)
+
+    def _update_map_preview(self):
+        """更新地图预览"""
+        self.map_manager.update_map_preview()
+
+    def _preview_search_result(self, coords, name, level=None):
+        """预览搜索结果"""
+        self.map_manager.preview_search_result(coords, name, level)
+
+    def _show_location_on_map(self, lat: float, lon: float, popup_text: str):
+        """在地图上显示位置"""
+        self.logger.debug(f"[UI回调] 收到显示位置请求: {lat}, {lon}")
+        self.map_manager.show_location_on_map(lat, lon, popup_text)
+        self.logger.debug("[UI回调] 地图管理器显示位置完成")
+
+    def _show_route_on_map(self):
+        """在地图上显示路线"""
+        self.map_manager.show_route_on_map()
+
+    def _trigger_browser_location(self):
+        """触发浏览器定位"""
         geolocation_script = """
         if (navigator.geolocation) {
             console.log('[定位] 正在调用浏览器定位API...');
@@ -1703,304 +660,197 @@ class GpxStudio(QMainWindow):
             console.log('定位失败: 浏览器不支持定位');
         }
         """
-
         if self.map_view and self.map_view.page():
             self.map_view.page().runJavaScript(geolocation_script)
-            log_cb("DEBUG", "已发起浏览器定位请求")
-        else:
-            log_cb("WARNING", "地图视图未初始化，无法执行定位")
 
-        return None
+    def _setup_date_panel_callback(self, callback):
+        """设置日期面板回调"""
+        try:
+            self.date_panel.date_selected.disconnect()
+        except TypeError:
+            pass
+        self.date_panel.date_selected.connect(callback)
 
-    def _on_geolocation_success(self, lat, lon, accuracy):
+    def _setup_time_panel_callback(self, callback):
+        """设置时间面板回调"""
+        try:
+            self.time_panel.time_selected.disconnect()
+        except TypeError:
+            pass
+        self.time_panel.time_selected.connect(callback)
+
+    def _show_date_panel(self, current_date):
+        """显示日期面板"""
+        log_rect = self.log_panel.rect()
+        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
+        log_size = self.log_panel.size()
+        self.date_panel.show_panel(current_date, log_pos, 0, log_size)
+
+    def _show_time_panel(self, current_time):
+        """显示时间面板"""
+        log_rect = self.log_panel.rect()
+        log_pos = self.log_panel.mapToGlobal(log_rect.topLeft())
+        log_size = self.log_panel.size()
+        self.time_panel.show_panel(current_time, log_pos, 0, log_size)
+
+    def _add_route_time_info(self):
+        """添加路线时间信息到结果列表"""
+        # 起始时间
+        start_datetime = self.start_time_edit.dateTime()
+        start_time_str = start_datetime.toString("yyyy-MM-dd HH:mm")
+        self.search_results_list.addItem(f"起始时间: {start_time_str}")
+
+        # 途径时间
+        duration_hours = self.data_manager.estimated_duration_seconds // 3600
+        duration_minutes = (self.data_manager.estimated_duration_seconds % 3600) // 60
+        self.search_results_list.addItem(f"途径时间: {int(duration_hours)}小时{duration_minutes}分钟")
+
+        # 结束时间
+        end_datetime = self.end_time_edit.dateTime()
+        end_time_str = end_datetime.toString("yyyy-MM-dd HH:mm")
+        self.search_results_list.addItem(f"结束时间: {end_time_str}")
+
+    def _show_initial_map(self):
+        """显示初始地图"""
+        self.map_manager.show_initial_map()
+        self.scale_panel.update_zoom(10)
+
+    # ==================== 事件处理方法 ====================
+
+    def on_locate_clicked(self):
+        """定位按钮点击"""
+        self.location_manager.get_current_location()
+
+    def on_plan_route_clicked(self):
+        """规划路线按钮点击"""
+        transport_mode = self.transport_combo.currentText()
+        self.route_manager.plan_route(transport_mode)
+
+    def on_export_gpx_clicked(self):
+        """导出GPX按钮点击"""
+        self.route_manager.export_gpx()
+
+    def on_search_result_clicked(self, item):
+        """搜索结果点击"""
+        data = item.data(Qt.UserRole)
+        self.search_manager.select_search_result(data)
+
+    def on_clear_search_clicked(self):
+        """清空搜索结果按钮点击"""
+        self.search_manager.clear_search_results()
+
+    def on_map_zoom_changed(self, zoom_level: int):
+        """处理地图缩放变化事件"""
+        self.logger.info(f"地图缩放级别变化: {zoom_level}")
+        self.scale_panel.update_zoom(zoom_level)
+
+    def _on_geolocation_success(self, lat: float, lon: float, accuracy: float):
         """处理浏览器定位成功信号"""
-        self.logger.info(f"浏览器定位成功: {lat}, {lon}, 精度: {accuracy}m")
+        self.logger.info(f"[主应用] 收到浏览器定位成功信号: {lat}, {lon}, 精度: {accuracy}m")
+        self.logger.debug(f"[主应用] location_manager存在: {hasattr(self, 'location_manager')}")
+        if hasattr(self, 'location_manager'):
+            self.logger.debug("[主应用] 调用location_manager.handle_browser_location_success...")
+            self.location_manager.handle_browser_location_success(lat, lon, accuracy)
+            self.logger.debug("[主应用] location_manager.handle_browser_location_success 调用完成")
+        else:
+            self.logger.error("[主应用] location_manager未初始化！")
 
-        location_info = {
-            'lat': lat,
-            'lon': lon,
-            'accuracy': accuracy
-        }
-        self.handle_gaode_online_location_success(location_info)
-
-    def _on_geolocation_error(self, error_msg):
+    def _on_geolocation_error(self, error_msg: str):
         """处理浏览器定位失败信号"""
         self.logger.warning(f"浏览器定位失败: {error_msg}")
-        self.handle_gaode_location_error({'code': -1, 'message': error_msg})
+        self.location_manager.handle_browser_location_error(error_msg)
 
-    def handle_gaode_online_location_success(self, location_info):
-        """处理高德在线定位成功（浏览器Geolocation + 高德逆地理编码）"""
-        self.logger.info("高德在线定位成功")
+    # ==================== 公共方法（由PanelFactory调用）====================
 
-        lat = location_info['lat']
-        lon = location_info['lon']
-        accuracy = location_info.get('accuracy', 0)
+    def search_location(self, location_type: str):
+        """搜索地点（起点/终点）"""
+        search_text = getattr(self, f"{location_type}_input").text()
+        if search_text:
+            self.search_manager.search_location(search_text, location_type)
 
-        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}m")
+    def search_waypoint(self):
+        """搜索途径点"""
+        search_text = self.waypoint_input.text()
+        if search_text:
+            self.search_manager.search_location(search_text, "waypoint")
 
-        if map_config.is_gaode_configured():
-            self.logger.debug("正在进行逆地理编码...")
-            address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
+    def select_location(self, item, location_type: str):
+        """选择地点（从下拉框）"""
+        data = item.data(Qt.UserRole)
+        self.search_manager.select_location_from_list(data, location_type)
 
-            if address_info:
-                city = address_info.get('city', '')
-                full_address = address_info.get('full_address', '')
+    def remove_waypoint(self):
+        """删除途径点"""
+        current_row = self.waypoint_list.currentRow()
+        if current_row >= 0:
+            self.waypoint_list.takeItem(current_row)
+            self.data_manager.remove_waypoint(current_row)
 
-                self.logger.debug(f"逆地理编码成功: {full_address}")
+            # 重新编号
+            for i in range(self.waypoint_list.count()):
+                item = self.waypoint_list.item(i)
+                data = item.data(Qt.UserRole)
+                item.setText(f"{i+1}. {data[0]}")
 
-                self.progress_bar.setMaximum(100)
-                self.progress_bar.setMinimum(0)
-                self.progress_bar.setValue(100)
-                QApplication.processEvents()
+            self.map_manager.update_map_preview()
 
-                self.search_results_list.clear()
-                self.search_results_list.addItem("定位成功！")
-                self.search_results_list.addItem("定位方式: 高德地图在线定位（精准定位）")
-                self.search_results_list.addItem(f"位置: {city}")
+    def clear_all_waypoints(self):
+        """清空所有途径点"""
+        self.waypoint_list.clear()
+        self.data_manager.clear_waypoints()
+        self.map_manager.update_map_preview()
 
-                self.current_location = (lat, lon)
+    def show_date_panel(self, time_type: str):
+        """显示日期选择面板"""
+        self.time_manager.show_date_panel(time_type)
 
-                popup_text = f"我的位置\n{full_address}\n定位方式: 高德在线定位\n精度: 约{accuracy:.0f}米"
-                MapRenderer.add_marker(self.map_view.current_map, [lat, lon], popup_text, 'green', 'user')
-                self.map_view.current_map.fit_bounds([[lat, lon], [lat, lon]])
+    def show_time_panel(self, time_type: str):
+        """显示时间选择面板"""
+        self.time_manager.show_time_panel(time_type)
 
-                self.show_location_on_map(lat, lon, city, full_address)
-                return
+    def calculate_times(self):
+        """计算时间"""
+        self.time_manager.calculate_times()
 
-            self.logger.warning("逆地理编码失败，仅显示坐标")
+    def show_map_config(self):
+        """显示地图配置对话框"""
+        dialog = MapConfigDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            map_source = map_config.get_map_source()
+            self.logger.info(f"地图数据源已更新: {map_source}")
 
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setValue(100)
-        QApplication.processEvents()
+            # 更新服务配置
+            if map_source == "gaode":
+                api_key = map_config.get_api_key()
+                security_key = map_config.get_security_key()
+                self.service_manager.update_gaode_config(api_key, security_key)
+                self.logger.info("高德地图API配置已更新")
 
-        self.search_results_list.clear()
-        self.search_results_list.addItem("定位成功！")
-        self.search_results_list.addItem("定位方式: 浏览器Geolocation API")
-        self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
+            # 清空路线数据并重新加载地图
+            self.clear_route_data()
+            self._show_initial_map()
 
-        self.current_location = (lat, lon)
+    def clear_route_data(self):
+        """清空所有路线相关数据"""
+        self.data_manager.clear_all_route_data()
 
-        popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
-        self.show_location_on_map(lat, lon, "", popup_text)
-
-    def handle_gaode_location_error(self, error):
-        """处理高德在线定位失败"""
-        error_code = error.get('code', -1)
-        error_msg = error.get('message', '未知错误')
-
-        self.logger.warning(f"高德在线定位失败: {error_msg} (代码: {error_code})")
-
-        self.search_results_list.clear()
-        self.search_results_list.addItem("在线定位失败")
-
-        if error_code in GEOLOCATION_ERROR_MESSAGES:
-            error_text = GEOLOCATION_ERROR_MESSAGES[error_code]
-            self.search_results_list.addItem(f"原因: {error_text}")
-            self.logger.warning(error_text)
-        else:
-            self.search_results_list.addItem(f"原因: {error_msg}")
-
-    def handle_gaode_location_success(self, location_info):
-        """处理高德地图定位成功"""
-        self.logger.info("高德地图定位成功")
-
-        lat = location_info['lat']
-        lon = location_info['lon']
-        city = location_info.get('city', '')
-        province = location_info.get('province', '')
-
-        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 城市: {city}")
-
-        try:
-            if map_config.is_gaode_configured():
-                address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
-            else:
-                address_info = None
-
-            self.current_location = (lat, lon)
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
+        # 清空UI显示
+        if hasattr(self, 'start_label'):
+            self.start_label.setText('')
+        if hasattr(self, 'end_label'):
+            self.end_label.setText('')
+        if hasattr(self, 'start_list'):
+            self.start_list.clear()
+        if hasattr(self, 'end_list'):
+            self.end_list.clear()
+        if hasattr(self, 'waypoint_list'):
+            self.waypoint_list.clear()
+        if hasattr(self, 'search_results_list'):
             self.search_results_list.clear()
-            self.search_results_list.addItem("定位成功！")
-            self.search_results_list.addItem("定位方式: 高德地图IP定位")
+        if hasattr(self, 'search_results_title'):
+            self.search_results_title.setText("搜索结果")
 
-            full_address = f"{province}{city}" if province and city else (city or province)
-            if full_address:
-                self.search_results_list.addItem(f"位置: {full_address}")
-                popup_text = f"我的位置\n{full_address}\n定位方式: 高德地图IP定位"
-            else:
-                popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 高德地图IP定位"
-
-            self.search_results_list.addItem(f"坐标: {lat:.6f}, {lon:.6f}")
-
-            self.logger.info(f"位置信息: {full_address}")
-            self.show_location_on_map(lat, lon, popup_text)
-
-        except Exception as e:
-            self.logger.exception(f"高德定位处理异常: {str(e)}")
-            self.show_location_on_map(lat, lon, f"我的位置\n坐标: {lat:.4f}, {lon:.4f}")
-
-    def handle_native_location_success(self, location_info):
-        """处理Windows原生定位成功"""
-        self.logger.info("Windows原生定位成功")
-
-        lat = location_info['latitude']
-        lon = location_info['longitude']
-        accuracy = location_info.get('accuracy', 0)
-
-        self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}米")
-
-        try:
-            if map_config.is_gaode_configured():
-                address_info = self.gaode_geocoding_service.reverse_geocode(lat, lon)
-            else:
-                address_info = None
-                self.logger.warning("高德地图API未配置，无法获取地址信息")
-
-            self.current_location = (lat, lon)
-
-            self.progress_bar.setMaximum(100)
-            self.progress_bar.setMinimum(0)
-            self.progress_bar.setValue(100)
-            QApplication.processEvents()
-
-            self.search_results_list.clear()
-            self.search_results_list.addItem("定位成功！")
-            self.search_results_list.addItem("定位方式: Windows原生定位（高精度）")
-
-            if address_info:
-                city = address_info.get('city', '')
-                country = address_info.get('country', '')
-                self.search_results_list.addItem(f"位置: {city}, {country}")
-                popup_text = f"我的位置\n{city}, {country}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
-            else:
-                popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
-
-            self.search_results_list.addItem(f"坐标: {lat:.6f}, {lon:.6f}")
-            self.search_results_list.addItem(f"精度: 约{accuracy:.0f}米")
-
-            self.logger.info(f"位置信息: {address_info}")
-            self.show_location_on_map(lat, lon, popup_text)
-
-        except Exception as e:
-            self.logger.exception(f"处理异常: {str(e)}")
-
-    def handle_ip_location_success(self, location_info, source: str = "IP地址定位"):
-        """处理IP定位成功"""
-        self.logger.info(f"{source}成功")
-
-        lat = location_info.get('lat')
-        lon = location_info.get('lon')
-        city = location_info.get('city', '')
-        country = location_info.get('country', '')
-        region = location_info.get('region', '')
-        isp = location_info.get('isp', '')
-        source_key = location_info.get('source', '')
-
-        if lat is None or lon is None:
-            self.search_results_list.clear()
-            self.search_results_list.addItem("定位成功！")
-            self.search_results_list.addItem(f"定位方式: {source}（仅城市级别）")
-            self.search_results_list.addItem(f"位置: {city}")
-
-            if source_key == 'gaode_ip_city':
-                self.logger.info(f"高德IP定位成功（城市级别）: {city}")
-                QMessageBox.information(self, "定位成功", f"定位成功！\n\n位置: {city}\n定位方式: {source}（仅城市级别）")
-            return
-
-        self.logger.debug(f"纬度: {lat}, 经度: {lon}")
-        self.logger.info(f"位置: {city}, {region}, {country}")
-
-        self.current_location = (lat, lon)
-
-        self.search_results_list.clear()
-        self.search_results_list.addItem("定位成功！")
-
-        if source_key == 'gaode_ip':
-            self.search_results_list.addItem("定位方式: 高德IP定位（城市级精度）")
-        else:
-            self.search_results_list.addItem(f"定位方式: {source}（城市级精度）")
-
-        location_text = ", ".join(filter(None, [city, region, country]))
-        self.search_results_list.addItem(f"位置: {location_text}")
-        self.search_results_list.addItem(f"坐标: {lat:.4f}, {lon:.4f}")
-
-        if isp:
-            self.search_results_list.addItem(f"运营商: {isp}")
-            popup_text = f"我的位置\n{location_text}\n定位方式: {source}\n运营商: {isp}"
-        else:
-            popup_text = f"我的位置\n{location_text}\n定位方式: {source}"
-
-        self.show_location_on_map(lat, lon, popup_text)
-
-    def show_location_on_map(self, lat, lon, popup_text):
-        """在地图上显示定位"""
-        map_source = map_config.get_map_source()
-        m = MapRenderer.create_base_map([lat, lon], zoom_start=13, map_source=map_source)
-
-        MapRenderer.add_marker(
-            m, [lat, lon], popup_text,
-            color=COLOR_ORANGE, icon=ICON_WARNING
-        )
-
-        # 添加已选择的点
-        self._add_selected_points_to_map(m)
-
-        # 添加路线
-        if self.route_points:
-            MapRenderer.add_route(m, self.route_points)
-
-        url = MapRenderer.save_and_get_url(m)
-        self.map_view.setUrl(url)
-
-    def test_geolocation(self):
-        """测试定位功能"""
-        self.logger.info("开始测试定位功能")
-        self.logger.debug("="*50)
-
-        self.search_results_list.clear()
-        self.search_results_list.addItem("=== 定位功能测试 ===")
-        self.search_results_list.addItem("1. 检查定位处理器...")
-        self.search_results_list.addItem(
-            f"   状态: {'✓ 已初始化' if self.geolocation_handler else '✗ 未初始化'}"
-        )
-        self.logger.debug(f"定位处理器状态: {self.geolocation_handler is not None}")
-
-        self.search_results_list.addItem("2. 检查地图视图...")
-        self.search_results_list.addItem(
-            f"   状态: {'✓ 已创建' if self.map_view else '✗ 未创建'}"
-        )
-        self.logger.debug(f"地图视图状态: {self.map_view is not None}")
-
-        self.search_results_list.addItem("3. 检查当前位置...")
-        self.search_results_list.addItem(
-            f"   状态: {'✓ 已定位' if self.current_location else '✗ 未定位'}"
-        )
-        if self.current_location:
-            self.search_results_list.addItem(
-                f"   坐标: {self.current_location[0]:.4f}, {self.current_location[1]:.4f}"
-            )
-            self.logger.debug(f"当前位置: {self.current_location[0]:.4f}, {self.current_location[1]:.4f}")
-        else:
-            self.logger.debug("当前位置: 未定位")
-
-        self.search_results_list.addItem("4. 测试信号连接...")
-        try:
-            self.geolocation_handler.test_geolocation()
-            self.search_results_list.addItem("   状态: ✓ 信号连接正常")
-            self.logger.debug("测试结果: 信号连接正常")
-        except Exception as e:
-            self.search_results_list.addItem(f"   状态: ✗ 信号连接失败: {e}")
-            self.logger.error(f"信号连接测试失败: {e}")
-
-        self.search_results_list.addItem("=== 测试完成 ===")
-        self.logger.info("定位功能测试完成")
-        self.logger.debug("="*50)
+        self.logger.info("已清空所有路线相关数据")
 
     def show_about_dialog(self):
         """显示关于对话框"""
@@ -2008,12 +858,11 @@ class GpxStudio(QMainWindow):
         dialog.exec_()
 
     def closeEvent(self, event):
-        """关闭事件"""
-        event.accept()
+        """重写关闭事件"""
+        self.window_manager.handle_close_event(event)
 
 
 if __name__ == "__main__":
-    import sys
     app = QApplication(sys.argv)
     window = GpxStudio()
     window.show()
