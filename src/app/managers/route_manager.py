@@ -229,33 +229,25 @@ class RouteManager(QObject):
     def _update_route_times(self, estimated_duration: int):
         """更新路线时间信息（内部方法）
 
-        根据预估路线耗时，计算并更新起始时间、结束时间和途径时间。
+        根据预估路线耗时，计算并更新结束时间和途径时间。
+        注意：起始时间不会被更新，保持用户设置的值或程序启动时的初始值。
 
         参数:
             estimated_duration: 预估路线耗时（秒）
         """
-        # 获取当前时间并去除秒数
-        current_time = datetime.now()
-        current_time_zero_sec = current_time.replace(second=0)
-
-        # 设置起始时间为当前时间
-        qt_current_datetime = QDateTime.fromString(
-            current_time_zero_sec.strftime("%Y-%m-%d %H:%M:%S"),
-            "yyyy-MM-dd hh:mm:ss"
-        )
-        self.ui_updater['set_start_time'](qt_current_datetime)
+        # 获取当前的起始时间（不更新，使用用户设置的值）
+        start_datetime = self.ui_updater['get_start_time']()
 
         # 计算途径时间（小时，支持小数）
         duration_hours = estimated_duration / 3600
         self.ui_updater['set_duration'](f"{duration_hours:.1f}")
 
-        # 计算结束时间
-        end_time = current_time_zero_sec.timestamp() + estimated_duration
-        end_datetime = datetime.fromtimestamp(end_time)
-        qt_end_datetime = QDateTime.fromString(
-            end_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "yyyy-MM-dd hh:mm:ss"
-        )
+        # 根据起始时间和途径时间计算结束时间
+        start_timestamp = start_datetime.toSecsSinceEpoch()
+        end_timestamp = start_timestamp + estimated_duration
+
+        # 创建结束时间的 QDateTime 对象
+        qt_end_datetime = QDateTime.fromSecsSinceEpoch(end_timestamp)
         self.ui_updater['set_end_time'](qt_end_datetime)
 
     def _handle_route_success(self, transport_mode: str):

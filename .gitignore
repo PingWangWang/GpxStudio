@@ -28,6 +28,8 @@ build/GPXStudio/
 *.swo
 *~
 .vs
+.venv
+.venv_nuitka
 
 # 操作系统文件
 .DS_Store
