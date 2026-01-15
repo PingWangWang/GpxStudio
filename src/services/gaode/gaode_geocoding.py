@@ -339,7 +339,13 @@ class GaodeGeocodingService(IGeocodingService):
         if pois and len(pois) > 0:
             nearest_poi = pois[0]
             poi_type = nearest_poi.get('type', '')
-            distance = nearest_poi.get('distance', 999999)
+            distance_raw = nearest_poi.get('distance', 999999)
+
+            # 确保distance是数字类型
+            try:
+                distance = float(distance_raw) if distance_raw else 999999
+            except (ValueError, TypeError):
+                distance = 999999
 
             # 如果POI距离很近（小于50米），使用POI的类型编码作为level
             if distance < 50:
