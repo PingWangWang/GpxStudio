@@ -8,12 +8,23 @@ PyQtWebEngine>=5.15.0
 folium>=0.14.0
 xyzservices>=2025.11.0
 
+# Data Processing (version compatibility required)
+numpy>=1.26.0,<2.0
+pandas>=2.0.0
+
 # Route Planning and Geocoding
 requests>=2.31.0
 geopy>=2.3.0
 
 # GPX Processing
 gpxpy>=1.6.0
+
+# Timezone Support
+timezonefinder>=6.0.0
+pytz>=2024.1
+
+# Testing
+hypothesis>=6.0.0
 
 # Windows Location Service (Windows only)
 winrt-Windows.Devices.Geolocation>=3.2.1

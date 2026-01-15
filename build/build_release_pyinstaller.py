@@ -22,7 +22,7 @@ with open(VERSION_FILE, "r", encoding="utf-8") as f:
     exec(f.read())
 
 # 构建配置
-BUILD_NAME = f"GPXStudio-{__version__}"
+BUILD_NAME = f"GPXStudio_{__version__}"
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build", BUILD_NAME)
 DIST_FILE = os.path.join(PROJECT_ROOT, "dist", f"{BUILD_NAME}.exe")
 

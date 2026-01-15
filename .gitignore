@@ -42,10 +42,13 @@ Thumbs.db
 *.tmp
 *.temp
 *.bak
+src/.hypothesis/
+.hypothesis
 
 # 测试文件
 tests/results/
 .pytest_cache/
+test_output_gpx
 
 # 本地配置
 *.local
