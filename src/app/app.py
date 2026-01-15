@@ -6,8 +6,9 @@ GPX Studio 主应用窗口 (重构版)
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication, QDialog, QTimeEdit)
-from PyQt5.QtCore import Qt, QTimer
+                             QApplication, QDialog, QTimeEdit, QMenuBar, QMenu, QAction)
+from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
@@ -142,6 +143,10 @@ class GpxStudio(QMainWindow):
         """初始化窗口设置"""
         print("开始初始化窗口设置")
         self.window_manager.setup_window()
+
+        # 创建菜单栏
+        self._create_menu_bar()
+
         print("窗口设置初始化完成")
 
     def _init_services(self):
@@ -336,6 +341,19 @@ class GpxStudio(QMainWindow):
 
     # ==================== UI初始化方法 ====================
 
+    def _create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+
+        # 帮助菜单
+        help_menu = menubar.addMenu("帮助(&H)")
+
+        # 关于动作
+        about_action = QAction("关于 GPX Studio(&A)", self)
+        about_action.setShortcut("F1")
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
     def init_ui(self):
         """初始化用户界面"""
         central_widget = QWidget()
@@ -369,25 +387,11 @@ class GpxStudio(QMainWindow):
         left_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[0])
         left_layout = QVBoxLayout(left_widget)
 
-        # 顶部按钮
-        top_button_layout = QHBoxLayout()
-
-        locate_button = QPushButton("📍 定位")
-        locate_button.clicked.connect(self.on_locate_clicked)
-        locate_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
-        top_button_layout.addWidget(locate_button)
-
+        # 顶部按钮 - 只保留地图配置按钮，并让它占满宽度
         config_button = QPushButton("⚙️ 地图配置")
         config_button.clicked.connect(self.show_map_config)
         config_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
-        top_button_layout.addWidget(config_button)
-
-        about_button = QPushButton("ℹ️ 关于")
-        about_button.clicked.connect(self.show_about_dialog)
-        about_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
-        top_button_layout.addWidget(about_button)
-
-        left_layout.addLayout(top_button_layout)
+        left_layout.addWidget(config_button)
 
         # 滚动区域
         scroll = QScrollArea()
@@ -503,6 +507,8 @@ class GpxStudio(QMainWindow):
         right_widget = QWidget()
         right_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[2])
         layout = QVBoxLayout(right_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         # 创建地图视图
         self.map_view = QWebEngineView()
@@ -514,7 +520,60 @@ class GpxStudio(QMainWindow):
         profile = QWebEngineProfile.defaultProfile()
         profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-        layout.addWidget(self.map_view)
+        # 创建一个容器来放置地图和浮动按钮
+        map_container = QWidget()
+        map_container_layout = QVBoxLayout(map_container)
+        map_container_layout.setContentsMargins(0, 0, 0, 0)
+        map_container_layout.setSpacing(0)
+        map_container_layout.addWidget(self.map_view)
+
+        # 创建定位按钮（浮动在地图上）
+        self.locate_button = QPushButton()
+        self.locate_button.setToolTip("定位到当前位置")
+        self.locate_button.clicked.connect(self.on_locate_clicked)
+
+        # 加载图标
+        import os
+        # __file__ 是 src/app/app.py，需要向上三级到达项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        icon_path = os.path.join(project_root, 'res', 'Location.png')
+
+        if os.path.exists(icon_path):
+            from PyQt5.QtGui import QIcon
+            self.locate_button.setIcon(QIcon(icon_path))
+            from PyQt5.QtCore import QSize
+            self.locate_button.setIconSize(QSize(18, 18))
+        else:
+            self.locate_button.setText("📍")
+
+        # 设置按钮样式，与 leaflet 的缩放按钮保持一致
+        self.locate_button.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                border: 2px solid rgba(0, 0, 0, 0.2);
+                border-radius: 2px;
+                padding: 0px;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background-color: #f4f4f4;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
+
+        self.locate_button.setParent(map_container)
+        # 放置在左上角，放大缩小按钮下方
+        # leaflet 的缩放控件默认位置是 top-left，距离顶部10px，左侧10px
+        # 每个按钮高度约30px，加上1px边框，所以第三个按钮应该在 10 + 30 + 30 = 70px 处
+        self.locate_button.move(10, 70)
+        self.locate_button.raise_()
+
+        layout.addWidget(map_container)
 
         return right_widget
 
