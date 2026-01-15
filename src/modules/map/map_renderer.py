@@ -267,6 +267,25 @@ class MapRenderer:
         """
         m.get_root().html.add_child(folium.Element(scroll_zoom_script))
 
+        # 添加CSS样式，禁用地图的手型光标
+        cursor_style = """
+        <style>
+        .leaflet-container {
+            cursor: default !important;
+        }
+        .leaflet-grab {
+            cursor: default !important;
+        }
+        .leaflet-dragging .leaflet-grab {
+            cursor: default !important;
+        }
+        .leaflet-dragging .leaflet-container {
+            cursor: default !important;
+        }
+        </style>
+        """
+        m.get_root().html.add_child(folium.Element(cursor_style))
+
         scale_script = """
         <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -294,10 +313,10 @@ class MapRenderer:
         """
         m.get_root().html.add_child(folium.Element(scale_script))
 
-        # 添加缩放监听脚本
-        zoom_listener_script = """
+        # 添加缩放监听和右键菜单脚本
+        map_interaction_script = """
         <script>
-        // 直接在全局作用域中添加缩放监听
+        // 直接在全局作用域中添加地图交互监听
         (function() {
             var map = null;
             var initAttempts = 0;
@@ -311,8 +330,8 @@ class MapRenderer:
                 var mapElement = document.querySelector('.leaflet-container');
                 if (mapElement && mapElement._leaflet_map) {
                     map = mapElement._leaflet_map;
-                    console.log('[地图缩放] 成功通过.leaflet-container找到地图');
-                    setupZoomListener();
+                    console.log('[地图交互] 成功通过.leaflet-container找到地图');
+                    setupMapListeners();
                     return;
                 }
 
@@ -322,8 +341,8 @@ class MapRenderer:
                         window[key].getZoom && typeof window[key].getZoom === 'function' &&
                         window[key].on && typeof window[key].on === 'function') {
                         map = window[key];
-                        console.log('[地图缩放] 成功通过全局对象找到地图: ' + key);
-                        setupZoomListener();
+                        console.log('[地图交互] 成功通过全局对象找到地图: ' + key);
+                        setupMapListeners();
                         return;
                     }
                 }
@@ -332,28 +351,43 @@ class MapRenderer:
                 if (initAttempts < maxInitAttempts) {
                     setTimeout(initMapListener, 200);
                 } else {
-                    console.log('[地图缩放] 初始化失败，无法找到地图对象');
+                    console.log('[地图交互] 初始化失败，无法找到地图对象');
                 }
             }
 
-            function setupZoomListener() {
+            function setupMapListeners() {
                 if (!map) return;
 
-                console.log('[地图缩放] 开始设置缩放监听器');
+                console.log('[地图交互] 开始设置地图监听器');
 
-                // 立即发送当前缩放级别
+                // 1. 禁用默认右键菜单
+                var container = map.getContainer();
+                container.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    return false;
+                });
+                console.log('[地图交互] 已禁用默认右键菜单');
+
+                // 2. 设置缩放监听
                 var currentZoom = map.getZoom();
                 console.log('[地图缩放] 当前缩放级别: ' + currentZoom);
                 console.log('缩放变化:' + currentZoom);
 
-                // 监听缩放事件
                 map.on('zoomend', function() {
                     var zoomLevel = map.getZoom();
                     console.log('[地图缩放] 缩放级别变化: ' + zoomLevel);
                     console.log('缩放变化:' + zoomLevel);
                 });
 
-                console.log('[地图缩放] 缩放监听器设置完成');
+                // 3. 设置右键点击监听
+                map.on('contextmenu', function(e) {
+                    var lat = e.latlng.lat;
+                    var lon = e.latlng.lng;
+                    console.log('[地图右键] 右键点击位置: ' + lat + ', ' + lon);
+                    console.log('右键点击:' + lat + ',' + lon);
+                });
+
+                console.log('[地图交互] 地图监听器设置完成');
             }
 
             // 页面加载完成后初始化
@@ -365,7 +399,7 @@ class MapRenderer:
         })();
         </script>
         """
-        m.get_root().html.add_child(folium.Element(zoom_listener_script))
+        m.get_root().html.add_child(folium.Element(map_interaction_script))
 
         return m
 

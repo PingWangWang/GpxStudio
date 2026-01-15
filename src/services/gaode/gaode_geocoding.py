@@ -253,6 +253,8 @@ class GaodeGeocodingService(IGeocodingService):
             Optional[dict]: 地址信息字典，包含以下字段：
                 - city: 城市名称
                 - full_address: 格式化的完整地址
+                - level: 地址级别（推断）
+                - type: 地址类型（POI类型）
             编码失败时返回None
         """
         def log_cb(level, message):
@@ -271,7 +273,8 @@ class GaodeGeocodingService(IGeocodingService):
                 'key': self.api_key,                 # API密钥
                 'location': f"{lon},{lat}",          # 经纬度坐标，格式："lon,lat"
                 'output': 'json',                     # 返回格式为JSON
-                'radius': 100                        # 搜索半径（米）
+                'radius': 100,                        # 搜索半径（米）
+                'extensions': 'all'                   # 返回详细信息，包括POI
             }
 
             # 如果配置了安全密钥，生成签名
@@ -291,17 +294,24 @@ class GaodeGeocodingService(IGeocodingService):
                 # 获取格式化地址
                 address = regeocode.get('formatted_address', '')
 
+                # 获取地址组件
+                address_component = regeocode.get('addressComponent', {})
+
                 # 获取城市信息，如果城市为空则使用区县信息
-                city = regeocode.get('addressComponent', {}).get('city', '') or \
-                       regeocode.get('addressComponent', {}).get('district', '')
+                city = address_component.get('city', '') or address_component.get('district', '')
+
+                # 推断地址级别和类型
+                level, poi_type = self._infer_address_level(regeocode)
 
                 # 构造结果字典
                 result = {
                     'city': city,                # 城市名称
-                    'full_address': address      # 完整地址
+                    'full_address': address,     # 完整地址
+                    'level': level,              # 地址级别
+                    'type': poi_type             # 地址类型
                 }
 
-                log_cb("INFO", f"反向地理编码成功: {address}")
+                log_cb("INFO", f"反向地理编码成功: {address}, level: {level}, type: {poi_type}")
                 return result
             else:
                 error_msg = data.get('info', '未知错误')
@@ -311,6 +321,64 @@ class GaodeGeocodingService(IGeocodingService):
         except Exception as e:
             log_cb("ERROR", f"反向地理编码异常: {str(e)}")
             return None
+
+    def _infer_address_level(self, regeocode: dict) -> tuple:
+        """
+        根据逆地理编码结果推断地址级别和类型
+
+        Args:
+            regeocode: 逆地理编码返回的regeocode对象
+
+        Returns:
+            tuple: (level, type) 地址级别和类型
+        """
+        address_component = regeocode.get('addressComponent', {})
+        pois = regeocode.get('pois', [])
+
+        # 优先使用最近的POI信息
+        if pois and len(pois) > 0:
+            nearest_poi = pois[0]
+            poi_type = nearest_poi.get('type', '')
+            distance = nearest_poi.get('distance', 999999)
+
+            # 如果POI距离很近（小于50米），使用POI的类型编码作为level
+            if distance < 50:
+                typecode = nearest_poi.get('typecode', '')
+                if typecode:
+                    return (typecode, poi_type)
+
+        # 根据addressComponent推断级别
+        building = address_component.get('building', {})
+        street_number = address_component.get('streetNumber', {})
+        neighborhood = address_component.get('neighborhood', {})
+        township = address_component.get('township', '')
+        district = address_component.get('district', '')
+
+        # 建筑物级别
+        if building and building.get('name'):
+            building_type = building.get('type', '')
+            return ('门牌号级', building_type)
+
+        # 门牌号级别
+        if street_number and street_number.get('number'):
+            return ('门牌号级', '道路')
+
+        # 社区级别
+        if neighborhood and neighborhood.get('name'):
+            neighborhood_type = neighborhood.get('type', '')
+            return ('门牌号级', neighborhood_type)
+
+        # 乡镇/街道级别
+        if township:
+            return ('乡镇级', '乡镇街道')
+
+        # 区县级别
+        if district:
+            return ('区县级', '行政区')
+
+        # 默认返回区县级
+        return ('区县级', '')
+
 
     def get_ip_location(self) -> Optional[dict]:
         """

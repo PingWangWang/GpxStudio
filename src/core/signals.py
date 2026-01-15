@@ -25,6 +25,7 @@ class SignalManager(QObject):
     map_zoom_changed = pyqtSignal(int)  # 缩放级别
     map_loaded = pyqtSignal()  # 无参数
     map_center_changed = pyqtSignal(float, float)  # 纬度, 经度
+    map_right_click = pyqtSignal(float, float)  # 纬度, 经度 - 地图右键点击
 
     # 搜索相关信号
     search_results_updated = pyqtSignal(list, str)  # 搜索结果列表, 搜索类型
@@ -70,6 +71,10 @@ class SignalManager(QObject):
             'map_center_changed': {
                 'signal': self.map_center_changed,
                 'description': '地图中心点改变时发射'
+            },
+            'map_right_click': {
+                'signal': self.map_right_click,
+                'description': '地图右键点击时发射'
             },
 
             # 搜索相关信号

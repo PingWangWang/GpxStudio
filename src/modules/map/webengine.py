@@ -51,7 +51,7 @@ class ConsoleWebEnginePage(QWebEnginePage):
     def on_load_finished(self, success):
         """页面加载完成"""
         url_str = self.url().toString()
-        
+
         if success:
             print("[加载] ✅ 页面加载成功")
             print(f"[加载] URL: {url_str}")
@@ -66,19 +66,19 @@ class ConsoleWebEnginePage(QWebEnginePage):
             # 更加宽容的处理：即使success为False，也尝试执行JavaScript来验证页面是否真的加载成功
             print("[加载] ⚠️ 页面加载状态为失败，但尝试验证页面是否可用...")
             print(f"[加载] URL: {url_str}")
-            
+
             # 尝试执行JavaScript来测试页面是否真的加载成功
             test_script = """
             console.log('[测试] 尝试在加载状态为失败时执行JavaScript');
             '页面加载成功'  // 返回一个字符串表示成功
             """
-            
+
             def on_js_result(result):
                 if result == '页面加载成功':
                     print("[加载] ✅ 页面实际上加载成功，只是状态报告为失败")
                 else:
                     print(f"[加载] ❌ 页面加载失败，JavaScript执行结果: {result}")
-            
+
             self.runJavaScript(test_script, on_js_result)
 
     def on_feature_permission_requested(self, securityOrigin, feature):
@@ -125,6 +125,25 @@ class ConsoleWebEnginePage(QWebEnginePage):
                     signal_manager.map_zoom_changed.emit(zoom_level)
             except Exception as e:
                 print(f"[地图缩放] 解析缩放级别失败: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # 处理地图右键点击消息
+        if message.startswith('右键点击:'):
+            try:
+                parts = message[len('右键点击:'):].split(',')
+                lat = float(parts[0].strip())
+                lon = float(parts[1].strip())
+                print(f"[地图右键] 捕获到右键点击: {lat}, {lon}")
+                # 使用传入的信号管理器或全局信号管理器
+                if self.signal_manager:
+                    print("[地图右键] 使用实例信号管理器发送信号")
+                    self.signal_manager.map_right_click.emit(lat, lon)
+                else:
+                    print("[地图右键] 使用全局信号管理器发送信号")
+                    signal_manager.map_right_click.emit(lat, lon)
+            except Exception as e:
+                print(f"[地图右键] 解析右键点击位置失败: {e}")
                 import traceback
                 traceback.print_exc()
 

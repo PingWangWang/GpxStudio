@@ -88,15 +88,43 @@ class MapManager:
                 # OSM数据格式
                 return f"{index}. {loc.address}"
 
-        # 计算所有搜索结果的中心点
-        center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
-        center_lon = sum(get_lon(loc) for loc in locations) / len(locations)
-
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
-        # 创建以搜索结果中心为中心的基础地图
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_source=map_source)
+        # 根据搜索结果数量决定缩放策略
+        if len(locations) == 1:
+            # 单个地址：使用智能缩放级别
+            first_location = locations[0]
+            if isinstance(first_location, dict):
+                level = first_location.get('level', None)
+                type_info = first_location.get('type', None)
+                radius = first_location.get('radius', None)
+                center_lat = first_location.get('lat')
+                center_lon = first_location.get('lon')
+            else:
+                # OSM数据格式
+                level = getattr(first_location, 'level', None) if hasattr(first_location, 'level') else None
+                type_info = getattr(first_location, 'type', None) if hasattr(first_location, 'type') else None
+                radius = None
+                center_lat = first_location.latitude
+                center_lon = first_location.longitude
+
+            # 使用智能缩放级别计算
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info, radius)
+            # 保存缩放级别
+            self.data_manager.last_map_zoom_level = zoom_level
+
+            # 创建基础地图，使用智能缩放级别
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_source=map_source)
+        else:
+            # 多个地址：计算中心点，稍后使用fit_bounds自动适应
+            center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
+            center_lon = sum(get_lon(loc) for loc in locations) / len(locations)
+
+            # 创建基础地图，使用默认缩放级别（稍后会被fit_bounds覆盖）
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_source=map_source)
+            # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
+            self.data_manager.last_map_zoom_level = None
 
         # 为每个搜索结果添加标记，统一使用灰色图标（尚未选中）
         for i, location in enumerate(locations):
@@ -113,14 +141,24 @@ class MapManager:
         if self.data_manager.route_points:
             MapRenderer.add_route(m, self.data_manager.route_points)
 
+        # 多个地址时，自动适应所有搜索结果
+        if len(locations) > 1:
+            all_search_coords = [(get_lat(loc), get_lon(loc)) for loc in locations]
+            MapRenderer.fit_bounds(m, all_search_coords)
+
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
         self.map_view.setUrl(url)
 
-    def update_map_preview(self):
-        """更新地图预览，根据当前选中的点和搜索结果更新地图显示"""
+    def update_map_preview(self, auto_fit=False, keep_zoom=False):
+        """更新地图预览，根据当前选中的点和搜索结果更新地图显示
+
+        参数:
+            auto_fit: 是否自动调整地图以适应所有点（默认False）
+            keep_zoom: 是否保持上次的缩放级别（默认False）
+        """
         # 默认地图中心（北京）
         center_lat, center_lon = 39.9042, 116.4074
         center_level = None  # 中心点精度级别
@@ -140,14 +178,54 @@ class MapManager:
         elif self.data_manager.waypoints_coords:
             center_lat, center_lon = self.data_manager.waypoints_coords[0]
 
-        # 根据中心点的精度级别和类型计算缩放级别
-        zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
+        # 确定缩放级别
+        if keep_zoom and self.data_manager.last_map_zoom_level is not None:
+            # 使用上次保存的缩放级别
+            calculated_zoom_level = self.data_manager.last_map_zoom_level
+        else:
+            # 根据中心点的精度级别和类型计算缩放级别
+            calculated_zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
+            # 保存缩放级别
+            self.data_manager.last_map_zoom_level = calculated_zoom_level
 
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
         # 创建基础地图
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_source=map_source)
+        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=calculated_zoom_level, map_source=map_source)
+
+        # 添加已选择的点（起点、终点、途径点）
+        self._add_selected_points_to_map(m)
+
+        # 添加搜索结果
+        self._add_search_results_to_map(m)
+
+        # 如果需要自动适应所有点，调整地图边界
+        if auto_fit:
+            all_coords = self._get_all_selected_coords()
+            if len(all_coords) >= 2:
+                MapRenderer.fit_bounds(m, all_coords)
+                # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
+                self.data_manager.last_map_zoom_level = None
+
+        # 保存地图并获取URL
+        url = MapRenderer.save_and_get_url(m)
+
+        # 在地图视图中加载地图
+        self.map_view.setUrl(url)
+
+    def update_map_preview_simple(self, center_coords: Tuple[float, float], zoom_level: int = 13):
+        """简单更新地图预览，不改变缩放级别
+
+        参数:
+            center_coords: 地图中心坐标 (纬度, 经度)
+            zoom_level: 缩放级别（默认13）
+        """
+        # 获取当前配置的地图数据源
+        map_source = map_config.get_map_source()
+
+        # 创建基础地图，使用指定的缩放级别
+        m = MapRenderer.create_base_map([center_coords[0], center_coords[1]], zoom_start=zoom_level, map_source=map_source)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
@@ -160,6 +238,20 @@ class MapManager:
 
         # 在地图视图中加载地图
         self.map_view.setUrl(url)
+
+    def _get_all_selected_coords(self):
+        """获取所有已选择的坐标点
+
+        返回:
+            list: 所有坐标点的列表 [(lat, lon), ...]
+        """
+        coords = []
+        if self.data_manager.start_coords:
+            coords.append(self.data_manager.start_coords)
+        coords.extend(self.data_manager.waypoints_coords)
+        if self.data_manager.end_coords:
+            coords.append(self.data_manager.end_coords)
+        return coords
 
     def preview_search_result(self, coords: Tuple[float, float], name: str, level: Optional[str] = None, type_info: Optional[str] = None, radius: Optional[float] = None):
         """

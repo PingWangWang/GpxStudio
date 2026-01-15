@@ -63,6 +63,8 @@ class PanelFactory:
         # 地址显示框，使用QLineEdit实现省略号功能
         address_line_edit = QLineEdit()
         address_line_edit.setReadOnly(True)
+        # 设置文本对齐方式为左对齐
+        address_line_edit.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         # 设置省略号模式（右侧省略）
         address_line_edit.setPlaceholderText("未选择地址")
         # 使用PyQt5的CSS样式
@@ -72,6 +74,7 @@ class PanelFactory:
                 color: #000000;
                 border: 1px solid #cccccc;
                 padding: 5px 10px;
+                font-size: 9pt;
             }
         """)
         # 设置固定高度确保文本不会换行

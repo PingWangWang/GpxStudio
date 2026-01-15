@@ -17,39 +17,59 @@ class ScalePanel(QWidget):
 
     def setup_ui(self):
         """设置UI"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(2)
+        # 使用水平布局，更紧凑
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(15)
 
-        # 标题
-        title_label = QLabel("地图缩放:")
-        title_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
-        title_label.setToolTip("显示当前地图的缩放级别和比例尺信息")
-        layout.addWidget(title_label)
+        # 缩放级别显示（带图标）
+        zoom_container = QHBoxLayout()
+        zoom_container.setSpacing(5)
 
-        # 缩放级别显示
+        zoom_icon = QLabel("🔍")
+        zoom_icon.setStyleSheet("font-size: 9pt;")
+        zoom_container.addWidget(zoom_icon)
+
         self.zoom_label = QLabel("级别: -")
-        self.zoom_label.setStyleSheet("color: #666666; font-size: 9pt;")
+        self.zoom_label.setStyleSheet("color: #333333; font-size: 9pt; font-weight: bold;")
         self.zoom_label.setToolTip("地图缩放级别：数字越大，地图显示越详细\n范围：3-18（3为国家级，18为建筑级）")
-        self.zoom_label.setWordWrap(True)
-        layout.addWidget(self.zoom_label)
+        zoom_container.addWidget(self.zoom_label)
 
-        # 比例尺显示
+        layout.addLayout(zoom_container)
+
+        # 分隔符
+        separator = QLabel("|")
+        separator.setStyleSheet("color: #cccccc; font-size: 9pt;")
+        layout.addWidget(separator)
+
+        # 比例尺显示（带图标）
+        scale_container = QHBoxLayout()
+        scale_container.setSpacing(5)
+
+        scale_icon = QLabel("📏")
+        scale_icon.setStyleSheet("font-size: 9pt;")
+        scale_container.addWidget(scale_icon)
+
         self.scale_label = QLabel("比例: -")
         self.scale_label.setStyleSheet("color: #666666; font-size: 9pt;")
-        self.scale_label.setToolTip("地图比例尺：表示地图上的距离与实际距离的比值\n例如 1:50,000 表示地图上1厘米代表实际50,000厘米(500米)")
-        self.scale_label.setWordWrap(True)
-        layout.addWidget(self.scale_label)
+        self.scale_label.setToolTip("地图比例尺：表示地图上的距离与实际距离的比值")
+        scale_container.addWidget(self.scale_label)
 
-        # 设置面板样式
+        layout.addLayout(scale_container)
+
+        layout.addStretch()  # 添加弹性空间
+
+        # 设置面板样式 - 更现代化的设计
         self.setStyleSheet("""
             ScalePanel {
-                background-color: #f9f9f9;
-                border: 1px solid #dddddd;
-                border-radius: 3px;
-                max-height: 60px;
+                background-color: #f5f7fa;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
             }
         """)
+
+        # 设置固定高度，避免布局跳变
+        self.setFixedHeight(40)
 
     def update_zoom(self, zoom_level: int):
         """

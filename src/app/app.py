@@ -34,6 +34,7 @@ from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
 from ui.dialogs.map_config_dialog import MapConfigDialog
 from ui.dialogs.about_dialog import AboutDialog
+from ui.dialogs.map_context_menu import MapContextMenu
 from ui.layout.layout_manager import LayoutManager
 
 # 导入常量
@@ -168,6 +169,13 @@ class GpxStudio(QMainWindow):
         """初始化用户界面"""
         print("开始初始化UI")
         self.init_ui()
+
+        # 初始化地图右键菜单
+        self.map_context_menu = MapContextMenu(self)
+        self.map_context_menu.set_as_start.connect(self._on_context_menu_set_start)
+        self.map_context_menu.add_as_waypoint.connect(self._on_context_menu_add_waypoint)
+        self.map_context_menu.set_as_end.connect(self._on_context_menu_set_end)
+
         print("UI初始化完成")
 
     def _init_logging(self):
@@ -291,6 +299,7 @@ class GpxStudio(QMainWindow):
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
         self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
+        self.signal_manager.map_right_click.connect(self._on_map_right_click)
 
     def _connect_task_manager_signals(self):
         """连接任务管理器信号"""
@@ -480,12 +489,6 @@ class GpxStudio(QMainWindow):
         """)
         layout.addWidget(self.search_results_list, 1)  # 设置伸展因子，占据更多空间
 
-        # 清空按钮
-        clear_button = QPushButton("清空搜索结果")
-        clear_button.clicked.connect(self.on_clear_search_clicked)
-        clear_button.setStyleSheet(UIStyles.CLEAR_BUTTON)
-        layout.addWidget(clear_button)
-
         # 任务进度面板
         from ui.panels.task_progress_panel import TaskInfoPanel
         self.task_progress_panel = TaskInfoPanel()
@@ -495,10 +498,6 @@ class GpxStudio(QMainWindow):
         # 地图缩放比例尺显示面板
         self.scale_panel = ScalePanel()
         layout.addWidget(self.scale_panel)
-
-        # 进度条
-        self.progress_bar = PanelFactory.create_progress_bar()
-        layout.addWidget(self.progress_bar)
 
         return middle_widget
 
@@ -589,23 +588,22 @@ class GpxStudio(QMainWindow):
 
     def _set_progress_indeterminate(self):
         """设置进度条为不确定模式"""
-        self.progress_bar.setMaximum(0)
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setValue(0)
+        # 使用任务进度面板的进度条
+        self.task_progress_panel.progress_widget.progress_bar.setRange(0, 0)
         QApplication.processEvents()
 
     def _set_progress_complete(self):
         """设置进度条为完成状态"""
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setValue(100)
+        # 使用任务进度面板的进度条
+        self.task_progress_panel.progress_widget.progress_bar.setRange(0, 100)
+        self.task_progress_panel.progress_widget.progress_bar.setValue(100)
         QApplication.processEvents()
 
     def _set_progress(self, value: int):
         """设置进度条值"""
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setValue(value)
+        # 使用任务进度面板的进度条
+        self.task_progress_panel.progress_widget.progress_bar.setRange(0, 100)
+        self.task_progress_panel.progress_widget.progress_bar.setValue(value)
         QApplication.processEvents()
 
     def _clear_results(self):
@@ -693,16 +691,19 @@ class GpxStudio(QMainWindow):
         if location_type == "start":
             if hasattr(self, 'start_label'):
                 self.start_label.setText(name)
+                self.start_label.setCursorPosition(0)  # 将光标移到开头
                 self.start_label.setProperty('userData', data)
         elif location_type == "end":
             if hasattr(self, 'end_label'):
                 self.end_label.setText(name)
+                self.end_label.setCursorPosition(0)  # 将光标移到开头
                 self.end_label.setProperty('userData', data)
 
     def _update_start_from_search(self, name: str, data: tuple):
         """从搜索结果更新起点"""
         if hasattr(self, 'start_label'):
             self.start_label.setText(name)
+            self.start_label.setCursorPosition(0)  # 将光标移到开头
             self.start_label.setProperty('userData', data)
         if hasattr(self, 'start_list'):
             self.start_list.clear()
@@ -713,6 +714,7 @@ class GpxStudio(QMainWindow):
         """从搜索结果更新终点"""
         if hasattr(self, 'end_label'):
             self.end_label.setText(name)
+            self.end_label.setCursorPosition(0)  # 将光标移到开头
             self.end_label.setProperty('userData', data)
         if hasattr(self, 'end_list'):
             self.end_list.clear()
@@ -900,6 +902,213 @@ class GpxStudio(QMainWindow):
         self.logger.warning(f"浏览器定位失败: {error_msg}")
         self.location_manager.handle_browser_location_error(error_msg)
 
+    def _on_map_right_click(self, lat: float, lon: float):
+        """处理地图右键点击事件"""
+        self.logger.info(f"[地图右键] 收到右键点击信号: {lat}, {lon}")
+
+        # 使用地理编码服务获取位置信息
+        self.logger.debug("[地图右键] 开始反向地理编码...")
+
+        # 创建后台任务获取位置信息
+        def get_location_info(progress_callback, log_callback, cancel_check):
+            """后台任务：获取位置信息"""
+            try:
+                log_callback("INFO", "开始获取位置信息")
+
+                from services.config.map_config import map_config
+                map_source = map_config.get_map_source()
+
+                # 获取对应的地理编码服务
+                geocoding_service = self.service_manager.get_geocoding_service(map_source)
+
+                if map_source == "gaode":
+                    # 使用高德地理编码服务
+                    log_callback("DEBUG", "使用高德地图反向地理编码")
+                    result = geocoding_service.reverse_geocode(lat, lon)
+                    if result:
+                        # 高德地图返回格式：{'city': '...', 'full_address': '...', 'level': '...', 'type': '...'}
+                        name = result.get('full_address', '未知位置')
+                        type_info = result.get('type', '')
+                        level = result.get('level', None)
+
+                        log_callback("INFO", f"获取位置信息成功: {name}, level: {level}, type: {type_info}")
+                        return {
+                            'success': True,
+                            'name': name,
+                            'lat': lat,
+                            'lon': lon,
+                            'type': type_info,
+                            'level': level
+                        }
+                else:
+                    # 使用OSM地理编码服务
+                    log_callback("DEBUG", "使用OSM反向地理编码")
+                    result = geocoding_service.reverse_geocode(lat, lon)
+                    if result:
+                        # OSM返回格式：{'name': '...', 'address': '...', 'type': '...'}
+                        name = result.get('name', '未知位置')
+                        type_info = result.get('type', '')
+
+                        log_callback("INFO", f"获取位置信息成功: {name}")
+                        return {
+                            'success': True,
+                            'name': name,
+                            'lat': lat,
+                            'lon': lon,
+                            'type': type_info,
+                            'level': None
+                        }
+
+                # 如果获取失败，返回基本信息
+                log_callback("WARNING", "获取位置信息失败，使用坐标格式")
+                return {
+                    'success': False,
+                    'name': f'位置 ({lat:.6f}, {lon:.6f})',
+                    'lat': lat,
+                    'lon': lon,
+                    'type': '',
+                    'level': None
+                }
+
+            except Exception as e:
+                log_callback("ERROR", f"获取位置信息失败: {e}")
+                return {
+                    'success': False,
+                    'name': f'位置 ({lat:.6f}, {lon:.6f})',
+                    'lat': lat,
+                    'lon': lon,
+                    'type': '',
+                    'level': None
+                }
+
+        # 提交后台任务
+        task_id = self.task_manager.submit_task(
+            task_type='context_menu',
+            task_func=get_location_info
+        )
+
+        # 保存任务ID，用于在任务完成时识别
+        self._context_menu_task_id = task_id
+
+    def _show_context_menu(self, location_info: dict):
+        """显示右键菜单"""
+        self.logger.debug(f"[地图右键] 显示右键菜单: {location_info}")
+
+        # 保存位置信息，供右键菜单处理方法使用
+        self._context_menu_location_info = location_info
+
+        # 获取鼠标当前位置
+        from PyQt5.QtGui import QCursor
+        cursor_pos = QCursor.pos()
+
+        # 显示菜单
+        self.map_context_menu.show_menu(
+            cursor_pos,
+            location_info['name'],
+            location_info['lat'],
+            location_info['lon'],
+            location_info.get('type', '')
+        )
+
+    def _on_context_menu_set_start(self, name: str, lat: float, lon: float):
+        """右键菜单：设为起点"""
+        self.logger.info(f"[右键菜单] 设为起点: {name} ({lat}, {lon})")
+
+        # 获取位置信息（包括level和type）
+        location_info = getattr(self, '_context_menu_location_info', {})
+        level = location_info.get('level', None)
+        type_info = location_info.get('type', None)
+
+        # 使用DataManager的方法保存起点信息（包括名称）
+        self.data_manager.set_start_location((lat, lon), name)
+
+        # 更新UI显示
+        data = (name, lat, lon, None, None, None)
+        self._update_start_from_search(name, data)
+
+        # 检查是否有搜索结果需要清除
+        has_search_results = len(self.data_manager.search_results) > 0
+
+        # 清除搜索结果（数据和UI）
+        self.search_manager.clear_search_results()
+
+        # 智能更新地图：
+        all_coords = self.map_manager._get_all_selected_coords()
+        if len(all_coords) >= 2:
+            # 多点：自动适应所有点
+            self.map_manager.update_map_preview(auto_fit=True)
+        else:
+            # 单点：根据地址级别智能缩放
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
+            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
+            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+
+    def _on_context_menu_add_waypoint(self, name: str, lat: float, lon: float):
+        """右键菜单：添加途径点"""
+        self.logger.info(f"[右键菜单] 添加途径点: {name} ({lat}, {lon})")
+
+        # 获取位置信息（包括level和type）
+        location_info = getattr(self, '_context_menu_location_info', {})
+        level = location_info.get('level', None)
+        type_info = location_info.get('type', None)
+
+        # 使用DataManager的方法添加途径点（包括名称）
+        self.data_manager.add_waypoint((lat, lon), name)
+
+        # 更新UI显示
+        data = (name, lat, lon, None, None, None)
+        self._add_waypoint_to_list(name, data, None)
+
+        # 检查是否有搜索结果需要清除
+        has_search_results = len(self.data_manager.search_results) > 0
+
+        # 清除搜索结果（数据和UI）
+        self.search_manager.clear_search_results()
+
+        # 智能更新地图：
+        all_coords = self.map_manager._get_all_selected_coords()
+        if len(all_coords) >= 2:
+            # 多点：自动适应所有点
+            self.map_manager.update_map_preview(auto_fit=True)
+        else:
+            # 单点：根据地址级别智能缩放
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
+            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
+            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+
+    def _on_context_menu_set_end(self, name: str, lat: float, lon: float):
+        """右键菜单：设为终点"""
+        self.logger.info(f"[右键菜单] 设为终点: {name} ({lat}, {lon})")
+
+        # 获取位置信息（包括level和type）
+        location_info = getattr(self, '_context_menu_location_info', {})
+        level = location_info.get('level', None)
+        type_info = location_info.get('type', None)
+
+        # 使用DataManager的方法保存终点信息（包括名称）
+        self.data_manager.set_end_location((lat, lon), name)
+
+        # 更新UI显示
+        data = (name, lat, lon, None, None, None)
+        self._update_end_from_search(name, data)
+
+        # 检查是否有搜索结果需要清除
+        has_search_results = len(self.data_manager.search_results) > 0
+
+        # 清除搜索结果（数据和UI）
+        self.search_manager.clear_search_results()
+
+        # 智能更新地图：
+        all_coords = self.map_manager._get_all_selected_coords()
+        if len(all_coords) >= 2:
+            # 多点：自动适应所有点
+            self.map_manager.update_map_preview(auto_fit=True)
+        else:
+            # 单点：根据地址级别智能缩放
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
+            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
+            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+
     # ==================== 公共方法（由PanelFactory调用）====================
 
     def search_location(self, location_type: str):
@@ -1041,6 +1250,10 @@ class GpxStudio(QMainWindow):
         elif task_id.startswith('map_render_'):
             self.route_manager.on_map_render_task_completed(task_id, result)
             self.task_progress_panel.task_completed("地图渲染完成")
+        elif task_id.startswith('context_menu_'):
+            # 处理右键菜单任务完成
+            self._show_context_menu(result)
+            self.task_progress_panel.task_completed("位置信息获取完成")
         else:
             self.task_progress_panel.task_completed("任务完成")
 
@@ -1061,6 +1274,9 @@ class GpxStudio(QMainWindow):
             self.route_manager.on_route_task_failed(task_id, error)
         elif task_id.startswith('map_render_'):
             self.route_manager.on_map_render_task_failed(task_id, error)
+        elif task_id.startswith('context_menu_'):
+            # 处理右键菜单任务失败
+            self.logger.error(f"[地图右键] 任务失败: {error}")
 
         # 在任务进度面板显示失败
         self.task_progress_panel.task_failed(error)

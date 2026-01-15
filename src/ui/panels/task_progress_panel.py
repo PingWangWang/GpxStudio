@@ -48,21 +48,28 @@ class TaskProgressWidget(QWidget):
 
         # 任务图标和名称
         self.task_icon = QLabel("⏳")
-        self.task_icon.setStyleSheet("font-size: 16px;")
+        self.task_icon.setStyleSheet("font-size: 9pt;")
+        self.task_icon.setFixedWidth(30)  # 固定宽度，避免图标变化导致布局跳变
         info_layout.addWidget(self.task_icon)
 
         self.task_label = QLabel("准备就绪")
-        self.task_label.setStyleSheet("font-weight: bold; color: #333333;")
+        self.task_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
         info_layout.addWidget(self.task_label)
 
         info_layout.addStretch()
 
         # 执行时间
         self.time_label = QLabel("00:00")
-        self.time_label.setStyleSheet("color: #666666; font-family: Consolas;")
+        self.time_label.setStyleSheet("color: #666666; font-family: Consolas; font-size: 9pt;")
+        self.time_label.setFixedWidth(50)  # 固定宽度，避免时间变化导致布局跳变
         info_layout.addWidget(self.time_label)
 
-        # 取消按钮
+        # 取消按钮 - 使用固定宽度的占位符，避免显示/隐藏导致布局跳变
+        cancel_container = QWidget()
+        cancel_container.setFixedWidth(30)  # 固定宽度
+        cancel_layout = QHBoxLayout(cancel_container)
+        cancel_layout.setContentsMargins(0, 0, 0, 0)
+
         self.cancel_button = QPushButton("✕")
         self.cancel_button.setFixedSize(24, 24)
         self.cancel_button.setStyleSheet("""
@@ -72,6 +79,7 @@ class TaskProgressWidget(QWidget):
                 border-radius: 3px;
                 font-weight: bold;
                 color: #666666;
+                font-size: 9pt;
             }
             QPushButton:hover {
                 background-color: #ff6b6b;
@@ -81,20 +89,23 @@ class TaskProgressWidget(QWidget):
         """)
         self.cancel_button.clicked.connect(self._on_cancel_clicked)
         self.cancel_button.setVisible(False)
-        info_layout.addWidget(self.cancel_button)
+        cancel_layout.addWidget(self.cancel_button)
+
+        info_layout.addWidget(cancel_container)
 
         layout.addLayout(info_layout)
 
-        # 进度条
+        # 进度条 - 始终保持固定高度，避免显示/隐藏导致布局跳变
         self.progress_bar = QProgressBar()
         self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFixedHeight(22)  # 固定高度
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: 1px solid #cccccc;
                 border-radius: 3px;
                 text-align: center;
                 background-color: #f5f5f5;
-                height: 20px;
+                font-size: 9pt;
             }
             QProgressBar::chunk {
                 background-color: #4A90E2;
@@ -103,17 +114,17 @@ class TaskProgressWidget(QWidget):
         """)
         layout.addWidget(self.progress_bar)
 
-        # 状态消息
+        # 状态消息 - 固定高度，避免内容变化导致布局跳变
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("color: #666666; font-size: 12px;")
+        self.status_label.setFixedHeight(40)  # 固定高度，可容纳2行文本
+        self.status_label.setStyleSheet("color: #666666; font-size: 9pt;")
         layout.addWidget(self.status_label)
 
-        # 详细信息展示区
+        # 详细信息展示区 - 固定高度
         self.detail_text = QTextEdit()
         self.detail_text.setReadOnly(True)
-        self.detail_text.setMinimumHeight(100)
-        self.detail_text.setMaximumHeight(100)
+        self.detail_text.setFixedHeight(100)  # 使用固定高度而不是最小/最大高度
         self.detail_text.setFont(QFont("Consolas", 9))
         self.detail_text.setStyleSheet("""
             QTextEdit {
@@ -122,14 +133,15 @@ class TaskProgressWidget(QWidget):
                 border-radius: 3px;
                 padding: 5px;
                 color: #333333;
+                font-size: 9pt;
             }
         """)
         layout.addWidget(self.detail_text)
 
-        # 初始状态：进度条隐藏，详细信息展示区始终可见
-        self.progress_bar.setVisible(False)
-        # detail_text始终可见，避免高度跳变
-        self.detail_text.setVisible(True)
+        # 初始状态：进度条设置为0%而不是隐藏，避免布局跳变
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("")  # 空白格式，不显示百分比
 
     def start_task(self, task_id: str, task_type: str, task_name: str):
         """开始新任务"""
@@ -143,12 +155,12 @@ class TaskProgressWidget(QWidget):
         self.status_label.setText("正在初始化...")
         self.time_label.setText("00:00")
 
-        # 显示进度条和取消按钮，详细信息区始终可见
-        self.progress_bar.setVisible(True)
+        # 显示取消按钮，进度条始终可见
         self.cancel_button.setVisible(True)
 
         # 设置进度条为不确定模式
         self.progress_bar.setRange(0, 0)
+        self.progress_bar.setFormat("%p%")  # 显示百分比
 
         # 清空详细信息
         self.detail_text.clear()
@@ -223,15 +235,15 @@ class TaskProgressWidget(QWidget):
 
         self.task_icon.setText("⏳")
         self.task_label.setText("准备就绪")
-        self.task_label.setStyleSheet("font-weight: bold; color: #333333;")
+        self.task_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
         self.status_label.setText("")
         self.time_label.setText("00:00")
 
-        # 隐藏进度条和取消按钮，保持详细信息区可见
-        self.progress_bar.setVisible(False)
+        # 隐藏取消按钮，进度条保持可见但设置为0%
         self.cancel_button.setVisible(False)
-        # detail_text保持可见，不隐藏
-        # self.detail_text.setVisible(False)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("")  # 空白格式，不显示百分比
 
         # 停止计时器
         self.timer.stop()
@@ -304,12 +316,11 @@ class TaskInfoPanel(QFrame):
 
     def setup_ui(self):
         """设置UI"""
-        self.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        # 去除边框样式，使用简单的背景色
         self.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 5px;
+                border: none;
             }
         """)
 
@@ -321,7 +332,7 @@ class TaskInfoPanel(QFrame):
 
         # 标题
         title_label = QLabel("任务执行状态")
-        title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #333333;")
+        title_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #333333;")
         layout.addWidget(title_label)
 
         # 分隔线

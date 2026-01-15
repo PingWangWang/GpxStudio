@@ -8,7 +8,7 @@ from typing import Optional, List, Tuple
 
 class DataManager:
     """数据状态管理器
-    
+
     负责管理应用的所有数据状态，包括：
     - 起点、终点、途径点信息
     - 路线数据和预估时间
@@ -51,11 +51,14 @@ class DataManager:
         self.last_selected_type: Optional[str] = None  # 最后选中的类型
         self.last_selected_from_search: bool = False  # 是否从搜索结果中选中
 
+        # 地图状态
+        self.last_map_zoom_level: Optional[int] = None  # 最后一次地图更新的缩放级别
+
         print("数据状态初始化完成")
 
     def set_start_location(self, coords: Tuple[float, float], name: str, level: Optional[str] = None):
         """设置起点
-        
+
         参数:
             coords: 起点坐标 (纬度, 经度)
             name: 起点名称
@@ -68,7 +71,7 @@ class DataManager:
 
     def set_end_location(self, coords: Tuple[float, float], name: str, level: Optional[str] = None):
         """设置终点
-        
+
         参数:
             coords: 终点坐标 (纬度, 经度)
             name: 终点名称
@@ -81,7 +84,7 @@ class DataManager:
 
     def add_waypoint(self, coords: Tuple[float, float], name: str):
         """添加途径点
-        
+
         参数:
             coords: 途径点坐标 (纬度, 经度)
             name: 途径点名称
@@ -92,7 +95,7 @@ class DataManager:
 
     def update_waypoint(self, index: int, coords: Tuple[float, float], name: str):
         """更新途径点
-        
+
         参数:
             index: 途径点索引
             coords: 新的途径点坐标 (纬度, 经度)
@@ -104,7 +107,7 @@ class DataManager:
 
     def remove_waypoint(self, index: int):
         """删除途径点
-        
+
         参数:
             index: 要删除的途径点索引
         """
@@ -119,7 +122,7 @@ class DataManager:
 
     def set_route(self, route_points: List[Tuple[float, float]], duration_seconds: int = 0):
         """设置路线
-        
+
         参数:
             route_points: 路线坐标点列表
             duration_seconds: 预估路线耗时（秒，可选）
@@ -129,7 +132,7 @@ class DataManager:
 
     def set_search_results(self, results: List, searching_for: str):
         """设置搜索结果
-        
+
         参数:
             results: 搜索结果列表
             searching_for: 搜索的类型（起点/终点/途径点）
@@ -146,7 +149,7 @@ class DataManager:
     def set_selected_search_result(self, coords: Tuple[float, float], level: Optional[str] = None,
                                    type_info: Optional[str] = None):
         """设置选中的搜索结果
-        
+
         参数:
             coords: 选中的搜索结果坐标 (纬度, 经度)
             level: 选中结果的精度级别（可选）
@@ -158,7 +161,7 @@ class DataManager:
     def _update_last_selected(self, coords: Tuple[float, float], level: Optional[str],
                              type_info: Optional[str], from_search: bool):
         """更新最后选中的位置信息（内部方法）
-        
+
         参数:
             coords: 选中的坐标 (纬度, 经度)
             level: 精度级别（可选）
@@ -176,26 +179,26 @@ class DataManager:
         self.start_coords = None
         self.start_name = None
         self.start_level = None
-        
+
         # 重置终点信息
         self.end_coords = None
         self.end_name = None
         self.end_level = None
-        
+
         # 重置途径点信息
         self.waypoints_coords = []
         self.waypoints_names = []
-        
+
         # 重置路线数据
         self.current_route = None
         self.route_points = []
         self.estimated_duration_seconds = 0
-        
+
         # 重置搜索相关
         self.search_results = []
         self.searching_for = None
         self.selected_search_result_coords = None
-        
+
         # 重置最后选中信息
         self.last_selected_coords = None
         self.last_selected_level = None
@@ -204,7 +207,7 @@ class DataManager:
 
     def get_all_points(self) -> List[Tuple[float, float]]:
         """获取所有点（起点+途径点+终点）
-        
+
         返回:
             包含所有点坐标的列表，顺序为：起点 -> 途径点 -> 终点
         """
@@ -218,7 +221,7 @@ class DataManager:
 
     def has_route(self) -> bool:
         """检查是否有路线数据
-        
+
         返回:
             如果有路线数据返回True，否则返回False
         """
@@ -226,7 +229,7 @@ class DataManager:
 
     def has_start_end(self) -> bool:
         """检查是否同时设置了起点和终点
-        
+
         返回:
             如果同时设置了起点和终点返回True，否则返回False
         """
