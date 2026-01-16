@@ -90,9 +90,28 @@ def main():
         print(f"[GPXStudio] 清理之前的构建目录: {BUILD_DIR}")
         shutil.rmtree(BUILD_DIR)
 
-    if os.path.exists(DIST_FILE):
-        print(f"[GPXStudio] 删除之前的可执行文件: {DIST_FILE}")
-        os.remove(DIST_FILE)
+    # 清理dist目录中的旧文件，但保留GPXStudioData数据目录
+    dist_dir = os.path.join(PROJECT_ROOT, "dist")
+    if os.path.exists(dist_dir):
+        print(f"[GPXStudio] 清理dist目录中的旧文件（保留GPXStudioData）...")
+        for item in os.listdir(dist_dir):
+            item_path = os.path.join(dist_dir, item)
+            # 跳过GPXStudioData目录
+            if item == "GPXStudioData":
+                print(f"[GPXStudio] 保留数据目录: {item_path}")
+                continue
+            # 删除其他文件和目录
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                    print(f"[GPXStudio] 删除文件: {item_path}")
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                    print(f"[GPXStudio] 删除目录: {item_path}")
+            except Exception as e:
+                print(f"[GPXStudio] 警告：无法删除 {item_path}: {e}")
+    else:
+        print(f"[GPXStudio] dist目录不存在，将自动创建")
 
     # 清理和重新创建虚拟环境
     print(f"[GPXStudio] 清理和重新创建虚拟环境...")
