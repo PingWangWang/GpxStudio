@@ -6,7 +6,8 @@ GPX Studio 主应用窗口 (重构版)
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QFileDialog,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
-                             QApplication, QDialog, QTimeEdit, QMenuBar, QMenu, QAction)
+                             QApplication, QDialog, QTimeEdit, QMenuBar, QMenu, QAction,
+                             QComboBox, QLineEdit)
 from PyQt5.QtCore import Qt, QTimer, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
@@ -256,6 +257,7 @@ class GpxStudio(QMainWindow):
             # 搜索结果显示
             'show_search_results': self._show_search_results,
             'show_search_results_on_map': self._show_search_results_on_map,
+            'show_search_results_dropdown': self._show_search_results_dropdown,  # 新增：显示搜索结果下拉列表
 
             # 位置显示
             'update_location_display': self._update_location_display,
@@ -352,45 +354,581 @@ class GpxStudio(QMainWindow):
 
     def _create_menu_bar(self):
         """创建菜单栏"""
-        menubar = self.menuBar()
-
-        # 帮助菜单
-        help_menu = menubar.addMenu("帮助(&H)")
-
-        # 关于动作
-        about_action = QAction("关于 GPX Studio(&A)", self)
-        about_action.setShortcut("F1")
-        about_action.triggered.connect(self.show_about_dialog)
-        help_menu.addAction(about_action)
+        # 暂时不创建任何菜单，为重新设计界面做准备
+        pass
 
     def init_ui(self):
-        """初始化用户界面"""
+        """初始化用户界面 - 简化版，只显示地图"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        main_layout = QHBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # 创建分割器
-        splitter = QSplitter(Qt.Horizontal)
-
-        # 创建三个主面板
-        left_panel = self.create_left_panel()
-        self.middle_panel = self.create_middle_panel()
-        right_panel = self.create_right_panel()
-
-        splitter.addWidget(left_panel)
-        splitter.addWidget(self.middle_panel)
-        splitter.addWidget(right_panel)
-
-        # 使用布局管理器设置布局
-        LayoutManager.setup_layout(splitter)
-
-        main_layout.addWidget(splitter)
+        # 只创建地图面板，铺满整个界面
+        map_panel = self.create_map_panel()
+        main_layout.addWidget(map_panel)
 
         # 延迟加载初始地图
         QTimer.singleShot(MAP_LOAD_DELAY_MS, self._show_initial_map)
 
-    def create_left_panel(self):
+    def create_map_panel(self):
+        """创建地图面板（铺满整个界面）"""
+        map_widget = QWidget()
+        layout = QVBoxLayout(map_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 创建地图视图
+        self.map_view = QWebEngineView()
+        self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
+        self.web_page.set_geolocation_handler(self.geolocation_handler)
+        self.map_view.setPage(self.web_page)
+
+        # 设置User Agent
+        profile = QWebEngineProfile.defaultProfile()
+        profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+        # 创建一个容器来放置地图和浮动按钮
+        map_container = QWidget()
+        map_container_layout = QVBoxLayout(map_container)
+        map_container_layout.setContentsMargins(0, 0, 0, 0)
+        map_container_layout.setSpacing(0)
+        map_container_layout.addWidget(self.map_view)
+
+        # 获取项目根目录
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+        # 按钮样式（30x30，缩小为原来的一半）
+        button_style = """
+            QPushButton {
+                background-color: white;
+                border: 2px solid rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
+                padding: 0px;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background-color: #f4f4f4;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """
+
+        # 创建放大按钮（右下角）
+        self.zoom_in_button = QPushButton()
+        self.zoom_in_button.setToolTip("放大")
+        self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
+        zoom_in_icon_path = os.path.join(project_root, 'res', 'ZoomBig.png')
+        if os.path.exists(zoom_in_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.zoom_in_button.setIcon(QIcon(zoom_in_icon_path))
+            from PyQt5.QtCore import QSize
+            self.zoom_in_button.setIconSize(QSize(18, 18))  # 图标缩小
+        else:
+            self.zoom_in_button.setText("+")
+        self.zoom_in_button.setStyleSheet(button_style)
+        self.zoom_in_button.setParent(map_container)
+
+        # 创建缩小按钮（右下角，放大按钮下方）
+        self.zoom_out_button = QPushButton()
+        self.zoom_out_button.setToolTip("缩小")
+        self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
+        zoom_out_icon_path = os.path.join(project_root, 'res', 'ZoomSamll.png')
+        if os.path.exists(zoom_out_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.zoom_out_button.setIcon(QIcon(zoom_out_icon_path))
+            from PyQt5.QtCore import QSize
+            self.zoom_out_button.setIconSize(QSize(18, 18))  # 图标缩小
+        else:
+            self.zoom_out_button.setText("-")
+        self.zoom_out_button.setStyleSheet(button_style)
+        self.zoom_out_button.setParent(map_container)
+
+        # 创建定位按钮（右下角，缩小按钮下方）
+        self.locate_button = QPushButton()
+        self.locate_button.setToolTip("定位到当前位置")
+        self.locate_button.clicked.connect(self.on_locate_clicked)
+        location_icon_path = os.path.join(project_root, 'res', 'Location.png')
+        if os.path.exists(location_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.locate_button.setIcon(QIcon(location_icon_path))
+            from PyQt5.QtCore import QSize
+            self.locate_button.setIconSize(QSize(18, 18))  # 图标缩小
+        else:
+            self.locate_button.setText("📍")
+        self.locate_button.setStyleSheet(button_style)
+        self.locate_button.setParent(map_container)
+
+        # 创建比例尺信息标签（左下角）
+        self.scale_info_label = QLabel()
+        self.scale_info_label.setStyleSheet("""
+            QLabel {
+                background-color: rgba(255, 255, 255, 0.8);
+                border: 1px solid rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 12px;
+                color: #333333;
+            }
+        """)
+        self.scale_info_label.setText("缩放级别: 10")
+        self.scale_info_label.setParent(map_container)
+
+        # 创建搜索框容器（左上角）- 带统一背景
+        self.search_container = QWidget()
+        self.search_container.setParent(map_container)
+        # 设置统一的背景样式（参考高德地图）
+        self.search_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.15);
+            }
+        """)
+        search_layout = QHBoxLayout(self.search_container)
+        search_layout.setContentsMargins(8, 6, 8, 6)  # 内边距
+        search_layout.setSpacing(8)  # 控件间距
+
+        # 统一的控件高度
+        control_height = 36
+
+        # 搜索输入框
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("搜索地点...")
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #f5f5f5;
+                border: none;
+                border-radius: 4px;
+                padding: 0px 12px;
+                font-size: 13px;
+                min-width: 250px;
+                max-width: 250px;
+            }
+            QLineEdit:focus {
+                background-color: #ebebeb;
+            }
+        """)
+        self.search_input.setFixedHeight(control_height)
+        # 按回车键触发搜索
+        self.search_input.returnPressed.connect(self.on_search_button_clicked)
+        # 文本改变时的处理
+        self.search_input.textChanged.connect(self._on_search_input_text_changed)
+        # 获得焦点时显示搜索历史
+        self.search_input.focusInEvent = self._on_search_input_focus_in
+        # 失去焦点时隐藏搜索历史（延迟处理以允许点击历史项）
+        self.search_input.focusOutEvent = self._on_search_input_focus_out
+        search_layout.addWidget(self.search_input)
+
+        # 搜索按钮样式（方形按钮，无边框）
+        search_button_style = """
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """
+
+        # 搜索按钮
+        self.search_button = QPushButton()
+        self.search_button.setToolTip("搜索")
+        self.search_button.clicked.connect(self.on_search_button_clicked)
+        self.search_button.setFixedSize(control_height, control_height)
+        search_icon_path = os.path.join(project_root, 'res', 'Search.png')
+        if os.path.exists(search_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.search_button.setIcon(QIcon(search_icon_path))
+            from PyQt5.QtCore import QSize
+            self.search_button.setIconSize(QSize(20, 20))
+        else:
+            self.search_button.setText("🔍")
+        self.search_button.setStyleSheet(search_button_style)
+        search_layout.addWidget(self.search_button)
+
+        # 路线按钮
+        self.route_button = QPushButton()
+        self.route_button.setToolTip("路线")
+        self.route_button.clicked.connect(self.on_route_button_clicked)
+        self.route_button.setFixedSize(control_height, control_height)
+        route_icon_path = os.path.join(project_root, 'res', 'Route.png')
+        if os.path.exists(route_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.route_button.setIcon(QIcon(route_icon_path))
+            from PyQt5.QtCore import QSize
+            self.route_button.setIconSize(QSize(20, 20))
+        else:
+            self.route_button.setText("🗺️")
+        self.route_button.setStyleSheet(search_button_style)
+        search_layout.addWidget(self.route_button)
+
+        # 关闭按钮（初始隐藏，显示搜索结果时替换路线按钮）
+        self.cancel_button = QPushButton()
+        self.cancel_button.setToolTip("关闭")
+        self.cancel_button.clicked.connect(self.on_cancel_button_clicked)
+        self.cancel_button.setFixedSize(control_height, control_height)
+        cancel_icon_path = os.path.join(project_root, 'res', 'Cancel.png')
+        if os.path.exists(cancel_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.cancel_button.setIcon(QIcon(cancel_icon_path))
+            from PyQt5.QtCore import QSize
+            self.cancel_button.setIconSize(QSize(20, 20))
+        else:
+            self.cancel_button.setText("✕")
+        self.cancel_button.setStyleSheet(search_button_style)
+        search_layout.addWidget(self.cancel_button)
+        self.cancel_button.hide()  # 初始隐藏
+
+        self.scale_info_label.setParent(map_container)
+
+        # 监听窗口大小变化，调整按钮位置
+        map_container.resizeEvent = lambda event: self._update_button_positions(map_container)
+
+        layout.addWidget(map_container)
+
+        # 初始化必要的UI组件（用于后台逻辑，但不显示）
+        self._init_hidden_ui_components()
+
+        # 创建搜索历史下拉列表
+        from modules.search import SearchHistoryPopup, SearchResultsPopup
+        self.search_history_popup = SearchHistoryPopup(map_container)
+        self.search_history_popup.history_selected.connect(self._on_history_selected)
+        self.search_history_popup.hide()
+
+        # 创建搜索结果下拉列表
+        self.search_results_popup = SearchResultsPopup(map_container)
+        self.search_results_popup.result_selected.connect(self._on_result_selected)
+        self.search_results_popup.hide()
+
+        # 保存当前搜索文本（用于保存历史记录）
+        self.current_search_text = ""
+
+        return map_widget
+
+    def _update_button_positions(self, container):
+        """更新浮动按钮的位置"""
+        # 获取容器大小
+        width = container.width()
+        height = container.height()
+
+        # 右下角按钮位置（距离右边和底部各20px）
+        right_margin = 20
+        bottom_margin = 20
+        button_spacing = 5  # 按钮之间的间距（从10px减小到5px）
+
+        # 定位按钮（最下方）
+        locate_x = width - 30 - right_margin  # 按钮宽度改为30
+        locate_y = height - 30 - bottom_margin  # 按钮高度改为30
+        self.locate_button.move(locate_x, locate_y)
+        self.locate_button.raise_()
+
+        # 缩小按钮（定位按钮上方）
+        zoom_out_x = locate_x
+        zoom_out_y = locate_y - 30 - button_spacing  # 按钮高度改为30
+        self.zoom_out_button.move(zoom_out_x, zoom_out_y)
+        self.zoom_out_button.raise_()
+
+        # 放大按钮（缩小按钮上方）
+        zoom_in_x = locate_x
+        zoom_in_y = zoom_out_y - 30 - button_spacing  # 按钮高度改为30
+        self.zoom_in_button.move(zoom_in_x, zoom_in_y)
+        self.zoom_in_button.raise_()
+
+        # 比例尺信息标签（左下角）
+        left_margin = 20
+        self.scale_info_label.adjustSize()  # 自动调整大小
+        scale_x = left_margin
+        scale_y = height - self.scale_info_label.height() - bottom_margin
+        self.scale_info_label.move(scale_x, scale_y)
+        self.scale_info_label.raise_()
+
+        # 搜索框容器（左上角）
+        top_margin = 20
+        self.search_container.adjustSize()  # 自动调整大小
+        search_x = left_margin
+        search_y = top_margin
+        self.search_container.move(search_x, search_y)
+        self.search_container.raise_()
+
+    def on_zoom_in_clicked(self):
+        """放大按钮点击"""
+        # 通过JavaScript调用地图的放大方法
+        js_code = """
+        var mapElement = document.querySelector('.leaflet-container');
+        if (mapElement && mapElement._leaflet_map) {
+            var map = mapElement._leaflet_map;
+            map.zoomIn();
+            console.log('[缩放] 放大地图');
+        }
+        """
+        if self.map_view and self.map_view.page():
+            self.map_view.page().runJavaScript(js_code)
+
+    def on_zoom_out_clicked(self):
+        """缩小按钮点击"""
+        # 通过JavaScript调用地图的缩小方法
+        js_code = """
+        var mapElement = document.querySelector('.leaflet-container');
+        if (mapElement && mapElement._leaflet_map) {
+            var map = mapElement._leaflet_map;
+            map.zoomOut();
+            console.log('[缩放] 缩小地图');
+        }
+        """
+        if self.map_view and self.map_view.page():
+            self.map_view.page().runJavaScript(js_code)
+
+    def on_search_button_clicked(self):
+        """搜索按钮点击"""
+        # 获取搜索框内容
+        search_text = self.search_input.text().strip()
+
+        # 如果输入框为空，不执行任何操作
+        if not search_text:
+            self.logger.debug("[搜索] 搜索框为空，不执行搜索")
+            return
+
+        self.logger.info(f"[搜索] 搜索地点: {search_text}")
+
+        # 保存当前搜索文本
+        self.current_search_text = search_text
+
+        # 隐藏搜索历史下拉列表
+        if hasattr(self, 'search_history_popup'):
+            self.search_history_popup.hide()
+
+        # 调用搜索管理器进行搜索
+        # 搜索类型设为 "search"，表示通用搜索
+        self.search_manager.search_location(search_text, "search")
+
+    def _on_search_input_focus_in(self, event):
+        """搜索框获得焦点"""
+        # 调用原始的focusInEvent
+        QLineEdit.focusInEvent(self.search_input, event)
+
+        # 显示搜索历史
+        self._show_search_history()
+
+    def _on_search_input_focus_out(self, event):
+        """搜索框失去焦点"""
+        # 调用原始的focusOutEvent
+        QLineEdit.focusOutEvent(self.search_input, event)
+
+        # 延迟隐藏搜索历史，以允许点击历史项
+        QTimer.singleShot(200, self._hide_search_history_if_needed)
+
+    def _on_search_input_text_changed(self, text: str):
+        """搜索框文本改变"""
+        # 当用户开始输入时，自动关闭历史记录列表
+        if text.strip():
+            self.logger.debug("[搜索历史] 用户开始输入，关闭历史记录列表")
+            if hasattr(self, 'search_history_popup'):
+                self.search_history_popup.hide()
+
+    def _show_search_history(self):
+        """显示搜索历史下拉列表"""
+        if not hasattr(self, 'search_history_popup'):
+            return
+
+        # 只有当搜索框为空时才显示历史记录
+        if self.search_input.text().strip():
+            self.logger.debug("[搜索历史] 搜索框有文字，不显示历史记录")
+            self.search_history_popup.hide()
+            return
+
+        # 获取搜索历史
+        history_list = self.search_manager.get_search_history(10)
+
+        if history_list:
+            self.logger.debug(f"[搜索历史] 显示 {len(history_list)} 条历史记录")
+            # 使用搜索容器作为参考
+            self.search_history_popup.show_history(history_list, self.search_container)
+
+            # 使用QTimer延迟恢复焦点，确保在下拉列表显示后焦点回到搜索框
+            QTimer.singleShot(10, lambda: self.search_input.setFocus())
+            self.logger.debug("[搜索历史] 已设置延迟焦点恢复")
+        else:
+            self.logger.debug("[搜索历史] 没有历史记录")
+            self.search_history_popup.hide()
+
+    def _hide_search_history_if_needed(self):
+        """如果需要，隐藏搜索历史下拉列表"""
+        if not hasattr(self, 'search_history_popup'):
+            return
+
+        # 检查搜索框是否仍有焦点
+        if not self.search_input.hasFocus():
+            # 检查下拉列表是否有焦点
+            if not self.search_history_popup.hasFocus():
+                self.search_history_popup.hide()
+
+    def _on_history_selected(self, record: dict):
+        """处理历史记录选择"""
+        self.logger.info(f"[搜索历史] 用户选择: {record.get('name')}")
+
+        # 隐藏下拉列表
+        if hasattr(self, 'search_history_popup'):
+            self.search_history_popup.hide()
+
+        # 调用搜索管理器处理历史记录选择
+        self.search_manager.select_history_result(record)
+
+    def _on_result_selected(self, result: dict):
+        """处理搜索结果选择"""
+        self.logger.info(f"[搜索结果] 用户选择: {result.get('name')}")
+
+        # 隐藏下拉列表
+        if hasattr(self, 'search_history_popup'):
+            self.search_history_popup.hide()
+
+        # 调用搜索管理器处理搜索结果选择（会保存到历史记录）
+        self.search_manager.select_result_from_dropdown(result, self.current_search_text)
+
+    def on_route_button_clicked(self):
+        """路线按钮点击"""
+        self.logger.info("[路线] 路线按钮点击")
+        # TODO: 实现路线功能
+        # 暂时显示提示信息
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(self, "提示", "路线功能即将实现")
+
+    def on_cancel_button_clicked(self):
+        """关闭按钮点击"""
+        self.logger.info("[搜索] ========== 关闭按钮点击 ==========")
+
+        # 添加详细的调试信息
+        self.logger.debug(f"[搜索] 关闭按钮可见性: {self.cancel_button.isVisible()}")
+        self.logger.debug(f"[搜索] 关闭按钮启用状态: {self.cancel_button.isEnabled()}")
+        self.logger.debug(f"[搜索] 关闭按钮位置: {self.cancel_button.pos()}")
+        self.logger.debug(f"[搜索] 关闭按钮大小: {self.cancel_button.size()}")
+        self.logger.debug(f"[搜索] 搜索结果下拉列表存在: {hasattr(self, 'search_results_popup')}")
+
+        if hasattr(self, 'search_results_popup'):
+            self.logger.debug(f"[搜索] 搜索结果下拉列表可见: {self.search_results_popup.isVisible()}")
+
+        # 隐藏搜索结果下拉列表
+        if hasattr(self, 'search_results_popup'):
+            self.logger.debug("[搜索] 正在隐藏搜索结果下拉列表...")
+            self.search_results_popup.hide()
+            self.logger.debug("[搜索] 搜索结果下拉列表已隐藏")
+
+        # 清空搜索框
+        self.logger.debug("[搜索] 正在清空搜索框...")
+        self.search_input.clear()
+        self.logger.debug("[搜索] 搜索框已清空")
+
+        # 切换回路线按钮
+        self.logger.debug("[搜索] 正在切换回路线按钮...")
+        self._switch_to_route_button()
+        self.logger.debug("[搜索] 已切换回路线按钮")
+
+        self.logger.info("[搜索] ========== 关闭按钮处理完成 ==========")
+
+    def _switch_to_cancel_button(self):
+        """切换到关闭按钮（显示搜索结果时）"""
+        self.logger.debug("[按钮切换] 切换到关闭按钮")
+        self.route_button.hide()
+        self.cancel_button.show()
+        self.cancel_button.raise_()  # 确保按钮在最上层
+        self.logger.debug(f"[按钮切换] 关闭按钮可见: {self.cancel_button.isVisible()}")
+
+    def _switch_to_route_button(self):
+        """切换回路线按钮（关闭搜索结果时）"""
+        self.logger.debug("[按钮切换] 切换回路线按钮")
+        self.cancel_button.hide()
+        self.route_button.show()
+        self.route_button.raise_()  # 确保按钮在最上层
+        self.logger.debug(f"[按钮切换] 路线按钮可见: {self.route_button.isVisible()}")
+
+    def _init_hidden_ui_components(self):
+        """初始化隐藏的UI组件（用于后台逻辑）"""
+        # 创建隐藏的搜索结果列表
+        self.search_results_list = QListWidget()
+        self.search_results_list.itemClicked.connect(self.on_search_result_clicked)
+        self.search_results_list.hide()
+
+        # 创建隐藏的搜索结果标题
+        self.search_results_title = QLabel("搜索结果")
+        self.search_results_title.hide()
+
+        # 创建隐藏的任务进度面板
+        from ui.panels.task_progress_panel import TaskInfoPanel
+        self.task_progress_panel = TaskInfoPanel()
+        self.task_progress_panel.cancel_task_requested.connect(self._on_cancel_task_requested)
+        self.task_progress_panel.hide()
+
+        # 创建隐藏的地图缩放比例尺显示面板
+        self.scale_panel = ScalePanel()
+        self.scale_panel.hide()
+
+        # 创建隐藏的输入框和列表（用于后台逻辑）
+        self.start_input = QLineEdit()
+        self.start_input.hide()
+        self.start_label = QLineEdit()
+        self.start_label.hide()
+        self.start_list = QListWidget()
+        self.start_list.hide()
+
+        self.end_input = QLineEdit()
+        self.end_input.hide()
+        self.end_label = QLineEdit()
+        self.end_label.hide()
+        self.end_list = QListWidget()
+        self.end_list.hide()
+
+        self.waypoint_input = QLineEdit()
+        self.waypoint_input.hide()
+        self.waypoint_list = QListWidget()
+        self.waypoint_list.hide()
+
+        # 创建隐藏的交通方式选择框
+        self.transport_combo = QComboBox()
+        self.transport_combo.addItems(["驾车", "步行", "骑行", "公交"])
+        self.transport_combo.hide()
+
+        # 创建隐藏的时间编辑器
+        from PyQt5.QtCore import QDateTime
+        self.start_time_edit = QTimeEdit()
+        self.start_time_edit.setDateTime(QDateTime.currentDateTime())
+        self.start_time_edit.hide()
+
+        self.end_time_edit = QTimeEdit()
+        self.end_time_edit.setDateTime(QDateTime.currentDateTime())
+        self.end_time_edit.hide()
+
+        self.duration_time_edit = QLineEdit()
+        self.duration_time_edit.hide()
+
+        # 创建隐藏的按钮
+        self.plan_button = QPushButton("规划路线")
+        self.plan_button.clicked.connect(self.on_plan_route_clicked)
+        self.plan_button.hide()
+
+        self.export_button = QPushButton("导出GPX")
+        self.export_button.clicked.connect(self.on_export_gpx_clicked)
+        self.export_button.hide()
+
+        # 创建隐藏的日期和时间面板（如果需要）
+        # 这些面板可能在后台逻辑中使用
+        # 暂时不创建，如果需要可以后续添加
+
+    # ==================== 原有面板创建方法（保留用于参考，暂时不使用）====================
+    # 以下方法保留用于将来重新设计界面时参考，目前不被调用
+
+    def _create_left_panel_original(self):
         """创建左侧控制面板"""
         left_widget = QWidget()
         left_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[0])
@@ -444,7 +982,7 @@ class GpxStudio(QMainWindow):
 
         return left_widget
 
-    def create_middle_panel(self):
+    def _create_middle_panel_original(self):
         """创建中间搜索结果面板"""
         middle_widget = QWidget()
         middle_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[1])
@@ -501,7 +1039,7 @@ class GpxStudio(QMainWindow):
 
         return middle_widget
 
-    def create_right_panel(self):
+    def _create_right_panel_original(self):
         """创建右侧地图面板"""
         right_widget = QWidget()
         right_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[2])
@@ -685,6 +1223,26 @@ class GpxStudio(QMainWindow):
     def _show_search_results_on_map(self, locations: list, location_type: str):
         """在地图上显示搜索结果"""
         self.map_manager.show_search_results_on_map(locations, location_type)
+
+    def _show_search_results_dropdown(self, results: list):
+        """
+        显示搜索结果下拉列表
+
+        参数:
+            results: 格式化后的搜索结果列表
+        """
+        self.logger.debug(f"[搜索结果] 显示 {len(results)} 条搜索结果")
+
+        if hasattr(self, 'search_results_popup') and results:
+            # 使用搜索容器（包含输入框和两个按钮）作为参考
+            self.search_results_popup.show_results(results, self.search_container)
+
+            # 切换到关闭按钮
+            self._switch_to_cancel_button()
+
+            # 确保关闭按钮在最上层，不被下拉列表遮挡
+            QTimer.singleShot(50, lambda: self.cancel_button.raise_())
+            self.logger.debug("[搜索结果] 已提升关闭按钮层级")
 
     def _update_location_display(self, location_type: str, name: str, data: tuple):
         """更新位置显示"""
@@ -884,7 +1442,55 @@ class GpxStudio(QMainWindow):
     def on_map_zoom_changed(self, zoom_level: int):
         """处理地图缩放变化事件"""
         self.logger.info(f"地图缩放级别变化: {zoom_level}")
+
+        # 更新隐藏的比例尺面板（用于后台逻辑）
         self.scale_panel.update_zoom(zoom_level)
+
+        # 更新显示的比例尺信息标签
+        if hasattr(self, 'scale_info_label'):
+            # 根据缩放级别计算比例尺
+            scale_text = self._get_scale_text(zoom_level)
+            self.scale_info_label.setText(f"缩放级别: {zoom_level}  {scale_text}")
+            self.scale_info_label.adjustSize()  # 调整标签大小以适应文本
+
+    def _get_scale_text(self, zoom_level: int) -> str:
+        """根据缩放级别获取比例尺文本
+
+        Args:
+            zoom_level: 地图缩放级别 (1-20)
+
+        Returns:
+            str: 比例尺文本，如 "比例尺: 1:50000"
+        """
+        # 高德地图缩放级别对应的比例尺（近似值）
+        # zoom 3:  1:40000000 (全球)
+        # zoom 10: 1:300000 (城市)
+        # zoom 15: 1:10000 (街道)
+        # zoom 18: 1:1250 (建筑)
+
+        scale_map = {
+            3: "1:40000000",
+            4: "1:20000000",
+            5: "1:10000000",
+            6: "1:5000000",
+            7: "1:2500000",
+            8: "1:1250000",
+            9: "1:625000",
+            10: "1:300000",
+            11: "1:150000",
+            12: "1:75000",
+            13: "1:40000",
+            14: "1:20000",
+            15: "1:10000",
+            16: "1:5000",
+            17: "1:2500",
+            18: "1:1250",
+            19: "1:625",
+            20: "1:300"
+        }
+
+        scale = scale_map.get(zoom_level, "1:100000")
+        return f"比例尺: {scale}"
 
     def _on_geolocation_success(self, lat: float, lon: float, accuracy: float):
         """处理浏览器定位成功信号"""

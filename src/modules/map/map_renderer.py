@@ -209,7 +209,12 @@ class MapRenderer:
         Returns:
             folium.Map: 地图对象
         """
-        m = folium.Map(location=center, zoom_start=zoom_start, tiles=None)
+        m = folium.Map(
+            location=center,
+            zoom_start=zoom_start,
+            tiles=None,
+            zoom_control=False  # 禁用默认的缩放控件
+        )
 
         if map_source == 'gaode':
             # 使用高德地图瓦片

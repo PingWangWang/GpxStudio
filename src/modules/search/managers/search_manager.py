@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QMessageBox, QListWidgetItem, QApplication
 from PyQt5.QtCore import Qt, QObject, pyqtSlot
 from services.config.map_config import map_config
 from core.background_task import TaskPriority
-from services.storage import GeoInfoStorage
+from ..storage import GeoInfoStorage
 
 
 class SearchManager(QObject):
@@ -73,7 +73,7 @@ class SearchManager(QObject):
         # 如果有任务管理器，使用后台线程执行
         if self.task_manager:
             self.logger.info(f"使用后台线程执行搜索任务: {search_text}")
-            from .task_adapters import SearchTaskAdapter
+            from app.managers.task_adapters import SearchTaskAdapter
 
             # 获取地理编码服务
             geocoding_service = self.service_manager.get_geocoding_service(map_source)
