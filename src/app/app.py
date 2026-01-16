@@ -613,6 +613,18 @@ class GpxStudio(QMainWindow):
         self.search_results_popup.result_selected.connect(self._on_result_selected)
         self.search_results_popup.hide()
 
+        # 创建路线规划面板
+        from modules.routing import RoutePlanPanel, RouteHistoryStorage
+        self.route_plan_panel = RoutePlanPanel(map_container)
+        self.route_plan_panel.cancel_clicked.connect(self._on_route_panel_cancel)
+        self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)
+        self.route_plan_panel.search_location_clicked.connect(self._on_route_location_search)
+        self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
+        self.route_plan_panel.hide()
+
+        # 初始化路线历史存储
+        self.route_history_storage = RouteHistoryStorage()
+
         # 保存当前搜索文本（用于保存历史记录）
         self.current_search_text = ""
 
@@ -800,10 +812,9 @@ class GpxStudio(QMainWindow):
     def on_route_button_clicked(self):
         """路线按钮点击"""
         self.logger.info("[路线] 路线按钮点击")
-        # TODO: 实现路线功能
-        # 暂时显示提示信息
-        from PyQt5.QtWidgets import QMessageBox
-        QMessageBox.information(self, "提示", "路线功能即将实现")
+
+        # 显示路线规划面板
+        self._show_route_plan_panel()
 
     def on_cancel_button_clicked(self):
         """关闭按钮点击"""
@@ -1922,6 +1933,114 @@ class GpxStudio(QMainWindow):
         """请求取消任务"""
         self.logger.info(f"[任务] 用户请求取消: {task_id}")
         self.task_manager.cancel_task(task_id)
+
+    # ==================== 路线规划面板相关方法 ====================
+
+    def _show_route_plan_panel(self):
+        """显示路线规划面板"""
+        self.logger.info("[路线面板] 显示路线规划面板")
+
+        # 隐藏搜索相关的下拉列表
+        if hasattr(self, 'search_history_popup'):
+            self.search_history_popup.hide()
+        if hasattr(self, 'search_results_popup'):
+            self.search_results_popup.hide()
+
+        # 设置面板位置和大小（覆盖搜索容器）
+        if hasattr(self, 'search_container') and hasattr(self, 'route_plan_panel'):
+            # 获取搜索容器的全局位置
+            container_rect = self.search_container.rect()
+            container_global_pos = self.search_container.mapToGlobal(container_rect.topLeft())
+
+            # 设置路线规划面板的位置和大小
+            self.route_plan_panel.setGeometry(
+                container_global_pos.x(),
+                container_global_pos.y(),
+                self.search_container.width(),
+                400  # 固定高度
+            )
+
+            # 加载路线搜索历史
+            history_list = self.route_history_storage.get_history(10)
+            self.route_plan_panel.load_history(history_list)
+
+            # 显示面板
+            self.route_plan_panel.show()
+            self.route_plan_panel.raise_()
+
+            self.logger.debug(f"[路线面板] 面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
+            self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 400")
+
+            self.logger.debug("[路线面板] 路线规划面板已显示")
+
+    def _on_route_panel_cancel(self):
+        """路线规划面板取消按钮点击"""
+        self.logger.info("[路线面板] 取消路线规划")
+
+        # 隐藏路线规划面板
+        if hasattr(self, 'route_plan_panel'):
+            self.route_plan_panel.hide()
+
+    def _on_route_plan_clicked(self, start: str, end: str, mode: str, waypoints: list):
+        """路线规划按钮点击"""
+        self.logger.info(f"[路线规划] 开始规划路线: {start} → {end}, 方式: {mode}")
+        self.logger.info(f"[路线规划] 途径点: {waypoints}")
+
+        # TODO: 调用路线管理器进行路线规划
+        # 这里需要先将地点名称转换为坐标
+        # 然后调用 self.route_manager.plan_route()
+
+        # 暂时显示提示
+        from PyQt5.QtWidgets import QMessageBox
+        waypoint_text = f"，途径 {len(waypoints)} 个点" if waypoints else ""
+        QMessageBox.information(
+            self,
+            "路线规划",
+            f"将规划从 {start} 到 {end} 的{self._get_mode_text(mode)}路线{waypoint_text}"
+        )
+
+        # 保存到历史记录
+        self.route_history_storage.add_record(start, end, mode, waypoints)
+
+        # 重新加载历史记录
+        history_list = self.route_history_storage.get_history(10)
+        self.route_plan_panel.load_history(history_list)
+
+    def _on_route_location_search(self, search_text: str, location_type: str):
+        """路线面板中的地点搜索"""
+        self.logger.info(f"[路线面板] 搜索地点: {search_text}, 类型: {location_type}")
+
+        # TODO: 调用搜索管理器进行搜索
+        # 搜索结果应该填充到对应的输入框
+
+        # 暂时显示提示
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(self, "搜索", f"搜索 {location_type}: {search_text}")
+
+    def _on_route_history_selected(self, history_data: dict):
+        """选择路线搜索历史"""
+        start = history_data.get('start', '')
+        end = history_data.get('end', '')
+        mode = history_data.get('mode', 'driving')
+
+        self.logger.info(f"[路线面板] 选择历史记录: {start} → {end}")
+
+        # 填充到输入框
+        if hasattr(self, 'route_plan_panel'):
+            self.route_plan_panel.set_start_location(start)
+            self.route_plan_panel.set_end_location(end)
+
+            # 切换交通方式
+            self.route_plan_panel._switch_transport_mode(mode)
+
+    def _get_mode_text(self, mode: str) -> str:
+        """获取交通方式文本"""
+        mode_map = {
+            'driving': '驾车',
+            'cycling': '骑行',
+            'walking': '步行'
+        }
+        return mode_map.get(mode, '驾车')
 
 
 if __name__ == "__main__":

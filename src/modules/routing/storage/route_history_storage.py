@@ -1,0 +1,166 @@
+"""
+路线搜索历史存储
+
+保存和加载路线搜索历史记录
+"""
+
+import json
+import os
+from typing import List, Dict, Optional
+from datetime import datetime
+
+
+class RouteHistoryStorage:
+    """路线搜索历史存储"""
+
+    def __init__(self, storage_file: str = "RouteHistoryList.json"):
+        """
+        初始化路线历史存储
+
+        Args:
+            storage_file: 存储文件名（相对于exe目录）
+        """
+        # 获取exe所在目录
+        if getattr(sys, 'frozen', False):
+            # 打包后的exe
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # 开发环境
+            base_dir = os.getcwd()
+
+        self.storage_path = os.path.join(base_dir, storage_file)
+        self.history_records = []
+
+        # 加载历史记录
+        self._load_history()
+
+    def _load_history(self):
+        """从文件加载历史记录"""
+        if os.path.exists(self.storage_path):
+            try:
+                with open(self.storage_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.history_records = data.get('records', [])
+                print(f"[路线历史存储] 加载了 {len(self.history_records)} 条历史记录")
+            except Exception as e:
+                print(f"[路线历史存储] 加载失败: {e}")
+                self.history_records = []
+        else:
+            print("[路线历史存储] 未找到历史记录文件，将创建新文件")
+            self.history_records = []
+
+    def _save_history(self):
+        """保存历史记录到文件"""
+        try:
+            data = {
+                'records': self.history_records,
+                'last_updated': datetime.now().isoformat()
+            }
+
+            with open(self.storage_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            print(f"[路线历史存储] 已保存 {len(self.history_records)} 条记录到 {self.storage_path}")
+            return True
+        except Exception as e:
+            print(f"[路线历史存储] 保存失败: {e}")
+            return False
+
+    def add_record(self, start: str, end: str, mode: str, waypoints: List[str] = None,
+                   start_coords: tuple = None, end_coords: tuple = None,
+                   waypoint_coords: List[tuple] = None) -> bool:
+        """
+        添加路线搜索记录
+
+        Args:
+            start: 起点名称
+            end: 终点名称
+            mode: 交通方式 (driving/cycling/walking)
+            waypoints: 途径点名称列表
+            start_coords: 起点坐标 (lat, lon)
+            end_coords: 终点坐标 (lat, lon)
+            waypoint_coords: 途径点坐标列表
+
+        Returns:
+            bool: 是否保存成功
+        """
+        # 检查是否已存在相同记录（起点、终点、交通方式相同）
+        for record in self.history_records:
+            if (record.get('start') == start and
+                record.get('end') == end and
+                record.get('mode') == mode):
+                # 更新时间戳
+                record['timestamp'] = datetime.now().isoformat()
+                record['search_count'] = record.get('search_count', 1) + 1
+
+                # 移到列表开头（最近使用）
+                self.history_records.remove(record)
+                self.history_records.insert(0, record)
+
+                print(f"[路线历史存储] 更新记录: {start} → {end}")
+                return self._save_history()
+
+        # 创建新记录
+        record = {
+            'start': start,
+            'end': end,
+            'mode': mode,
+            'waypoints': waypoints or [],
+            'start_coords': start_coords,
+            'end_coords': end_coords,
+            'waypoint_coords': waypoint_coords or [],
+            'timestamp': datetime.now().isoformat(),
+            'search_count': 1
+        }
+
+        # 添加到列表开头
+        self.history_records.insert(0, record)
+
+        # 限制历史记录数量（最多保存50条）
+        if len(self.history_records) > 50:
+            self.history_records = self.history_records[:50]
+
+        print(f"[路线历史存储] 新增记录: {start} → {end}")
+        return self._save_history()
+
+    def get_history(self, limit: int = 10) -> List[Dict]:
+        """
+        获取历史记录
+
+        Args:
+            limit: 返回的最大记录数
+
+        Returns:
+            历史记录列表
+        """
+        return self.history_records[:limit]
+
+    def clear_history(self) -> bool:
+        """
+        清空历史记录
+
+        Returns:
+            bool: 是否清空成功
+        """
+        self.history_records = []
+        return self._save_history()
+
+    def remove_record(self, index: int) -> bool:
+        """
+        删除指定索引的记录
+
+        Args:
+            index: 记录索引
+
+        Returns:
+            bool: 是否删除成功
+        """
+        if 0 <= index < len(self.history_records):
+            removed = self.history_records.pop(index)
+            print(f"[路线历史存储] 删除记录: {removed.get('start')} → {removed.get('end')}")
+            return self._save_history()
+        return False
+
+
+# 添加sys导入
+import sys
