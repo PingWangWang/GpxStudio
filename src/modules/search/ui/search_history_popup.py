@@ -55,12 +55,9 @@ class SearchHistoryPopup(QListWidget):
         self._load_history_icon()
 
     def _load_history_icon(self):
-        """加载历史记录图标"""
-        # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        # 从 src/modules/search/ui/search_history_popup.py 到项目根目录需要4层
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
-        icon_path = os.path.join(project_root, 'res', 'History.png')
+        """加载历史图标"""
+        from core.resource_path import resource_path
+        icon_path = resource_path('res/History.png')
 
         if os.path.exists(icon_path):
             self.history_icon = QIcon(icon_path)

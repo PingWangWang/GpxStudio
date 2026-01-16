@@ -450,7 +450,8 @@ class GpxStudio(QMainWindow):
         self.map_settings_button.setToolTip("地图设置")
         self.map_settings_button.clicked.connect(self.on_map_settings_clicked)
         self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
-        settings_icon_path = os.path.join(project_root, 'res', 'Setting.png')
+        from core.resource_path import resource_path
+        settings_icon_path = resource_path('res/Setting.png')
         if os.path.exists(settings_icon_path):
             from PyQt5.QtGui import QIcon
             self.map_settings_button.setIcon(QIcon(settings_icon_path))
@@ -466,7 +467,7 @@ class GpxStudio(QMainWindow):
         self.log_settings_button.setToolTip("日志设置")
         self.log_settings_button.clicked.connect(self.on_log_settings_clicked)
         self.log_settings_button.setFixedSize(control_height, control_height)
-        log_icon_path = os.path.join(project_root, 'res', 'Log.png')
+        log_icon_path = resource_path('res/Log.png')
         if os.path.exists(log_icon_path):
             from PyQt5.QtGui import QIcon
             self.log_settings_button.setIcon(QIcon(log_icon_path))
@@ -482,7 +483,7 @@ class GpxStudio(QMainWindow):
         self.about_button.setToolTip("关于")
         self.about_button.clicked.connect(self.on_about_clicked)
         self.about_button.setFixedSize(control_height, control_height)
-        about_icon_path = os.path.join(project_root, 'res', 'About.png')
+        about_icon_path = resource_path('res/About.png')
         if os.path.exists(about_icon_path):
             from PyQt5.QtGui import QIcon
             self.about_button.setIcon(QIcon(about_icon_path))
@@ -498,7 +499,7 @@ class GpxStudio(QMainWindow):
         self.zoom_in_button.setToolTip("放大")
         self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
         self.zoom_in_button.setFixedSize(control_height, control_height)
-        zoom_in_icon_path = os.path.join(project_root, 'res', 'ZoomBig.png')
+        zoom_in_icon_path = resource_path('res/ZoomBig.png')
         if os.path.exists(zoom_in_icon_path):
             from PyQt5.QtGui import QIcon
             self.zoom_in_button.setIcon(QIcon(zoom_in_icon_path))
@@ -514,7 +515,7 @@ class GpxStudio(QMainWindow):
         self.zoom_out_button.setToolTip("缩小")
         self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
         self.zoom_out_button.setFixedSize(control_height, control_height)
-        zoom_out_icon_path = os.path.join(project_root, 'res', 'ZoomSamll.png')
+        zoom_out_icon_path = resource_path('res/ZoomSamll.png')
         if os.path.exists(zoom_out_icon_path):
             from PyQt5.QtGui import QIcon
             self.zoom_out_button.setIcon(QIcon(zoom_out_icon_path))
@@ -530,7 +531,7 @@ class GpxStudio(QMainWindow):
         self.locate_button.setToolTip("定位到当前位置")
         self.locate_button.clicked.connect(self.on_locate_clicked)
         self.locate_button.setFixedSize(control_height, control_height)
-        location_icon_path = os.path.join(project_root, 'res', 'Location.png')
+        location_icon_path = resource_path('res/Location.png')
         if os.path.exists(location_icon_path):
             from PyQt5.QtGui import QIcon
             self.locate_button.setIcon(QIcon(location_icon_path))
@@ -620,7 +621,7 @@ class GpxStudio(QMainWindow):
         self.search_button.setToolTip("搜索")
         self.search_button.clicked.connect(self.on_search_button_clicked)
         self.search_button.setFixedSize(control_height, control_height)
-        search_icon_path = os.path.join(project_root, 'res', 'Search.png')
+        search_icon_path = resource_path('res/Search.png')
         if os.path.exists(search_icon_path):
             from PyQt5.QtGui import QIcon
             self.search_button.setIcon(QIcon(search_icon_path))
@@ -636,7 +637,7 @@ class GpxStudio(QMainWindow):
         self.route_button.setToolTip("路线")
         self.route_button.clicked.connect(self.on_route_button_clicked)
         self.route_button.setFixedSize(control_height, control_height)
-        route_icon_path = os.path.join(project_root, 'res', 'Route.png')
+        route_icon_path = resource_path('res/Route.png')
         if os.path.exists(route_icon_path):
             from PyQt5.QtGui import QIcon
             self.route_button.setIcon(QIcon(route_icon_path))
@@ -652,7 +653,7 @@ class GpxStudio(QMainWindow):
         self.cancel_button.setToolTip("关闭")
         self.cancel_button.clicked.connect(self.on_cancel_button_clicked)
         self.cancel_button.setFixedSize(control_height, control_height)
-        cancel_icon_path = os.path.join(project_root, 'res', 'Cancel.png')
+        cancel_icon_path = resource_path('res/Cancel.png')
         if os.path.exists(cancel_icon_path):
             from PyQt5.QtGui import QIcon
             self.cancel_button.setIcon(QIcon(cancel_icon_path))
@@ -1211,10 +1212,8 @@ class GpxStudio(QMainWindow):
         self.locate_button.clicked.connect(self.on_locate_clicked)
 
         # 加载图标
-        import os
-        # __file__ 是 src/app/app.py，需要向上三级到达项目根目录
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        icon_path = os.path.join(project_root, 'res', 'Location.png')
+        from core.resource_path import resource_path
+        icon_path = resource_path('res/Location.png')
 
         if os.path.exists(icon_path):
             from PyQt5.QtGui import QIcon

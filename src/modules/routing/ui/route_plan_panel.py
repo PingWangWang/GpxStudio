@@ -62,9 +62,7 @@ class RouteHistoryItem(QWidget):
 
     def _load_mode_icon(self):
         """加载交通方式图标"""
-        # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+        from core.resource_path import resource_path
 
         mode = self.history_data.get('mode', 'driving')
         icon_name_map = {
@@ -74,7 +72,7 @@ class RouteHistoryItem(QWidget):
         }
 
         icon_name = icon_name_map.get(mode, 'Driving_white.png')
-        icon_path = os.path.join(project_root, 'res', icon_name)
+        icon_path = resource_path(f'res/{icon_name}')
 
         if os.path.exists(icon_path):
             pixmap = QPixmap(icon_path)
@@ -282,11 +280,9 @@ class AddressSuggestionItem(QWidget):
 
     def _load_icon(self):
         """加载确认图标"""
-        # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+        from core.resource_path import resource_path
 
-        icon_path = os.path.join(project_root, 'res', 'Yes.png')
+        icon_path = resource_path('res/Yes.png')
         if os.path.exists(icon_path):
             self.confirm_button.setIcon(QIcon(icon_path))
             self.confirm_button.setIconSize(QSize(18, 18))  # 减小图标尺寸
@@ -766,35 +762,34 @@ class RoutePlanPanel(QWidget):
     def _load_icons(self):
         """加载图标"""
         # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+        from core.resource_path import resource_path
 
         # 驾车图标（白色版本）
-        driving_icon_path = os.path.join(project_root, 'res', 'Driving_white.png')
+        driving_icon_path = resource_path('res/Driving_white.png')
         if os.path.exists(driving_icon_path):
             self.driving_button.setIcon(QIcon(driving_icon_path))
             self.driving_button.setIconSize(QSize(24, 24))
 
         # 骑行图标（白色版本）
-        cycling_icon_path = os.path.join(project_root, 'res', 'Cycling_white.png')
+        cycling_icon_path = resource_path('res/Cycling_white.png')
         if os.path.exists(cycling_icon_path):
             self.cycling_button.setIcon(QIcon(cycling_icon_path))
             self.cycling_button.setIconSize(QSize(24, 24))
 
         # 步行图标（白色版本）
-        walking_icon_path = os.path.join(project_root, 'res', 'Waking_white.png')
+        walking_icon_path = resource_path('res/Waking_white.png')
         if os.path.exists(walking_icon_path):
             self.walking_button.setIcon(QIcon(walking_icon_path))
             self.walking_button.setIconSize(QSize(24, 24))
 
         # 取消图标（白色版本）
-        cancel_icon_path = os.path.join(project_root, 'res', 'Cancel_white.png')
+        cancel_icon_path = resource_path('res/Cancel_white.png')
         if os.path.exists(cancel_icon_path):
             self.cancel_button.setIcon(QIcon(cancel_icon_path))
             self.cancel_button.setIconSize(QSize(20, 20))
 
         # 切换图标（白色版本，旋转90度）
-        switch_icon_path = os.path.join(project_root, 'res', 'Switch_white.png')
+        switch_icon_path = resource_path('res/Switch_white.png')
         if os.path.exists(switch_icon_path):
             pixmap = QPixmap(switch_icon_path)
             # 旋转90度
@@ -804,13 +799,13 @@ class RoutePlanPanel(QWidget):
             self.switch_button.setIconSize(QSize(20, 20))
 
         # 添加途径点图标
-        add_icon_path = os.path.join(project_root, 'res', 'Add.png')
+        add_icon_path = resource_path('res/Add.png')
         if os.path.exists(add_icon_path):
             self.add_waypoint_button.setIcon(QIcon(add_icon_path))
             self.add_waypoint_button.setIconSize(QSize(20, 20))
 
         # 历史记录图标（白色版本）
-        history_icon_path = os.path.join(project_root, 'res', 'History_white.png')
+        history_icon_path = resource_path('res/History_white.png')
         if os.path.exists(history_icon_path):
             pixmap = QPixmap(history_icon_path)
             # 缩放到16x16
@@ -818,7 +813,7 @@ class RoutePlanPanel(QWidget):
             self.history_icon_label.setPixmap(scaled_pixmap)
 
         # 搜索图标（白色版本）
-        search_icon_path = os.path.join(project_root, 'res', 'Search.png')
+        search_icon_path = resource_path('res/Search.png')
         if os.path.exists(search_icon_path):
             # 创建白色版本
             img = QPixmap(search_icon_path).toImage()
@@ -835,13 +830,10 @@ class RoutePlanPanel(QWidget):
     def _load_loading_icon(self):
         """加载Loading图标并设置旋转动画"""
         from PyQt5.QtCore import QTimer
-
-        # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+        from core.resource_path import resource_path
 
         # 加载Loading图标
-        loading_icon_path = os.path.join(project_root, 'res', 'Loading.png')
+        loading_icon_path = resource_path('res/Loading.png')
         if os.path.exists(loading_icon_path):
             self.loading_pixmap = QPixmap(loading_icon_path)
             # 缩放到24x24
@@ -1075,9 +1067,8 @@ class RoutePlanPanel(QWidget):
         delete_button.setToolTip("删除途径点")
 
         # 加载删除图标
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
-        delete_icon_path = os.path.join(project_root, 'res', 'Delete.png')
+        from core.resource_path import resource_path
+        delete_icon_path = resource_path('res/Delete.png')
         if os.path.exists(delete_icon_path):
             delete_button.setIcon(QIcon(delete_icon_path))
             delete_button.setIconSize(QSize(20, 20))

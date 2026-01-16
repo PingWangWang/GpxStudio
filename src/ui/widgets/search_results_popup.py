@@ -56,10 +56,8 @@ class SearchResultsPopup(QListWidget):
 
     def _load_search_icon(self):
         """加载搜索图标"""
-        # 获取项目根目录
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
-        icon_path = os.path.join(project_root, 'res', 'Search.png')
+        from core.resource_path import resource_path
+        icon_path = resource_path('res/Search.png')
 
         if os.path.exists(icon_path):
             self.search_icon = QIcon(icon_path)
