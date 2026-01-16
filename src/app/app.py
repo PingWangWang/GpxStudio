@@ -68,6 +68,10 @@ class GpxStudio(QMainWindow):
         print("GPX Studio 程序启动开始（重构版）")
         print("=" * 80)
 
+        # 初始化数据目录（最先执行）
+        from .data_paths import init_data_directories
+        init_data_directories()
+
         # 初始化各个部分（进度范围：10-95，为启动和完成阶段留出空间）
         self._update_splash(15, "正在初始化管理器...")
         self._init_managers()
@@ -154,6 +158,11 @@ class GpxStudio(QMainWindow):
     def _init_services(self):
         """初始化服务"""
         print("开始初始化服务")
+
+        # 重新加载地图配置（确保使用正确的数据目录）
+        from services.config.map_config import map_config
+        map_config._load_config()
+
         self.service_manager.initialize_services()
         print("服务初始化完成")
 
@@ -294,6 +303,8 @@ class GpxStudio(QMainWindow):
 
             # 路线信息
             'add_route_time_info': self._add_route_time_info,
+            'show_route_alternatives': self._show_route_alternatives,
+            'save_route_history': self._save_route_history,
         }
 
     def _connect_signals(self):
@@ -401,70 +412,134 @@ class GpxStudio(QMainWindow):
         import os
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
-        # 按钮样式（30x30，缩小为原来的一半）
-        button_style = """
-            QPushButton {
+        # 统一的控件高度（在使用前定义）
+        control_height = 36
+
+        # 创建右侧按钮容器（统一背景框，与搜索框样式一致）
+        self.right_buttons_container = QWidget()
+        self.right_buttons_container.setParent(map_container)
+        self.right_buttons_container.setStyleSheet("""
+            QWidget {
                 background-color: white;
-                border: 2px solid rgba(0, 0, 0, 0.2);
+                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.15);
+            }
+        """)
+        right_buttons_layout = QVBoxLayout(self.right_buttons_container)
+        right_buttons_layout.setContentsMargins(8, 6, 8, 6)  # 内边距，与搜索框一致
+        right_buttons_layout.setSpacing(5)  # 按钮间距
+
+        # 按钮样式（透明背景，无边框，与搜索框内按钮样式一致）
+        right_button_style = """
+            QPushButton {
+                background-color: transparent;
+                border: none;
                 border-radius: 4px;
                 padding: 0px;
-                min-width: 30px;
-                min-height: 30px;
-                max-width: 30px;
-                max-height: 30px;
             }
             QPushButton:hover {
-                background-color: #f4f4f4;
+                background-color: #f0f0f0;
             }
             QPushButton:pressed {
                 background-color: #e0e0e0;
             }
         """
 
-        # 创建放大按钮（右下角）
+        # 创建地图设置按钮
+        self.map_settings_button = QPushButton()
+        self.map_settings_button.setToolTip("地图设置")
+        self.map_settings_button.clicked.connect(self.on_map_settings_clicked)
+        self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
+        settings_icon_path = os.path.join(project_root, 'res', 'Setting.png')
+        if os.path.exists(settings_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.map_settings_button.setIcon(QIcon(settings_icon_path))
+            from PyQt5.QtCore import QSize
+            self.map_settings_button.setIconSize(QSize(20, 20))  # 与搜索框按钮图标大小一致
+        else:
+            self.map_settings_button.setText("⚙️")
+        self.map_settings_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.map_settings_button)
+
+        # 创建日志设置按钮
+        self.log_settings_button = QPushButton()
+        self.log_settings_button.setToolTip("日志设置")
+        self.log_settings_button.clicked.connect(self.on_log_settings_clicked)
+        self.log_settings_button.setFixedSize(control_height, control_height)
+        log_icon_path = os.path.join(project_root, 'res', 'Log.png')
+        if os.path.exists(log_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.log_settings_button.setIcon(QIcon(log_icon_path))
+            from PyQt5.QtCore import QSize
+            self.log_settings_button.setIconSize(QSize(20, 20))
+        else:
+            self.log_settings_button.setText("📋")
+        self.log_settings_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.log_settings_button)
+
+        # 创建关于按钮
+        self.about_button = QPushButton()
+        self.about_button.setToolTip("关于")
+        self.about_button.clicked.connect(self.on_about_clicked)
+        self.about_button.setFixedSize(control_height, control_height)
+        about_icon_path = os.path.join(project_root, 'res', 'About.png')
+        if os.path.exists(about_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.about_button.setIcon(QIcon(about_icon_path))
+            from PyQt5.QtCore import QSize
+            self.about_button.setIconSize(QSize(20, 20))
+        else:
+            self.about_button.setText("ℹ️")
+        self.about_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.about_button)
+
+        # 创建放大按钮
         self.zoom_in_button = QPushButton()
         self.zoom_in_button.setToolTip("放大")
         self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
+        self.zoom_in_button.setFixedSize(control_height, control_height)
         zoom_in_icon_path = os.path.join(project_root, 'res', 'ZoomBig.png')
         if os.path.exists(zoom_in_icon_path):
             from PyQt5.QtGui import QIcon
             self.zoom_in_button.setIcon(QIcon(zoom_in_icon_path))
             from PyQt5.QtCore import QSize
-            self.zoom_in_button.setIconSize(QSize(18, 18))  # 图标缩小
+            self.zoom_in_button.setIconSize(QSize(20, 20))
         else:
             self.zoom_in_button.setText("+")
-        self.zoom_in_button.setStyleSheet(button_style)
-        self.zoom_in_button.setParent(map_container)
+        self.zoom_in_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.zoom_in_button)
 
-        # 创建缩小按钮（右下角，放大按钮下方）
+        # 创建缩小按钮
         self.zoom_out_button = QPushButton()
         self.zoom_out_button.setToolTip("缩小")
         self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
+        self.zoom_out_button.setFixedSize(control_height, control_height)
         zoom_out_icon_path = os.path.join(project_root, 'res', 'ZoomSamll.png')
         if os.path.exists(zoom_out_icon_path):
             from PyQt5.QtGui import QIcon
             self.zoom_out_button.setIcon(QIcon(zoom_out_icon_path))
             from PyQt5.QtCore import QSize
-            self.zoom_out_button.setIconSize(QSize(18, 18))  # 图标缩小
+            self.zoom_out_button.setIconSize(QSize(20, 20))
         else:
             self.zoom_out_button.setText("-")
-        self.zoom_out_button.setStyleSheet(button_style)
-        self.zoom_out_button.setParent(map_container)
+        self.zoom_out_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.zoom_out_button)
 
-        # 创建定位按钮（右下角，缩小按钮下方）
+        # 创建定位按钮
         self.locate_button = QPushButton()
         self.locate_button.setToolTip("定位到当前位置")
         self.locate_button.clicked.connect(self.on_locate_clicked)
+        self.locate_button.setFixedSize(control_height, control_height)
         location_icon_path = os.path.join(project_root, 'res', 'Location.png')
         if os.path.exists(location_icon_path):
             from PyQt5.QtGui import QIcon
             self.locate_button.setIcon(QIcon(location_icon_path))
             from PyQt5.QtCore import QSize
-            self.locate_button.setIconSize(QSize(18, 18))  # 图标缩小
+            self.locate_button.setIconSize(QSize(20, 20))
         else:
             self.locate_button.setText("📍")
-        self.locate_button.setStyleSheet(button_style)
-        self.locate_button.setParent(map_container)
+        self.locate_button.setStyleSheet(right_button_style)
+        right_buttons_layout.addWidget(self.locate_button)
 
         # 创建比例尺信息标签（左下角）
         self.scale_info_label = QLabel()
@@ -495,9 +570,6 @@ class GpxStudio(QMainWindow):
         search_layout = QHBoxLayout(self.search_container)
         search_layout.setContentsMargins(8, 6, 8, 6)  # 内边距
         search_layout.setSpacing(8)  # 控件间距
-
-        # 统一的控件高度
-        control_height = 36
 
         # 搜索输入框
         self.search_input = QLineEdit()
@@ -620,6 +692,9 @@ class GpxStudio(QMainWindow):
         self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)
         self.route_plan_panel.search_location_clicked.connect(self._on_route_location_search)
         self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
+        self.route_plan_panel.address_selected.connect(self._on_route_address_selected)
+        self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)
+        self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)
         self.route_plan_panel.hide()
 
         # 初始化路线历史存储
@@ -627,6 +702,18 @@ class GpxStudio(QMainWindow):
 
         # 保存当前搜索文本（用于保存历史记录）
         self.current_search_text = ""
+
+        # 创建设置弹出面板
+        from ui.popups import MapSettingsPopup, LogSettingsPopup, AboutPopup
+        self.map_settings_popup = MapSettingsPopup(map_container)
+        self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
+        self.map_settings_popup.hide()
+
+        self.log_settings_popup = LogSettingsPopup(map_container)
+        self.log_settings_popup.hide()
+
+        self.about_popup = AboutPopup(map_container)
+        self.about_popup.hide()
 
         return map_widget
 
@@ -636,31 +723,21 @@ class GpxStudio(QMainWindow):
         width = container.width()
         height = container.height()
 
-        # 右下角按钮位置（距离右边和底部各20px）
+        # 边距设置
         right_margin = 20
         bottom_margin = 20
-        button_spacing = 5  # 按钮之间的间距（从10px减小到5px）
+        left_margin = 20
+        top_margin = 20
 
-        # 定位按钮（最下方）
-        locate_x = width - 30 - right_margin  # 按钮宽度改为30
-        locate_y = height - 30 - bottom_margin  # 按钮高度改为30
-        self.locate_button.move(locate_x, locate_y)
-        self.locate_button.raise_()
-
-        # 缩小按钮（定位按钮上方）
-        zoom_out_x = locate_x
-        zoom_out_y = locate_y - 30 - button_spacing  # 按钮高度改为30
-        self.zoom_out_button.move(zoom_out_x, zoom_out_y)
-        self.zoom_out_button.raise_()
-
-        # 放大按钮（缩小按钮上方）
-        zoom_in_x = locate_x
-        zoom_in_y = zoom_out_y - 30 - button_spacing  # 按钮高度改为30
-        self.zoom_in_button.move(zoom_in_x, zoom_in_y)
-        self.zoom_in_button.raise_()
+        # 右侧按钮容器位置（右侧垂直居中）
+        self.right_buttons_container.adjustSize()  # 自动调整大小
+        buttons_x = width - self.right_buttons_container.width() - right_margin
+        # 垂直居中：(容器高度 - 按钮容器高度) / 2
+        buttons_y = (height - self.right_buttons_container.height()) // 2
+        self.right_buttons_container.move(buttons_x, buttons_y)
+        self.right_buttons_container.raise_()
 
         # 比例尺信息标签（左下角）
-        left_margin = 20
         self.scale_info_label.adjustSize()  # 自动调整大小
         scale_x = left_margin
         scale_y = height - self.scale_info_label.height() - bottom_margin
@@ -668,7 +745,6 @@ class GpxStudio(QMainWindow):
         self.scale_info_label.raise_()
 
         # 搜索框容器（左上角）
-        top_margin = 20
         self.search_container.adjustSize()  # 自动调整大小
         search_x = left_margin
         search_y = top_margin
@@ -677,31 +753,79 @@ class GpxStudio(QMainWindow):
 
     def on_zoom_in_clicked(self):
         """放大按钮点击"""
+        self.logger.info("[缩放] 放大按钮点击")
         # 通过JavaScript调用地图的放大方法
         js_code = """
-        var mapElement = document.querySelector('.leaflet-container');
-        if (mapElement && mapElement._leaflet_map) {
-            var map = mapElement._leaflet_map;
-            map.zoomIn();
-            console.log('[缩放] 放大地图');
-        }
+        (function() {
+            var map = null;
+
+            // 方法1: 通过leaflet-container元素
+            var mapElement = document.querySelector('.leaflet-container');
+            if (mapElement && mapElement._leaflet_map) {
+                map = mapElement._leaflet_map;
+            }
+
+            // 方法2: 查找全局地图对象
+            if (!map) {
+                for (var key in window) {
+                    if (key.startsWith('map_') && window[key] && window[key].zoomIn) {
+                        map = window[key];
+                        break;
+                    }
+                }
+            }
+
+            if (map && map.zoomIn) {
+                map.zoomIn();
+                console.log('[缩放] 放大地图成功，当前级别: ' + map.getZoom());
+            } else {
+                console.log('[缩放] 未找到地图对象');
+            }
+        })();
         """
         if self.map_view and self.map_view.page():
             self.map_view.page().runJavaScript(js_code)
+            self.logger.debug("[缩放] 已执行放大JavaScript代码")
+        else:
+            self.logger.warning("[缩放] 地图视图或页面不存在")
 
     def on_zoom_out_clicked(self):
         """缩小按钮点击"""
+        self.logger.info("[缩放] 缩小按钮点击")
         # 通过JavaScript调用地图的缩小方法
         js_code = """
-        var mapElement = document.querySelector('.leaflet-container');
-        if (mapElement && mapElement._leaflet_map) {
-            var map = mapElement._leaflet_map;
-            map.zoomOut();
-            console.log('[缩放] 缩小地图');
-        }
+        (function() {
+            var map = null;
+
+            // 方法1: 通过leaflet-container元素
+            var mapElement = document.querySelector('.leaflet-container');
+            if (mapElement && mapElement._leaflet_map) {
+                map = mapElement._leaflet_map;
+            }
+
+            // 方法2: 查找全局地图对象
+            if (!map) {
+                for (var key in window) {
+                    if (key.startsWith('map_') && window[key] && window[key].zoomOut) {
+                        map = window[key];
+                        break;
+                    }
+                }
+            }
+
+            if (map && map.zoomOut) {
+                map.zoomOut();
+                console.log('[缩放] 缩小地图成功，当前级别: ' + map.getZoom());
+            } else {
+                console.log('[缩放] 未找到地图对象');
+            }
+        })();
         """
         if self.map_view and self.map_view.page():
             self.map_view.page().runJavaScript(js_code)
+            self.logger.debug("[缩放] 已执行缩小JavaScript代码")
+        else:
+            self.logger.warning("[缩放] 地图视图或页面不存在")
 
     def on_search_button_clicked(self):
         """搜索按钮点击"""
@@ -790,6 +914,12 @@ class GpxStudio(QMainWindow):
     def _on_history_selected(self, record: dict):
         """处理历史记录选择"""
         self.logger.info(f"[搜索历史] 用户选择: {record.get('name')}")
+
+        # 将地址名称回填到搜索框
+        name = record.get('name', '')
+        if hasattr(self, 'search_input'):
+            self.search_input.setText(name)
+            self.logger.debug(f"[搜索历史] 已回填地址到搜索框: {name}")
 
         # 隐藏下拉列表
         if hasattr(self, 'search_history_popup'):
@@ -1432,6 +1562,62 @@ class GpxStudio(QMainWindow):
         """定位按钮点击"""
         self.location_manager.get_current_location()
 
+    def on_map_settings_clicked(self):
+        """地图设置按钮点击"""
+        self.logger.info("[设置] 打开地图设置面板")
+
+        # 隐藏其他popup
+        if hasattr(self, 'log_settings_popup'):
+            self.log_settings_popup.hide()
+        if hasattr(self, 'about_popup'):
+            self.about_popup.hide()
+
+        # 显示地图设置popup
+        if hasattr(self, 'map_settings_popup'):
+            self.map_settings_popup.show_popup(self.map_settings_button)
+
+    def on_log_settings_clicked(self):
+        """日志设置按钮点击"""
+        self.logger.info("[设置] 打开日志设置面板")
+
+        # 隐藏其他popup
+        if hasattr(self, 'map_settings_popup'):
+            self.map_settings_popup.hide()
+        if hasattr(self, 'about_popup'):
+            self.about_popup.hide()
+
+        # 显示日志设置popup
+        if hasattr(self, 'log_settings_popup'):
+            self.log_settings_popup.show_popup(self.log_settings_button)
+
+    def on_about_clicked(self):
+        """关于按钮点击"""
+        self.logger.info("[设置] 打开关于面板")
+
+        # 隐藏其他popup
+        if hasattr(self, 'map_settings_popup'):
+            self.map_settings_popup.hide()
+        if hasattr(self, 'log_settings_popup'):
+            self.log_settings_popup.hide()
+
+        # 显示关于popup
+        if hasattr(self, 'about_popup'):
+            self.about_popup.show_popup(self.about_button)
+
+    def _on_map_config_saved(self):
+        """地图配置保存后的处理"""
+        self.logger.info("[设置] 地图配置已保存，重新加载地图")
+
+        # 重新加载配置
+        from services.config.map_config import map_config
+        map_config._load_config()
+
+        # 重新初始化服务（使用新的API Key）
+        self.service_manager.initialize_services()
+
+        # 重新加载地图
+        self._show_initial_map()
+
     def on_plan_route_clicked(self):
         """规划路线按钮点击"""
         transport_mode = self.transport_combo.currentText()
@@ -1867,6 +2053,9 @@ class GpxStudio(QMainWindow):
         elif task_id.startswith('map_render_'):
             self.route_manager.on_map_render_task_completed(task_id, result)
             self.task_progress_panel.task_completed("地图渲染完成")
+            # 地图渲染完成后隐藏加载状态
+            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                self.route_plan_panel.hide_loading()
         elif task_id.startswith('context_menu_'):
             # 处理右键菜单任务完成
             self._show_context_menu(result)
@@ -1889,8 +2078,16 @@ class GpxStudio(QMainWindow):
             self.search_manager.on_search_task_failed(task_id, error)
         elif task_id.startswith('routing_'):
             self.route_manager.on_route_task_failed(task_id, error)
+            # 路线规划失败时隐藏加载状态并显示错误提示
+            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                self.route_plan_panel.hide_loading()
+                self.route_plan_panel.show_route_plan_error("路线规划失败，请重试")
         elif task_id.startswith('map_render_'):
             self.route_manager.on_map_render_task_failed(task_id, error)
+            # 地图渲染失败时隐藏加载状态并显示错误提示
+            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                self.route_plan_panel.hide_loading()
+                self.route_plan_panel.show_route_plan_error("地图渲染失败，请重试")
         elif task_id.startswith('context_menu_'):
             # 处理右键菜单任务失败
             self.logger.error(f"[地图右键] 任务失败: {error}")
@@ -1977,6 +2174,10 @@ class GpxStudio(QMainWindow):
         """路线规划面板取消按钮点击"""
         self.logger.info("[路线面板] 取消路线规划")
 
+        # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
+        if hasattr(self, 'route_plan_panel'):
+            self.route_plan_panel.restore_history_mode()
+
         # 隐藏路线规划面板
         if hasattr(self, 'route_plan_panel'):
             self.route_plan_panel.hide()
@@ -1986,36 +2187,208 @@ class GpxStudio(QMainWindow):
         self.logger.info(f"[路线规划] 开始规划路线: {start} → {end}, 方式: {mode}")
         self.logger.info(f"[路线规划] 途径点: {waypoints}")
 
-        # TODO: 调用路线管理器进行路线规划
-        # 这里需要先将地点名称转换为坐标
-        # 然后调用 self.route_manager.plan_route()
+        # 检查起点和终点是否已设置
+        if not start or not end:
+            self.route_plan_panel.show_route_plan_error("请先设置起点和终点")
+            return
 
-        # 暂时显示提示
-        from PyQt5.QtWidgets import QMessageBox
-        waypoint_text = f"，途径 {len(waypoints)} 个点" if waypoints else ""
-        QMessageBox.information(
-            self,
-            "路线规划",
-            f"将规划从 {start} 到 {end} 的{self._get_mode_text(mode)}路线{waypoint_text}"
-        )
+        # 检查是否已经有起点和终点的坐标
+        if not self.data_manager.has_start_end():
+            self.route_plan_panel.show_route_plan_error("请先搜索并选择起点和终点位置")
+            return
 
-        # 保存到历史记录
-        self.route_history_storage.add_record(start, end, mode, waypoints)
+        # 保存当前的路线信息（用于后续保存历史记录）
+        self._current_route_info = {
+            'start': start,
+            'end': end,
+            'mode': mode,
+            'waypoints': waypoints,
+            'start_coords': self.data_manager.start_coords,
+            'end_coords': self.data_manager.end_coords,
+            'waypoint_coords': self.data_manager.waypoints_coords
+        }
 
-        # 重新加载历史记录
-        history_list = self.route_history_storage.get_history(10)
-        self.route_plan_panel.load_history(history_list)
+        # 显示加载中状态
+        self.route_plan_panel.show_loading()
+
+        # 调用路线管理器进行路线规划
+        self.route_manager.plan_route(mode)
+
+    def _on_route_clear_clicked(self):
+        """清除路线按钮点击"""
+        self.logger.info("[路线面板] 清除路线")
+
+        # 清除 data_manager 中的所有路线数据
+        self.data_manager.clear_all_route_data()
+
+        # 清除路线面板中的输入框内容
+        self.route_plan_panel.clear_all_inputs()
+
+        # 清除地图上的路线显示
+        self.map_manager.update_map_preview(auto_fit=False)
+
+        self.logger.info("[路线面板] 路线已清除")
 
     def _on_route_location_search(self, search_text: str, location_type: str):
         """路线面板中的地点搜索"""
         self.logger.info(f"[路线面板] 搜索地点: {search_text}, 类型: {location_type}")
 
-        # TODO: 调用搜索管理器进行搜索
-        # 搜索结果应该填充到对应的输入框
+        # 显示加载状态
+        self.route_plan_panel.show_loading()
 
-        # 暂时显示提示
-        from PyQt5.QtWidgets import QMessageBox
-        QMessageBox.information(self, "搜索", f"搜索 {location_type}: {search_text}")
+        # 获取当前地图源
+        from services.config.map_config import map_config
+        map_source = map_config.get_map_source()
+
+        # 获取对应的地理编码服务
+        geocoding_service = self.service_manager.get_geocoding_service(map_source)
+
+        if not geocoding_service:
+            self.logger.warning(f"未找到地图源 {map_source} 的地理编码服务")
+            self.route_plan_panel.hide_loading()
+            self.route_plan_panel.show_search_error(location_type)
+            return
+
+        try:
+            # 执行搜索
+            results = geocoding_service.search_location(search_text)
+
+            # 隐藏加载状态
+            self.route_plan_panel.hide_loading()
+
+            if results:
+                # 转换为地址待选列表格式
+                suggestions = []
+                for result in results:
+                    # 根据不同服务的返回格式进行转换
+                    name = result.get('name', '')
+                    address = result.get('address', result.get('formatted_address', ''))
+
+                    # 获取坐标
+                    if 'location' in result:
+                        location = result['location']
+                    elif 'lat' in result and 'lon' in result:
+                        location = f"{result['lon']},{result['lat']}"
+                    elif 'lng' in result and 'lat' in result:
+                        location = f"{result['lng']},{result['lat']}"
+                    else:
+                        location = ''
+
+                    # 保留原始结果中的级别、类型、半径信息
+                    suggestions.append({
+                        'name': name,
+                        'address': address,
+                        'location': location,
+                        'level': result.get('level'),
+                        'type': result.get('type'),
+                        'radius': result.get('radius')
+                    })
+
+                # 显示搜索结果
+                self.route_plan_panel.show_address_suggestions(suggestions)
+
+                # 在地图上预览第一个地址（使用 preview_search_result 以支持级别缩放）
+                if suggestions and suggestions[0].get('location'):
+                    first_addr = suggestions[0]
+                    location = first_addr['location']
+                    if ',' in location:
+                        try:
+                            lng, lat = location.split(',')
+                            # 使用 preview_search_result 方法，支持根据级别、类型、半径自动缩放
+                            self.map_manager.preview_search_result(
+                                coords=(float(lat), float(lng)),
+                                name=f"{first_addr['name']}\n{first_addr['address']}",
+                                level=first_addr.get('level'),
+                                type_info=first_addr.get('type'),
+                                radius=first_addr.get('radius')
+                            )
+                        except (ValueError, IndexError) as e:
+                            self.logger.error(f"无效的坐标格式: {location}, 错误: {e}")
+            else:
+                # 没有搜索结果
+                self.route_plan_panel.hide_address_suggestions_and_show_history()
+                self.route_plan_panel.show_search_error(location_type)
+                self.logger.warning(f"未找到地址: {search_text}")
+
+        except Exception as e:
+            self.logger.error(f"搜索地址失败: {e}")
+            self.route_plan_panel.hide_loading()
+            self.route_plan_panel.hide_address_suggestions_and_show_history()
+            self.route_plan_panel.show_search_error(location_type)
+
+    def _on_route_address_selected(self, address_data: dict, location_type: str, should_zoom: bool = True):
+        """处理地址选中事件
+
+        Args:
+            address_data: 地址数据字典
+            location_type: 位置类型（start/end/waypoint）
+            should_zoom: 是否缩放地图（默认True，双击时为False）
+        """
+        self.logger.info(f"[路线面板] 地址选中: {address_data.get('name', '')}, 类型: {location_type}, 缩放: {should_zoom}")
+
+        # 获取坐标
+        location = address_data.get('location', '')
+        if not location or ',' not in location:
+            self.logger.warning(f"地址缺少坐标信息: {address_data}")
+            return
+
+        try:
+            lng, lat = location.split(',')
+            lat_float = float(lat)
+            lng_float = float(lng)
+
+            # 根据地址类型设置到 data_manager
+            name = address_data.get('name', '')
+            level = address_data.get('level')
+
+            if location_type == "start":
+                self.data_manager.set_start_location((lat_float, lng_float), name, level)
+                self.logger.info(f"[路线面板] 设置起点: {name} ({lat_float}, {lng_float})")
+            elif location_type == "end":
+                self.data_manager.set_end_location((lat_float, lng_float), name, level)
+                self.logger.info(f"[路线面板] 设置终点: {name} ({lat_float}, {lng_float})")
+            elif location_type == "waypoint":
+                self.data_manager.add_waypoint((lat_float, lng_float), name)
+                self.logger.info(f"[路线面板] 添加途径点: {name} ({lat_float}, {lng_float})")
+
+            # 保存到搜索历史记录
+            search_text = address_data.get('_search_text', name)  # 获取原始搜索文本
+            if search_text:
+                # 构建标准格式的结果字典
+                result_dict = {
+                    'name': name,
+                    'address': address_data.get('address', ''),
+                    'lat': lat_float,
+                    'lon': lng_float,
+                    'type': address_data.get('type', ''),
+                    'level': address_data.get('level', ''),
+                    'radius': address_data.get('radius', None)
+                }
+                # 调用搜索管理器保存历史记录
+                self.search_manager._save_to_history(search_text, result_dict)
+                self.logger.info(f"[路线面板] 已保存到搜索历史: {search_text} -> {name}")
+
+            # 只有在需要缩放时才调用 preview_search_result
+            if should_zoom:
+                # 使用 preview_search_result 在地图上标识位置（带箭头标记）
+                # 支持根据级别、类型、半径自动缩放
+                address = address_data.get('address', '')
+                display_name = f"{name}\n{address}" if address else name
+
+                self.map_manager.preview_search_result(
+                    coords=(lat_float, lng_float),
+                    name=display_name,
+                    level=address_data.get('level'),
+                    type_info=address_data.get('type'),
+                    radius=address_data.get('radius')
+                )
+
+                self.logger.info(f"[路线面板] 地图已缩放到: {name} ({lat_float}, {lng_float})")
+            else:
+                self.logger.info(f"[路线面板] 跳过地图缩放（双击确认）")
+
+        except (ValueError, IndexError) as e:
+            self.logger.error(f"无效的坐标格式: {location}, 错误: {e}")
 
     def _on_route_history_selected(self, history_data: dict):
         """选择路线搜索历史"""
@@ -2023,7 +2396,32 @@ class GpxStudio(QMainWindow):
         end = history_data.get('end', '')
         mode = history_data.get('mode', 'driving')
 
+        # 获取坐标信息
+        start_coords = history_data.get('start_coords')
+        end_coords = history_data.get('end_coords')
+        waypoint_coords = history_data.get('waypoint_coords', [])
+
+        # 获取保存的路线点数据
+        route_points = history_data.get('route_points', [])
+        distance = history_data.get('distance', 0)
+        duration = history_data.get('duration', 0)
+
         self.logger.info(f"[路线面板] 选择历史记录: {start} → {end}")
+        self.logger.info(f"[路线面板] 起点坐标: {start_coords}, 终点坐标: {end_coords}")
+        self.logger.info(f"[路线面板] 路线点数量: {len(route_points)}, 距离: {distance}m, 时长: {duration}s")
+
+        # 清除旧的路线数据（重要：避免显示上一次的路线）
+        self.data_manager.clear_all_route_data()
+
+        # 清除旧的途径点数据
+        self.data_manager.clear_waypoints()
+
+        # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
+        if hasattr(self, 'route_plan_panel'):
+            self.route_plan_panel.restore_history_mode()
+
+            # 清空所有输入框（重要：清除旧数据）
+            self.route_plan_panel.clear_all_inputs()
 
         # 填充到输入框
         if hasattr(self, 'route_plan_panel'):
@@ -2032,6 +2430,208 @@ class GpxStudio(QMainWindow):
 
             # 切换交通方式
             self.route_plan_panel._switch_transport_mode(mode)
+
+        # 如果历史记录中有坐标，直接恢复
+        has_coords = False
+        if start_coords and isinstance(start_coords, (list, tuple)) and len(start_coords) == 2:
+            self.data_manager.set_start_location(tuple(start_coords), start)
+            self.logger.info(f"[路线面板] 已恢复起点坐标: {start_coords}")
+            has_coords = True
+
+        if end_coords and isinstance(end_coords, (list, tuple)) and len(end_coords) == 2:
+            self.data_manager.set_end_location(tuple(end_coords), end)
+            self.logger.info(f"[路线面板] 已恢复终点坐标: {end_coords}")
+            has_coords = has_coords and True
+        else:
+            has_coords = False
+
+        # 恢复途径点坐标和UI
+        if waypoint_coords:
+            waypoints = history_data.get('waypoints', [])
+            for i, coords in enumerate(waypoint_coords):
+                if coords and isinstance(coords, (list, tuple)) and len(coords) == 2:
+                    waypoint_name = waypoints[i] if i < len(waypoints) else f"途径点{i+1}"
+                    # 添加到data_manager
+                    self.data_manager.add_waypoint(tuple(coords), waypoint_name)
+                    # 添加到UI
+                    if hasattr(self, 'route_plan_panel'):
+                        self.route_plan_panel._add_waypoint()
+                        # 设置途径点文本
+                        if i < len(self.route_plan_panel.waypoint_widgets):
+                            self.route_plan_panel.waypoint_widgets[i]['input'].setText(waypoint_name)
+                    self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords}")
+
+        # 如果没有坐标，自动搜索起点和终点
+        if not has_coords:
+            self.logger.info(f"[路线面板] 历史记录缺少坐标，开始自动搜索...")
+            self._auto_search_history_locations(start, end, mode)
+        else:
+            # 恢复路线点数据到data_manager
+            if route_points and len(route_points) > 0:
+                # 将路线点转换为元组格式 (lat, lon) 或 (lat, lon, elevation)
+                converted_route_points = []
+                for point in route_points:
+                    if isinstance(point, (list, tuple)) and len(point) >= 2:
+                        # 保留原始格式（可能包含海拔）
+                        converted_route_points.append(tuple(point))
+
+                if converted_route_points:
+                    # 设置路线点数据
+                    self.data_manager.route_points = converted_route_points
+                    self.data_manager.estimated_duration_seconds = duration
+                    # 注意：distance 在 data_manager 中没有直接存储，但可以通过 route_points 计算
+
+                    self.logger.info(f"[路线面板] 已恢复路线点数据: {len(converted_route_points)} 个点")
+
+                    # 在地图上渲染路线
+                    self.map_manager.show_route_on_map()
+                    self.logger.info(f"[路线面板] 路线已渲染到地图")
+            else:
+                # 如果没有路线点数据，只显示起点和终点
+                self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
+                # 在地图上预览起点和终点
+                if self.data_manager.start_coords and self.data_manager.end_coords:
+                    # 更新地图预览，显示起点和终点
+                    self.map_manager.update_map_preview(auto_fit=True)
+
+    def _auto_search_history_locations(self, start: str, end: str, mode: str):
+        """自动搜索历史记录中的起点和终点坐标
+
+        Args:
+            start: 起点名称
+            end: 终点名称
+            mode: 交通方式
+        """
+        from services.config.map_config import map_config
+
+        # 获取地理编码服务
+        map_source = map_config.get_map_source()
+        geocoding_service = self.service_manager.get_geocoding_service(map_source)
+
+        if not geocoding_service:
+            self.logger.warning(f"未找到地图源 {map_source} 的地理编码服务")
+            return
+
+        try:
+            # 搜索起点
+            self.logger.info(f"[路线面板] 搜索起点: {start}")
+            start_results = geocoding_service.search_location(start)
+            if start_results and len(start_results) > 0:
+                # 使用第一个结果
+                first_result = start_results[0]
+                location = first_result.get('location', '')
+                if location and ',' in location:
+                    lng, lat = location.split(',')
+                    start_coords = (float(lat), float(lng))
+                    self.data_manager.set_start_location(
+                        start_coords,
+                        start,
+                        first_result.get('level')
+                    )
+                    self.logger.info(f"[路线面板] 起点坐标已找到: {start_coords}")
+
+            # 搜索终点
+            self.logger.info(f"[路线面板] 搜索终点: {end}")
+            end_results = geocoding_service.search_location(end)
+            if end_results and len(end_results) > 0:
+                # 使用第一个结果
+                first_result = end_results[0]
+                location = first_result.get('location', '')
+                if location and ',' in location:
+                    lng, lat = location.split(',')
+                    end_coords = (float(lat), float(lng))
+                    self.data_manager.set_end_location(
+                        end_coords,
+                        end,
+                        first_result.get('level')
+                    )
+                    self.logger.info(f"[路线面板] 终点坐标已找到: {end_coords}")
+
+            # 在地图上预览起点和终点
+            if self.data_manager.start_coords and self.data_manager.end_coords:
+                self.map_manager.update_map_preview(auto_fit=True)
+                self.logger.info(f"[路线面板] 已在地图上显示起点和终点")
+
+                # 更新历史记录中的坐标（下次就不用再搜索了）
+                self.route_history_storage.add_record(
+                    start, end, mode, [],
+                    start_coords=self.data_manager.start_coords,
+                    end_coords=self.data_manager.end_coords,
+                    waypoint_coords=[]
+                )
+                self.logger.info(f"[路线面板] 已更新历史记录中的坐标")
+            else:
+                self.logger.warning(f"[路线面板] 未能找到起点或终点的坐标")
+
+        except Exception as e:
+            self.logger.error(f"[路线面板] 自动搜索坐标失败: {e}")
+
+    def _on_route_alternative_selected(self, index: int):
+        """用户选择路线方案"""
+        self.logger.info(f"[路线面板] 用户选择路线方案: {index}")
+
+        # 隐藏加载状态
+        self.route_plan_panel.hide_loading()
+
+        # 调用路线管理器选择路线方案
+        self.route_manager.select_route_alternative(index)
+
+    def _show_route_alternatives(self, alternatives: list, selected_index: int = 0):
+        """显示路线待选列表"""
+        self.logger.info(f"[路线面板] 显示路线待选列表，共 {len(alternatives)} 个方案")
+
+        # 隐藏加载状态
+        self.route_plan_panel.hide_loading()
+
+        # 在路线规划面板中显示路线待选列表
+        self.route_plan_panel.show_route_alternatives(alternatives, selected_index)
+
+    def _save_route_history(self, distance: float = None, duration: int = None):
+        """保存路线历史记录（在路线规划成功后调用）
+
+        Args:
+            distance: 路线总距离（米）
+            duration: 路线总时长（秒）
+        """
+        if not hasattr(self, '_current_route_info'):
+            self.logger.warning("[路线面板] 没有当前路线信息，无法保存历史记录")
+            return
+
+        info = self._current_route_info
+
+        # 从data_manager获取完整路线点数据（包含海拔）
+        route_points = self.data_manager.route_points if hasattr(self.data_manager, 'route_points') else None
+
+        # 记录路线点数量
+        if route_points:
+            valid_points = [p for p in route_points if p is not None]
+            self.logger.debug(f"[路线面板] 准备保存路线点数据，共 {len(valid_points)} 个有效点")
+        else:
+            self.logger.warning("[路线面板] 没有路线点数据")
+
+        # 保存到历史记录（包含完整信息）
+        self.route_history_storage.add_record(
+            info['start'],
+            info['end'],
+            info['mode'],
+            info['waypoints'],
+            start_coords=info['start_coords'],
+            end_coords=info['end_coords'],
+            waypoint_coords=info['waypoint_coords'],
+            distance=distance,
+            duration=duration,
+            route_points=route_points
+        )
+
+        self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
+                        f"距离: {distance}米, 时长: {duration}秒")
+
+        # 重新加载历史记录
+        history_list = self.route_history_storage.get_history(10)
+        self.route_plan_panel.load_history(history_list)
+
+        # 清除临时信息
+        delattr(self, '_current_route_info')
 
     def _get_mode_text(self, mode: str) -> str:
         """获取交通方式文本"""

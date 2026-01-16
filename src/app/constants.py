@@ -2,7 +2,7 @@
 
 # 窗口配置
 WINDOW_TITLE = "GPX Studio - 路线规划工具"  # 应用程序窗口标题
-WINDOW_SIZE = (1400, 800)  # 应用程序窗口默认大小 (宽度, 高度)
+WINDOW_SIZE = (1000, 600)  # 应用程序窗口默认大小 (宽度, 高度)
 
 # 搜索类型
 SEARCH_TYPE_START = "start"  # 起点搜索类型

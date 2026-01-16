@@ -13,22 +13,20 @@ from datetime import datetime
 class RouteHistoryStorage:
     """路线搜索历史存储"""
 
-    def __init__(self, storage_file: str = "RouteHistoryList.json"):
+    def __init__(self, storage_file: str = None):
         """
         初始化路线历史存储
 
         Args:
-            storage_file: 存储文件名（相对于exe目录）
+            storage_file: 存储文件路径（如果为None，使用默认路径）
         """
-        # 获取exe所在目录
-        if getattr(sys, 'frozen', False):
-            # 打包后的exe
-            base_dir = os.path.dirname(sys.executable)
+        if storage_file is None:
+            # 使用新的数据路径管理
+            from app.data_paths import get_route_history_file
+            self.storage_path = get_route_history_file()
         else:
-            # 开发环境
-            base_dir = os.getcwd()
+            self.storage_path = storage_file
 
-        self.storage_path = os.path.join(base_dir, storage_file)
         self.history_records = []
 
         # 加载历史记录
@@ -68,7 +66,9 @@ class RouteHistoryStorage:
 
     def add_record(self, start: str, end: str, mode: str, waypoints: List[str] = None,
                    start_coords: tuple = None, end_coords: tuple = None,
-                   waypoint_coords: List[tuple] = None) -> bool:
+                   waypoint_coords: List[tuple] = None,
+                   distance: float = None, duration: int = None,
+                   route_points: List[tuple] = None) -> bool:
         """
         添加路线搜索记录
 
@@ -80,6 +80,9 @@ class RouteHistoryStorage:
             start_coords: 起点坐标 (lat, lon)
             end_coords: 终点坐标 (lat, lon)
             waypoint_coords: 途径点坐标列表
+            distance: 路线总距离（米）
+            duration: 路线总时长（秒）
+            route_points: 完整路线坐标点列表（包含海拔）[(lat, lon, elevation), ...]
 
         Returns:
             bool: 是否保存成功
@@ -89,26 +92,55 @@ class RouteHistoryStorage:
             if (record.get('start') == start and
                 record.get('end') == end and
                 record.get('mode') == mode):
-                # 更新时间戳
+                # 更新时间戳和搜索次数
                 record['timestamp'] = datetime.now().isoformat()
                 record['search_count'] = record.get('search_count', 1) + 1
+
+                # 更新坐标信息（如果提供了新的坐标）
+                # 确保坐标格式为列表（JSON兼容）
+                if start_coords is not None:
+                    record['start_coords'] = list(start_coords) if start_coords else None
+                if end_coords is not None:
+                    record['end_coords'] = list(end_coords) if end_coords else None
+                if waypoint_coords is not None:
+                    record['waypoint_coords'] = [list(coord) if coord else None for coord in waypoint_coords]
+                if waypoints is not None:
+                    record['waypoints'] = waypoints
+                if distance is not None:
+                    record['distance'] = distance
+                if duration is not None:
+                    record['duration'] = duration
+                if route_points is not None:
+                    # 保存路线点（过滤掉None分隔符，转换为列表格式）
+                    record['route_points'] = [
+                        list(point) if point and point is not None else None
+                        for point in route_points
+                    ]
 
                 # 移到列表开头（最近使用）
                 self.history_records.remove(record)
                 self.history_records.insert(0, record)
 
-                print(f"[路线历史存储] 更新记录: {start} → {end}")
+                print(f"[路线历史存储] 更新记录: {start} → {end}, 坐标: {record.get('start_coords')} → {record.get('end_coords')}, "
+                      f"距离: {distance}米, 时长: {duration}秒, 路线点数: {len([p for p in (route_points or []) if p is not None])}")
                 return self._save_history()
 
         # 创建新记录
+        # 确保坐标格式为列表（JSON兼容）
         record = {
             'start': start,
             'end': end,
             'mode': mode,
             'waypoints': waypoints or [],
-            'start_coords': start_coords,
-            'end_coords': end_coords,
-            'waypoint_coords': waypoint_coords or [],
+            'start_coords': list(start_coords) if start_coords else None,
+            'end_coords': list(end_coords) if end_coords else None,
+            'waypoint_coords': [list(coord) if coord else None for coord in (waypoint_coords or [])],
+            'distance': distance,
+            'duration': duration,
+            'route_points': [
+                list(point) if point and point is not None else None
+                for point in (route_points or [])
+            ] if route_points else None,
             'timestamp': datetime.now().isoformat(),
             'search_count': 1
         }
@@ -120,7 +152,8 @@ class RouteHistoryStorage:
         if len(self.history_records) > 50:
             self.history_records = self.history_records[:50]
 
-        print(f"[路线历史存储] 新增记录: {start} → {end}")
+        print(f"[路线历史存储] 新增记录: {start} → {end}, 坐标: {record.get('start_coords')} → {record.get('end_coords')}, "
+              f"距离: {distance}米, 时长: {duration}秒, 路线点数: {len([p for p in (route_points or []) if p is not None])}")
         return self._save_history()
 
     def get_history(self, limit: int = 10) -> List[Dict]:

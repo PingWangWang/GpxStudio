@@ -14,22 +14,20 @@ from datetime import datetime
 class GeoInfoStorage:
     """地理信息存储类"""
 
-    def __init__(self, storage_file: str = "GeoInfoList.json"):
+    def __init__(self, storage_file: str = None):
         """
         初始化地理信息存储
 
         Args:
-            storage_file: 存储文件名（默认为GeoInfoList.json）
+            storage_file: 存储文件路径（如果为None，使用默认路径）
         """
-        # 获取exe所在目录
-        if getattr(sys, 'frozen', False):
-            # 打包后的exe环境
-            self.storage_dir = os.path.dirname(sys.executable)
+        if storage_file is None:
+            # 使用新的数据路径管理
+            from app.data_paths import get_geo_info_file
+            self.storage_path = get_geo_info_file()
         else:
-            # 开发环境，使用项目根目录
-            self.storage_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            self.storage_path = storage_file
 
-        self.storage_path = os.path.join(self.storage_dir, storage_file)
         self.geo_info_list = []
         self.max_history = 100  # 最多保存100条历史记录
 

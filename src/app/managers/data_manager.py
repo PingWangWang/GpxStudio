@@ -37,6 +37,10 @@ class DataManager:
         self.route_points: List[Tuple[float, float]] = []  # 路线坐标点列表
         self.estimated_duration_seconds: int = 0  # 预估路线耗时（秒）
 
+        # 多路线方案支持
+        self.route_alternatives: List[dict] = []  # 所有路线方案列表
+        self.selected_route_index: int = 0  # 当前选中的路线方案索引
+
         # 搜索相关
         self.search_results: List = []  # 搜索结果列表
         self.searching_for: Optional[str] = None  # 当前搜索的类型（起点/终点/途径点）
@@ -121,7 +125,7 @@ class DataManager:
         self.waypoints_names.clear()
 
     def set_route(self, route_points: List[Tuple[float, float]], duration_seconds: int = 0):
-        """设置路线
+        """设置路线（单条路线，兼容旧代码）
 
         参数:
             route_points: 路线坐标点列表
@@ -129,6 +133,50 @@ class DataManager:
         """
         self.route_points = route_points
         self.estimated_duration_seconds = duration_seconds
+
+    def set_route_alternatives(self, alternatives: List[dict], selected_index: int = 0):
+        """设置多条路线方案
+
+        参数:
+            alternatives: 路线方案列表，每个方案包含：
+                - route_points: 路线点列表
+                - duration: 预估时间（秒）
+                - distance: 路线距离（米）
+                - tolls: 收费金额（元）
+                - traffic_lights: 红绿灯数量
+                - description: 路线描述
+            selected_index: 默认选中的方案索引
+        """
+        self.route_alternatives = alternatives
+        self.selected_route_index = selected_index
+
+        # 更新当前路线数据（兼容旧代码）
+        if alternatives and 0 <= selected_index < len(alternatives):
+            selected_route = alternatives[selected_index]
+            self.route_points = selected_route.get('route_points', [])
+            self.estimated_duration_seconds = selected_route.get('duration', 0)
+
+    def select_route_alternative(self, index: int):
+        """选择路线方案
+
+        参数:
+            index: 路线方案索引
+        """
+        if 0 <= index < len(self.route_alternatives):
+            self.selected_route_index = index
+            selected_route = self.route_alternatives[index]
+            self.route_points = selected_route.get('route_points', [])
+            self.estimated_duration_seconds = selected_route.get('duration', 0)
+
+    def get_selected_route(self) -> Optional[dict]:
+        """获取当前选中的路线方案
+
+        返回:
+            当前选中的路线方案，如果没有则返回None
+        """
+        if 0 <= self.selected_route_index < len(self.route_alternatives):
+            return self.route_alternatives[self.selected_route_index]
+        return None
 
     def set_search_results(self, results: List, searching_for: str):
         """设置搜索结果
@@ -193,6 +241,10 @@ class DataManager:
         self.current_route = None
         self.route_points = []
         self.estimated_duration_seconds = 0
+
+        # 重置多路线方案
+        self.route_alternatives = []
+        self.selected_route_index = 0
 
         # 重置搜索相关
         self.search_results = []

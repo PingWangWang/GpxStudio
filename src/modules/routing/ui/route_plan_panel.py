@@ -7,8 +7,289 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLineEdit, QLabel, QScrollArea, QListWidget, QListWidgetItem)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QIcon, QPixmap, QTransform
+from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
+
+
+class RouteHistoryItem(QWidget):
+    """路线历史记录列表项"""
+
+    def __init__(self, history_data: dict, parent=None):
+        super().__init__(parent)
+        self.history_data = history_data
+        self._init_ui()
+
+    def _init_ui(self):
+        """初始化UI"""
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        # 交通方式图标
+        self.mode_icon_label = QLabel()
+        self.mode_icon_label.setFixedSize(24, 24)
+        layout.addWidget(self.mode_icon_label)
+
+        # 路线文本
+        start = self.history_data.get('start', '')
+        end = self.history_data.get('end', '')
+        route_label = QLabel(f"{start} → {end}")
+        route_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        route_label.setWordWrap(True)
+        layout.addWidget(route_label, 1)
+
+        # 搜索次数（放在右侧）
+        search_count = self.history_data.get('search_count', 1)
+        if search_count > 1:
+            count_label = QLabel(f"搜索 {search_count} 次")
+            count_label.setStyleSheet("""
+                QLabel {
+                    color: rgba(255, 255, 255, 0.6);
+                    font-size: 11px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            layout.addWidget(count_label)
+
+        # 加载交通方式图标
+        self._load_mode_icon()
+
+    def _load_mode_icon(self):
+        """加载交通方式图标"""
+        # 获取项目根目录
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+
+        mode = self.history_data.get('mode', 'driving')
+        icon_name_map = {
+            'driving': 'Driving_white.png',
+            'cycling': 'Cycling_white.png',
+            'walking': 'Waking_white.png'
+        }
+
+        icon_name = icon_name_map.get(mode, 'Driving_white.png')
+        icon_path = os.path.join(project_root, 'res', icon_name)
+
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.mode_icon_label.setPixmap(scaled_pixmap)
+
+
+class RouteAlternativeItem(QWidget):
+    """路线待选列表项"""
+
+    def __init__(self, route_data: dict, index: int, is_selected: bool = False, parent=None):
+        super().__init__(parent)
+        self.route_data = route_data
+        self.index = index
+        self.is_selected = is_selected
+        self._init_ui()
+
+    def _init_ui(self):
+        """初始化UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+
+        # 第一行：方案名称和时间
+        first_row = QHBoxLayout()
+        first_row.setSpacing(8)
+
+        # 方案名称（如：推荐方案、距离最短、躲避拥堵）
+        description = self.route_data.get('description', f'方案{self.index + 1}')
+        name_label = QLabel(description)
+        name_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 14px;
+                font-weight: bold;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        first_row.addWidget(name_label)
+
+        first_row.addStretch()
+
+        # 预计时间
+        duration = self.route_data.get('duration', 0)
+        hours = duration // 3600
+        minutes = (duration % 3600) // 60
+        if hours > 0:
+            time_text = f"约{hours}小时{minutes}分钟"
+        else:
+            time_text = f"约{minutes}分钟"
+
+        time_label = QLabel(time_text)
+        time_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 12px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        first_row.addWidget(time_label)
+
+        layout.addLayout(first_row)
+
+        # 第二行：距离、红绿灯、收费信息
+        second_row = QHBoxLayout()
+        second_row.setSpacing(12)
+
+        # 距离
+        distance = self.route_data.get('distance', 0)
+        distance_km = distance / 1000
+        distance_label = QLabel(f"{distance_km:.1f}公里")
+        distance_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 11px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        second_row.addWidget(distance_label)
+
+        # 红绿灯数量（仅驾车模式）
+        traffic_lights = self.route_data.get('traffic_lights', 0)
+        if traffic_lights > 0:
+            lights_label = QLabel(f"红绿灯{traffic_lights}个")
+            lights_label.setStyleSheet("""
+                QLabel {
+                    color: rgba(255, 255, 255, 0.6);
+                    font-size: 11px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            second_row.addWidget(lights_label)
+
+        # 收费信息（仅驾车模式）
+        tolls = self.route_data.get('tolls', 0)
+        if tolls > 0:
+            tolls_label = QLabel(f"收费{tolls}元")
+            tolls_label.setStyleSheet("""
+                QLabel {
+                    color: rgba(255, 255, 255, 0.6);
+                    font-size: 11px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            second_row.addWidget(tolls_label)
+
+        second_row.addStretch()
+
+        layout.addLayout(second_row)
+
+        # 设置选中状态的背景色
+        if self.is_selected:
+            self.setStyleSheet("""
+                RouteAlternativeItem {
+                    background-color: rgba(255, 255, 255, 0.15);
+                    border-radius: 4px;
+                }
+            """)
+
+    def set_selected(self, selected: bool):
+        """设置选中状态"""
+        self.is_selected = selected
+        if selected:
+            self.setStyleSheet("""
+                RouteAlternativeItem {
+                    background-color: rgba(255, 255, 255, 0.15);
+                    border-radius: 4px;
+                }
+            """)
+        else:
+            self.setStyleSheet("")
+
+
+class AddressSuggestionItem(QWidget):
+    """地址待选列表项"""
+
+    confirm_clicked = pyqtSignal(dict)  # 确认按钮点击信号
+
+    def __init__(self, address_data: dict, parent=None):
+        super().__init__(parent)
+        self.address_data = address_data
+        self._init_ui()
+
+    def _init_ui(self):
+        """初始化UI"""
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)  # 减小内边距
+        layout.setSpacing(8)  # 减小间距
+
+        # 地址信息容器
+        address_container = QVBoxLayout()
+        address_container.setSpacing(2)  # 减小间距
+
+        # 地址名称
+        name_label = QLabel(self.address_data.get('name', ''))
+        name_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                font-size: 13px;
+                font-weight: bold;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        name_label.setWordWrap(True)
+        address_container.addWidget(name_label)
+
+        # 详细地址
+        address_label = QLabel(self.address_data.get('address', ''))
+        address_label.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 11px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        address_label.setWordWrap(True)
+        address_container.addWidget(address_label)
+
+        layout.addLayout(address_container, 1)
+
+        # 确认按钮
+        self.confirm_button = QPushButton()
+        self.confirm_button.setFixedSize(32, 32)  # 减小按钮尺寸
+        self.confirm_button.setToolTip("选择此地址")
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(74, 144, 226, 0.15);
+                border: 1px solid rgba(74, 144, 226, 0.4);
+                border-radius: 16px;
+            }
+            QPushButton:hover {
+                background-color: rgba(74, 144, 226, 0.25);
+                border: 1px solid rgba(74, 144, 226, 0.6);
+            }
+            QPushButton:pressed {
+                background-color: rgba(74, 144, 226, 0.35);
+                border: 1px solid rgba(74, 144, 226, 0.8);
+            }
+        """)
+        self.confirm_button.clicked.connect(lambda: self.confirm_clicked.emit(self.address_data))
+        layout.addWidget(self.confirm_button, 0, Qt.AlignVCenter | Qt.AlignRight)
+
+        # 加载确认图标
+        self._load_icon()
+
+    def _load_icon(self):
+        """加载确认图标"""
+        # 获取项目根目录
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+
+        icon_path = os.path.join(project_root, 'res', 'Yes.png')
+        if os.path.exists(icon_path):
+            self.confirm_button.setIcon(QIcon(icon_path))
+            self.confirm_button.setIconSize(QSize(18, 18))  # 减小图标尺寸
 
 
 class RoutePlanPanel(QWidget):
@@ -19,6 +300,9 @@ class RoutePlanPanel(QWidget):
     plan_route_clicked = pyqtSignal(str, str, str, list)  # 规划路线：(起点, 终点, 交通方式, 途径点列表)
     search_location_clicked = pyqtSignal(str, str)  # 搜索地点：(搜索文本, 类型: start/end/waypoint)
     history_selected = pyqtSignal(dict)  # 选择历史记录
+    address_selected = pyqtSignal(dict, str, bool)  # 地址选中：(地址数据, 类型: start/end/waypoint, 是否缩放地图)
+    clear_route_clicked = pyqtSignal()  # 清除路线按钮点击
+    route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
 
     def __init__(self, parent=None):
         """初始化路线规划面板"""
@@ -34,11 +318,14 @@ class RoutePlanPanel(QWidget):
         # 途径点列表
         self.waypoint_widgets = []
 
+        # 地址搜索相关状态
+        self.current_search_type = None  # 当前正在搜索的类型: start/end/waypoint
+        self.current_search_input = None  # 当前正在搜索的输入框
+        self.current_suggestions = []  # 当前的地址建议列表
+        self.selected_suggestion_index = 0  # 当前选中的建议索引
+
         # 初始化UI
         self._init_ui()
-
-        # 加载图标
-        self._load_icons()
 
         # 加载图标
         self._load_icons()
@@ -51,6 +338,7 @@ class RoutePlanPanel(QWidget):
                 background-color: #4A90E2;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 0, 0, 0.15);
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLineEdit {
                 background-color: rgba(255, 255, 255, 0.9);
@@ -59,6 +347,7 @@ class RoutePlanPanel(QWidget):
                 padding: 8px 12px;
                 font-size: 13px;
                 color: #333333;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLineEdit:focus {
                 background-color: white;
@@ -66,6 +355,7 @@ class RoutePlanPanel(QWidget):
             QPushButton {
                 background-color: transparent;
                 border: none;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QPushButton:hover {
                 background-color: rgba(255, 255, 255, 0.1);
@@ -98,6 +388,12 @@ class RoutePlanPanel(QWidget):
             }
             QPushButton[switchButton="true"]:pressed {
                 background-color: rgba(255, 255, 255, 0.15);
+            }
+            QLabel {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QListWidget {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
         """)
 
@@ -210,6 +506,7 @@ class RoutePlanPanel(QWidget):
         self.start_input = QLineEdit()
         self.start_input.setPlaceholderText("请输入起点")
         self.start_input.returnPressed.connect(lambda: self._on_search_location("start"))
+        self.start_input.focusInEvent = lambda e: self._on_input_focus_in(e, "start", self.start_input)
         self.start_layout.addWidget(self.start_input)
 
         # 起点右侧占位符（用于保持输入框宽度一致）
@@ -254,6 +551,7 @@ class RoutePlanPanel(QWidget):
         self.end_input = QLineEdit()
         self.end_input.setPlaceholderText("请输入终点")
         self.end_input.returnPressed.connect(lambda: self._on_search_location("end"))
+        self.end_input.focusInEvent = lambda e: self._on_input_focus_in(e, "end", self.end_input)
         self.end_layout.addWidget(self.end_input)
 
         # 终点右侧占位符（用于保持输入框宽度一致）
@@ -288,12 +586,9 @@ class RoutePlanPanel(QWidget):
         left_spacer.setFixedSize(32, 32)
         buttons_container_layout.addWidget(left_spacer)
 
-        # 中间按钮容器
-        center_buttons_layout = QHBoxLayout()
-        center_buttons_layout.setSpacing(8)
-
-        # 清除路线按钮
+        # 清除路线按钮（左对齐）
         self.clear_button = QPushButton("清除路线")
+        self.clear_button.setFixedWidth(110)
         self.clear_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.7);
@@ -311,10 +606,14 @@ class RoutePlanPanel(QWidget):
             }
         """)
         self.clear_button.clicked.connect(self._on_clear_route)
-        center_buttons_layout.addWidget(self.clear_button)
+        buttons_container_layout.addWidget(self.clear_button)
 
-        # 开车去按钮
+        # 弹性空间，将开车去按钮推到右侧
+        buttons_container_layout.addStretch()
+
+        # 开车去按钮（右对齐，与终点文本框右对齐）
         self.plan_button = QPushButton("开车去")
+        self.plan_button.setFixedWidth(110)
         self.plan_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.9);
@@ -332,18 +631,86 @@ class RoutePlanPanel(QWidget):
             }
         """)
         self.plan_button.clicked.connect(self._on_plan_route)
-        center_buttons_layout.addWidget(self.plan_button)
+        buttons_container_layout.addWidget(self.plan_button)
 
-        buttons_container_layout.addLayout(center_buttons_layout)
+        # 加载中按钮（默认隐藏，放在开车去右侧，但始终占据空间）
+        self.loading_button = QLabel()
+        self.loading_button.setFixedSize(32, 32)
+        self.loading_button.setAlignment(Qt.AlignCenter)
+        # 使用透明度隐藏，而不是setVisible，这样可以保持占据空间
+        self.loading_button.setStyleSheet("QLabel { background: transparent; }")
+        buttons_container_layout.addWidget(self.loading_button)
 
-        # 右侧占位符（与添加按钮宽度一致）
-        right_spacer = QWidget()
-        right_spacer.setFixedSize(32, 32)
-        buttons_container_layout.addWidget(right_spacer)
+        # 加载Loading图标
+        self._load_loading_icon()
 
         main_layout.addWidget(buttons_container)
 
-        # 4. 路线搜索历史记录
+        # 4. 地址待选列表（用于显示搜索结果）
+        self.address_suggestions_container = QWidget()
+        address_suggestions_layout = QVBoxLayout(self.address_suggestions_container)
+        address_suggestions_layout.setContentsMargins(0, 0, 0, 0)
+        address_suggestions_layout.setSpacing(4)
+
+        # 地址待选列表标题
+        suggestions_header_layout = QHBoxLayout()
+        suggestions_header_layout.setSpacing(4)
+        suggestions_header_layout.setContentsMargins(0, 8, 0, 8)
+
+        # 搜索图标
+        self.search_icon_label = QLabel()
+        self.search_icon_label.setFixedSize(16, 16)
+        suggestions_header_layout.addWidget(self.search_icon_label)
+
+        # 地址待选标题
+        self.suggestions_title_label = QLabel("地址待选")
+        self.suggestions_title_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 12px;
+            }
+        """)
+        suggestions_header_layout.addWidget(self.suggestions_title_label)
+
+        # 添加弹簧，使标签靠左
+        suggestions_header_layout.addStretch(1)
+
+        address_suggestions_layout.addLayout(suggestions_header_layout)
+
+        # 地址待选列表
+        self.address_suggestions_list = QListWidget()
+        self.address_suggestions_list.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(255, 255, 255, 0.95);
+                border: none;
+                border-radius: 4px;
+                color: #333333;
+            }
+            QListWidget::item {
+                padding: 0px;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            }
+            QListWidget::item:hover {
+                background-color: rgba(74, 144, 226, 0.05);
+            }
+            QListWidget::item:selected {
+                background-color: rgba(74, 144, 226, 0.1);
+            }
+        """)
+        self.address_suggestions_list.itemClicked.connect(self._on_address_suggestion_clicked)
+        self.address_suggestions_list.itemDoubleClicked.connect(self._on_address_suggestion_double_clicked)
+        address_suggestions_layout.addWidget(self.address_suggestions_list)
+
+        # 初始隐藏地址待选列表
+        self.address_suggestions_container.setVisible(False)
+        main_layout.addWidget(self.address_suggestions_container)
+
+        # 5. 路线搜索历史记录
+        self.history_container = QWidget()
+        history_container_layout = QVBoxLayout(self.history_container)
+        history_container_layout.setContentsMargins(0, 0, 0, 0)
+        history_container_layout.setSpacing(0)
+
         history_header_layout = QHBoxLayout()
         history_header_layout.setSpacing(4)
         history_header_layout.setContentsMargins(0, 8, 0, 8)
@@ -366,7 +733,7 @@ class RoutePlanPanel(QWidget):
         # 添加弹簧，使标签靠左
         history_header_layout.addStretch(1)
 
-        main_layout.addLayout(history_header_layout)
+        history_container_layout.addLayout(history_header_layout)
 
         # 历史记录列表
         self.history_list = QListWidget()
@@ -378,7 +745,7 @@ class RoutePlanPanel(QWidget):
                 color: white;
             }
             QListWidget::item {
-                padding: 8px;
+                padding: 0px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
             QListWidget::item:hover {
@@ -389,7 +756,9 @@ class RoutePlanPanel(QWidget):
             }
         """)
         self.history_list.itemClicked.connect(self._on_history_clicked)
-        main_layout.addWidget(self.history_list)
+        history_container_layout.addWidget(self.history_list)
+
+        main_layout.addWidget(self.history_container)
 
         # 初始化交通方式
         self._update_transport_mode_ui()
@@ -447,6 +816,163 @@ class RoutePlanPanel(QWidget):
             # 缩放到16x16
             scaled_pixmap = pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.history_icon_label.setPixmap(scaled_pixmap)
+
+        # 搜索图标（白色版本）
+        search_icon_path = os.path.join(project_root, 'res', 'Search.png')
+        if os.path.exists(search_icon_path):
+            # 创建白色版本
+            img = QPixmap(search_icon_path).toImage()
+            for y in range(img.height()):
+                for x in range(img.width()):
+                    pixel = img.pixelColor(x, y)
+                    if pixel.alpha() > 0:
+                        img.setPixelColor(x, y, QColor(255, 255, 255, pixel.alpha()))
+            pixmap = QPixmap.fromImage(img)
+            # 缩放到16x16
+            scaled_pixmap = pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.search_icon_label.setPixmap(scaled_pixmap)
+
+    def _load_loading_icon(self):
+        """加载Loading图标并设置旋转动画"""
+        from PyQt5.QtCore import QTimer
+
+        # 获取项目根目录
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file)))))
+
+        # 加载Loading图标
+        loading_icon_path = os.path.join(project_root, 'res', 'Loading.png')
+        if os.path.exists(loading_icon_path):
+            self.loading_pixmap = QPixmap(loading_icon_path)
+            # 缩放到24x24
+            self.loading_pixmap = self.loading_pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            # 初始化旋转角度
+            self.loading_rotation_angle = 0
+
+            # 创建定时器用于旋转动画
+            self.loading_timer = QTimer(self)
+            self.loading_timer.timeout.connect(self._rotate_loading_icon)
+
+    def _rotate_loading_icon(self):
+        """旋转Loading图标"""
+        if not hasattr(self, 'loading_pixmap'):
+            return
+
+        # 更新旋转角度
+        self.loading_rotation_angle = (self.loading_rotation_angle + 10) % 360
+
+        # 创建旋转后的图标
+        transform = QTransform().rotate(self.loading_rotation_angle)
+        rotated_pixmap = self.loading_pixmap.transformed(transform, Qt.SmoothTransformation)
+
+        # 设置到label
+        self.loading_button.setPixmap(rotated_pixmap)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """处理键盘事件"""
+        if event.key() == Qt.Key_Escape:
+            self.cancel_clicked.emit()
+        else:
+            super().keyPressEvent(event)
+
+    def show_loading(self):
+        """显示加载中状态"""
+        # 不使用setVisible，而是通过设置pixmap来显示
+        if hasattr(self, 'loading_timer'):
+            self.loading_timer.start(50)  # 每50ms旋转一次
+
+    def hide_loading(self):
+        """隐藏加载中状态"""
+        # 清除pixmap来隐藏，但保持占据空间
+        self.loading_button.clear()
+        if hasattr(self, 'loading_timer'):
+            self.loading_timer.stop()
+
+    def show_search_error(self, location_type: str):
+        """显示搜索失败提示"""
+        if location_type == "start":
+            input_widget = self.start_input
+        elif location_type == "end":
+            input_widget = self.end_input
+        else:
+            # 途径点
+            return
+
+        # 保存原始占位符
+        original_placeholder = input_widget.placeholderText()
+
+        # 设置错误提示
+        input_widget.setPlaceholderText("搜索失败，请重试")
+        input_widget.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid rgba(255, 100, 100, 0.5);
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+                color: #333333;
+            }
+            QLineEdit::placeholder {
+                color: #ff6666;
+            }
+        """)
+
+        # 3秒后恢复原始状态
+        from PyQt5.QtCore import QTimer
+        def restore_placeholder():
+            input_widget.setPlaceholderText(original_placeholder)
+            input_widget.setStyleSheet("""
+                QLineEdit {
+                    background-color: rgba(255, 255, 255, 0.9);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-size: 13px;
+                    color: #333333;
+                }
+            """)
+
+        QTimer.singleShot(3000, restore_placeholder)
+
+    def show_route_plan_error(self, error_message: str = "路线规划失败，请重试"):
+        """显示路线规划失败提示"""
+        # 在历史记录区域显示错误提示
+        self.history_list.clear()
+
+        # 创建错误提示项
+        error_widget = QWidget()
+        error_layout = QVBoxLayout(error_widget)
+        error_layout.setContentsMargins(16, 16, 16, 16)
+        error_layout.setSpacing(8)
+
+        # 错误图标和文字
+        error_text = QLabel(error_message)
+        error_text.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 100, 100, 1);
+                font-size: 13px;
+                font-weight: bold;
+            }
+        """)
+        error_text.setWordWrap(True)
+        error_text.setAlignment(Qt.AlignCenter)
+        error_layout.addWidget(error_text)
+
+        # 添加到列表
+        item = QListWidgetItem()
+        item.setSizeHint(error_widget.sizeHint())
+        self.history_list.addItem(item)
+        self.history_list.setItemWidget(item, error_widget)
+
+        # 3秒后恢复历史记录显示
+        from PyQt5.QtCore import QTimer
+        def restore_history():
+            # 重新加载历史记录
+            if hasattr(self, '_last_history_list'):
+                self.load_history(self._last_history_list)
+
+        QTimer.singleShot(3000, restore_history)
 
     def _switch_transport_mode(self, mode: str):
         """切换交通方式"""
@@ -540,6 +1066,7 @@ class RoutePlanPanel(QWidget):
         waypoint_input = QLineEdit()
         waypoint_input.setPlaceholderText(f"请输入途径点{len(self.waypoint_widgets) + 1}")
         waypoint_input.returnPressed.connect(lambda: self._on_search_location("waypoint"))
+        waypoint_input.focusInEvent = lambda e: self._on_input_focus_in(e, "waypoint", waypoint_input)
         waypoint_layout.addWidget(waypoint_input)
 
         # 删除按钮
@@ -665,17 +1192,35 @@ class RoutePlanPanel(QWidget):
         """搜索地点"""
         if location_type == "start":
             text = self.start_input.text().strip()
+            input_widget = self.start_input
         elif location_type == "end":
             text = self.end_input.text().strip()
+            input_widget = self.end_input
         else:  # waypoint
             # 找到当前焦点的输入框
             focused_widget = self.focusWidget()
             if isinstance(focused_widget, QLineEdit):
                 text = focused_widget.text().strip()
+                input_widget = focused_widget
             else:
                 return
 
+        # 如果地址待选列表可见且有结果，按回车时选择第一个地址
+        if self.address_suggestions_container.isVisible() and self.current_suggestions:
+            # 自动选择第一个地址
+            first_address = self.current_suggestions[0]
+            self._on_address_confirm_clicked(first_address)
+            return
+
         if text:
+            # 保存当前搜索文本（用于后续保存历史记录）
+            self._current_search_text = text
+
+            # 更新当前搜索状态
+            self.current_search_type = location_type
+            self.current_search_input = input_widget
+
+            # 发送搜索信号
             self.search_location_clicked.emit(text, location_type)
 
     def _on_plan_route(self):
@@ -705,7 +1250,13 @@ class RoutePlanPanel(QWidget):
         # 清空所有途径点
         while self.waypoint_widgets:
             widget_dict = self.waypoint_widgets[0]
-            self._remove_waypoint(widget_dict['layout'])
+            self._remove_waypoint(widget_dict['container'])
+
+        # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
+        self.restore_history_mode()
+
+        # 发送清除路线信号
+        self.clear_route_clicked.emit()
 
     def _on_history_clicked(self, item: QListWidgetItem):
         """点击历史记录"""
@@ -721,18 +1272,296 @@ class RoutePlanPanel(QWidget):
         """设置终点"""
         self.end_input.setText(text)
 
+    def clear_all_inputs(self):
+        """清空所有输入框（供外部调用）"""
+        # 清空起点和终点
+        self.start_input.clear()
+        self.end_input.clear()
+
+        # 清空所有途径点
+        while self.waypoint_widgets:
+            widget_dict = self.waypoint_widgets[0]
+            self._remove_waypoint(widget_dict['container'])
+
     def load_history(self, history_list: list):
         """加载历史记录"""
+        # 保存历史记录列表，以便错误提示后恢复
+        self._last_history_list = history_list
+
         self.history_list.clear()
 
         for record in history_list:
-            start = record.get('start', '')
-            end = record.get('end', '')
-            mode = record.get('mode', 'driving')
+            # 创建自定义历史记录项widget
+            history_widget = RouteHistoryItem(record)
 
             # 创建列表项
-            item_text = f"{start} → {end}"
-            item = QListWidgetItem(item_text)
+            item = QListWidgetItem()
             item.setData(Qt.UserRole, record)
+            item.setSizeHint(QSize(history_widget.sizeHint().width(), max(40, history_widget.sizeHint().height())))
 
             self.history_list.addItem(item)
+            self.history_list.setItemWidget(item, history_widget)
+
+    def _on_input_focus_in(self, event, location_type: str, input_widget):
+        """输入框获得焦点时的处理"""
+        # 如果之前有正在搜索的输入框，且不是当前输入框，则确认之前的选择
+        if self.current_search_input and self.current_search_input != input_widget:
+            self._confirm_current_selection()
+
+        # 更新当前搜索状态
+        self.current_search_type = location_type
+        self.current_search_input = input_widget
+
+        # 调用原始的focusInEvent
+        QLineEdit.focusInEvent(input_widget, event)
+
+    def _confirm_current_selection(self):
+        """确认当前的地址选择"""
+        if not self.current_search_input or not self.current_suggestions:
+            # 如果没有选择地址，直接显示所有历史记录
+            self.show_all_history()
+            self.address_suggestions_container.setVisible(False)
+            self.history_container.setVisible(True)
+            return
+
+        # 获取当前选中的地址
+        if 0 <= self.selected_suggestion_index < len(self.current_suggestions):
+            selected_address = self.current_suggestions[self.selected_suggestion_index]
+            # 将地址名称回显到输入框
+            address_name = selected_address.get('name', '')
+            self.current_search_input.setText(address_name)
+
+            # 如果是起点，根据起点过滤历史记录
+            if self.current_search_type == "start" and address_name:
+                self.filter_history_by_start(address_name)
+            else:
+                # 其他情况显示所有历史记录
+                self.show_all_history()
+
+        # 隐藏地址待选列表，显示历史记录
+        self._hide_address_suggestions()
+        self.history_container.setVisible(True)
+
+    def _hide_address_suggestions(self):
+        """隐藏地址待选列表"""
+        self.address_suggestions_container.setVisible(False)
+        self.current_suggestions = []
+        self.selected_suggestion_index = 0
+
+    def _on_address_suggestion_clicked(self, item: QListWidgetItem):
+        """点击地址待选项"""
+        # 获取地址数据
+        address_data = item.data(Qt.UserRole)
+        if not address_data:
+            return
+
+        # 更新选中索引
+        self.selected_suggestion_index = self.address_suggestions_list.row(item)
+
+        # 发送地址选中信号，通知父组件在地图上标识位置（需要缩放地图）
+        self.address_selected.emit(address_data, self.current_search_type, True)
+
+    def _on_address_suggestion_double_clicked(self, item: QListWidgetItem):
+        """双击地址待选项"""
+        # 获取地址数据
+        address_data = item.data(Qt.UserRole)
+        if not address_data:
+            return
+
+        # 双击时直接确认选择该地址
+        self._on_address_confirm_clicked(address_data)
+
+    def _on_address_confirm_clicked(self, address_data: dict):
+        """点击地址确认按钮"""
+        # 将地址名称回填到输入框
+        if self.current_search_input:
+            self.current_search_input.setText(address_data.get('name', ''))
+
+        # 更新选中的地址
+        for i in range(self.address_suggestions_list.count()):
+            item = self.address_suggestions_list.item(i)
+            if item.data(Qt.UserRole) == address_data:
+                self.selected_suggestion_index = i
+                break
+
+        # 发送地址选中信号（包含搜索文本，用于保存历史记录）
+        # 保存当前搜索的文本（用于历史记录）
+        search_text = getattr(self, '_current_search_text', address_data.get('name', ''))
+
+        # 发送地址选中信号，同时传递搜索文本，但不缩放地图（双击时不需要缩放）
+        self.address_selected.emit(address_data, self.current_search_type, False)
+
+        # 发送保存历史记录的信号（通过自定义属性传递）
+        address_data['_search_text'] = search_text
+
+        # 确认选择并关闭待选列表
+        self._confirm_current_selection()
+
+    def show_address_suggestions(self, suggestions: list):
+        """显示地址搜索结果
+
+        Args:
+            suggestions: 地址列表，每个地址是一个字典，包含：
+                - name: 地址名称
+                - address: 详细地址
+                - location: 经纬度 "lng,lat"
+        """
+        self.current_suggestions = suggestions
+        self.selected_suggestion_index = 0
+
+        # 清空列表
+        self.address_suggestions_list.clear()
+
+        if not suggestions:
+            self._hide_address_suggestions()
+            return
+
+        # 添加地址到列表
+        for i, addr in enumerate(suggestions):
+            # 创建自定义列表项widget
+            item_widget = AddressSuggestionItem(addr)
+            item_widget.confirm_clicked.connect(self._on_address_confirm_clicked)
+
+            # 创建列表项
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, addr)
+
+            # 设置合适的高度以显示完整内容
+            # 使用 sizeHint 并确保有足够的高度
+            size_hint = item_widget.sizeHint()
+            # 减小最小高度，让更多结果可以显示
+            item.setSizeHint(QSize(size_hint.width(), max(55, size_hint.height())))
+
+            self.address_suggestions_list.addItem(item)
+            self.address_suggestions_list.setItemWidget(item, item_widget)
+
+        # 显示地址待选列表，隐藏历史记录
+        self.address_suggestions_container.setVisible(True)
+        self.history_container.setVisible(False)
+
+        # 默认选中第一项
+        if self.address_suggestions_list.count() > 0:
+            self.address_suggestions_list.setCurrentRow(0)
+
+    def hide_address_suggestions_and_show_history(self):
+        """隐藏地址待选列表，显示历史记录"""
+        self._hide_address_suggestions()
+        self.history_container.setVisible(True)
+
+    def get_current_search_type(self):
+        """获取当前正在搜索的类型"""
+        return self.current_search_type
+
+    def get_selected_address(self):
+        """获取当前选中的地址"""
+        if 0 <= self.selected_suggestion_index < len(self.current_suggestions):
+            return self.current_suggestions[self.selected_suggestion_index]
+        return None
+
+    def filter_history_by_start(self, start_location: str):
+        """根据起点过滤历史记录
+
+        Args:
+            start_location: 起点地址
+        """
+        # 遍历历史记录列表，只显示匹配起点的记录
+        for i in range(self.history_list.count()):
+            item = self.history_list.item(i)
+            history_data = item.data(Qt.UserRole)
+            if history_data:
+                # 如果起点匹配，显示该项；否则隐藏
+                if history_data.get('start', '') == start_location:
+                    item.setHidden(False)
+                else:
+                    item.setHidden(True)
+
+    def show_all_history(self):
+        """显示所有历史记录"""
+        for i in range(self.history_list.count()):
+            item = self.history_list.item(i)
+            item.setHidden(False)
+
+    def show_route_alternatives(self, alternatives: list, selected_index: int = 0):
+        """显示路线待选列表
+
+        Args:
+            alternatives: 路线方案列表，每个方案包含：
+                - route_points: 路线点列表
+                - duration: 预估时间（秒）
+                - distance: 路线距离（米）
+                - tolls: 收费金额（元）
+                - traffic_lights: 红绿灯数量
+                - description: 路线描述
+            selected_index: 默认选中的方案索引
+        """
+        # 清空历史记录列表
+        self.history_list.clear()
+
+        if not alternatives:
+            return
+
+        # 添加路线方案到列表
+        for i, route_data in enumerate(alternatives):
+            # 创建自定义路线方案项widget
+            is_selected = (i == selected_index)
+            route_widget = RouteAlternativeItem(route_data, i, is_selected)
+
+            # 创建列表项
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, {'index': i, 'route_data': route_data})
+
+            # 设置合适的高度
+            size_hint = route_widget.sizeHint()
+            item.setSizeHint(QSize(size_hint.width(), max(60, size_hint.height())))
+
+            self.history_list.addItem(item)
+            self.history_list.setItemWidget(item, route_widget)
+
+        # 默认选中第一项
+        if self.history_list.count() > 0:
+            self.history_list.setCurrentRow(selected_index)
+
+        # 连接点击事件
+        try:
+            self.history_list.itemClicked.disconnect()  # 先断开之前的连接
+        except:
+            pass
+        self.history_list.itemClicked.connect(self._on_route_alternative_clicked)
+
+    def _on_route_alternative_clicked(self, item: QListWidgetItem):
+        """点击路线方案"""
+        data = item.data(Qt.UserRole)
+        if data:
+            index = data.get('index', 0)
+
+            # 更新所有项的选中状态
+            for i in range(self.history_list.count()):
+                list_item = self.history_list.item(i)
+                widget = self.history_list.itemWidget(list_item)
+                if isinstance(widget, RouteAlternativeItem):
+                    widget.set_selected(i == index)
+
+            # 发送信号
+            self.route_alternative_selected.emit(index)
+
+    def restore_history_mode(self):
+        """恢复历史记录模式"""
+        # 清空列表
+        self.history_list.clear()
+
+        # 重新连接历史记录点击事件
+        try:
+            self.history_list.itemClicked.disconnect()
+        except:
+            pass
+        self.history_list.itemClicked.connect(self._on_history_clicked)
+
+        # 重新加载历史记录
+        if hasattr(self, '_last_history_list') and self._last_history_list:
+            self.load_history(self._last_history_list)
+        else:
+            # 如果没有保存的历史记录，从存储中加载
+            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            storage = RouteHistoryStorage()
+            history_list = storage.get_history(10)
+            self.load_history(history_list)

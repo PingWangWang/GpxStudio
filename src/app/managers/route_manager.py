@@ -118,21 +118,22 @@ class RouteManager(QObject):
                 self.ui_updater['show_warning']("错误", "请先在地图配置中配置高德地图API密钥")
                 return
 
-            # 执行路线规划
-            route_points, estimated_duration = routing_service.plan_route(points, transport_mode)
-
-            # 保存路线数据到数据管理器
-            self.data_manager.set_route(route_points, estimated_duration)
-
-            # 更新路线时间信息
-            self._update_route_times(estimated_duration)
+            # 执行路线规划（返回多条路线方案）
+            route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
 
             # 更新UI显示路线规划完成
             self.ui_updater['set_progress_complete']()
 
-            if route_points:
+            if route_alternatives:
+                # 保存路线方案到数据管理器
+                self.data_manager.set_route_alternatives(route_alternatives, default_index)
+
+                # 更新路线时间信息（使用默认选中的方案）
+                selected_route = route_alternatives[default_index]
+                self._update_route_times(selected_route['duration'])
+
                 # 路线规划成功
-                self._handle_route_success(transport_mode)
+                self._handle_route_success(transport_mode, route_alternatives, default_index)
             else:
                 # 路线规划失败（未返回路线点）
                 self._handle_route_failure()
@@ -157,28 +158,29 @@ class RouteManager(QObject):
 
         参数:
             task_id: 任务ID
-            result: 路线规划结果 {'route_points': [...], 'duration': seconds}
+            result: 路线规划结果 {'alternatives': [...], 'default_index': 0}
         """
         self.logger.info(f"路线规划任务完成: {task_id}")
 
         self.ui_updater['set_progress_complete']()
 
-        if result and result.get('route_points'):
+        if result and result.get('alternatives'):
             # 路线规划成功
-            route_points = result['route_points']
-            estimated_duration = result['duration']
+            route_alternatives = result['alternatives']
+            default_index = result.get('default_index', 0)
 
-            # 保存路线数据
-            self.data_manager.set_route(route_points, estimated_duration)
+            # 保存路线方案
+            self.data_manager.set_route_alternatives(route_alternatives, default_index)
 
-            # 更新路线时间信息
-            self._update_route_times(estimated_duration)
+            # 更新路线时间信息（使用默认选中的方案）
+            selected_route = route_alternatives[default_index]
+            self._update_route_times(selected_route['duration'])
 
             # 获取交通方式
             transport_mode = self.ui_updater['get_transport_mode']()
 
             # 处理成功
-            self._handle_route_success(transport_mode)
+            self._handle_route_success(transport_mode, route_alternatives, default_index)
         else:
             # 路线规划失败
             self._handle_route_failure()
@@ -250,60 +252,40 @@ class RouteManager(QObject):
         qt_end_datetime = QDateTime.fromSecsSinceEpoch(end_timestamp)
         self.ui_updater['set_end_time'](qt_end_datetime)
 
-    def _handle_route_success(self, transport_mode: str):
+    def _handle_route_success(self, transport_mode: str, route_alternatives: list = None, default_index: int = 0):
         """处理路线规划成功（内部方法）
 
         路线规划成功后，更新UI显示路线信息并在地图上显示路线。
 
         参数:
             transport_mode: 交通方式
+            route_alternatives: 路线方案列表（可选，如果为None则从data_manager获取）
+            default_index: 默认选中的方案索引
         """
-        self.logger.info(f"路线规划成功，共 {len(self.data_manager.route_points)} 个点")
+        # 如果没有传入路线方案，从data_manager获取
+        if route_alternatives is None:
+            route_alternatives = self.data_manager.route_alternatives
+            default_index = self.data_manager.selected_route_index
+
+        self.logger.info(f"路线规划成功，共 {len(route_alternatives)} 个方案")
 
         # 更新UI显示路线规划成功
         self.ui_updater['set_progress_complete']()
-        self.ui_updater['clear_results_list']()
-        self.ui_updater['set_results_title']("路线信息")
 
-        # 获取时间信息
-        start_datetime = self.ui_updater['get_start_time']()
-        start_time_str = start_datetime.toString("yyyy-MM-dd HH:mm")
+        # 保存到历史记录（包含完整信息）
+        if 'save_route_history' in self.ui_updater:
+            selected_route = route_alternatives[default_index] if route_alternatives else None
+            if selected_route:
+                self.ui_updater['save_route_history'](
+                    distance=selected_route.get('distance'),
+                    duration=selected_route.get('duration')
+                )
 
-        end_datetime = self.ui_updater['get_end_time']()
-        end_time_str = end_datetime.toString("yyyy-MM-dd HH:mm")
+        # 显示路线待选列表（在路线规划面板中）
+        if 'show_route_alternatives' in self.ui_updater:
+            self.ui_updater['show_route_alternatives'](route_alternatives, default_index)
 
-        # 计算途径时间
-        duration_hours = self.data_manager.estimated_duration_seconds // 3600
-        duration_minutes = (self.data_manager.estimated_duration_seconds % 3600) // 60
-
-        # 显示路线详细信息 - 合并为一条结果
-        result_text = "路线规划成功！\n"
-        result_text += "=" * 30 + "\n"
-
-        # 显示起点、途径点和终点信息
-        start_name = self.data_manager.start_name or "未命名"
-        result_text += f"起点: {start_name}\n"
-
-        # 显示途径点
-        if self.data_manager.waypoints_coords:
-            for i, name in enumerate(self.data_manager.waypoints_names):
-                result_text += f"途径点{i+1}: {name}\n"
-
-        end_name = self.data_manager.end_name or "未命名"
-        result_text += f"终点: {end_name}\n"
-        result_text += "=" * 30 + "\n"
-
-        # 显示交通方式和时间信息
-        result_text += f"交通方式: {transport_mode}\n"
-        result_text += f"起始时间: {start_time_str}\n"
-        result_text += f"途径时间: {int(duration_hours)}小时{duration_minutes}分钟\n"
-        result_text += f"结束时间: {end_time_str}\n"
-        result_text += "=" * 30 + "\n"
-
-        # 先添加合并的结果
-        self.ui_updater['add_result'](result_text)
-
-        # 在地图上显示路线 - 使用后台线程渲染
+        # 在地图上显示默认选中的路线 - 使用后台线程渲染
         if self.task_manager:
             self.logger.info("使用后台线程渲染路线地图")
             from .task_adapters import MapRenderTaskAdapter
@@ -333,6 +315,43 @@ class RouteManager(QObject):
         self.ui_updater['clear_results_list']()
         self.ui_updater['add_result']("路线规划失败")
         self.ui_updater['show_warning']("错误", "路线规划失败")
+
+    def select_route_alternative(self, index: int):
+        """选择路线方案
+
+        参数:
+            index: 路线方案索引
+        """
+        self.logger.info(f"用户选择路线方案: {index}")
+
+        # 更新数据管理器中的选中方案
+        self.data_manager.select_route_alternative(index)
+
+        # 更新路线时间信息
+        selected_route = self.data_manager.get_selected_route()
+        if selected_route:
+            self._update_route_times(selected_route['duration'])
+
+        # 在地图上显示选中的路线
+        if self.task_manager:
+            self.logger.info("使用后台线程渲染选中的路线")
+            from .task_adapters import MapRenderTaskAdapter
+            from services.config.map_config import map_config
+
+            map_source = map_config.get_map_source()
+
+            task_id = self.task_manager.submit_task(
+                task_type="map_render",
+                task_func=MapRenderTaskAdapter.create_route_map_render_task,
+                priority=TaskPriority.HIGH,
+                data_manager=self.data_manager,
+                map_source=map_source
+            )
+
+            self.logger.debug(f"地图渲染任务已提交: {task_id}")
+        else:
+            # 兼容模式：直接渲染
+            self.ui_updater['show_route_on_map']()
 
     def export_gpx(self):
         """导出路线为GPX文件

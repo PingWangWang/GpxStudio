@@ -195,23 +195,22 @@ class RouteTaskAdapter:
             if cancel_check():
                 return None
 
-            # 执行路线规划（可能需要较长时间）
-            route_points, estimated_duration = routing_service.plan_route(points, transport_mode)
+            # 执行路线规划（返回多条路线方案）
+            route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
 
             if cancel_check():
                 return None
 
-            if route_points:
-                progress_callback(100, f"路线规划成功，共 {len(route_points)} 个点")
-                log_callback("INFO", f"路线规划成功，共 {len(route_points)} 个点")
-                log_callback("INFO", f"预估时长: {estimated_duration} 秒")
+            if route_alternatives:
+                progress_callback(100, f"路线规划成功，共 {len(route_alternatives)} 个方案")
+                log_callback("INFO", f"路线规划成功，共 {len(route_alternatives)} 个方案")
                 return {
-                    'route_points': route_points,
-                    'duration': estimated_duration
+                    'alternatives': route_alternatives,
+                    'default_index': default_index
                 }
             else:
                 progress_callback(100, "路线规划失败")
-                log_callback("WARNING", "路线规划失败，未返回路线点")
+                log_callback("WARNING", "路线规划失败，未返回路线方案")
                 return None
 
         except Exception as e:

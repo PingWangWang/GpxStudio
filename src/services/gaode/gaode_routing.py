@@ -167,7 +167,7 @@ class GaodeRoutingService(IRoutingService):
 
     def plan_route(self, points: List[tuple], transport_mode: str = "驾车") -> tuple:
         """
-        根据给定的坐标点和交通方式规划路线
+        根据给定的坐标点和交通方式规划路线（返回多条路线方案）
 
         使用高德地图路线规划API，为给定的一系列点规划连续的路线，并获取详细的路线点信息和海拔数据
 
@@ -176,10 +176,16 @@ class GaodeRoutingService(IRoutingService):
             transport_mode (str): 交通方式，支持 "步行"、"骑行"、"驾车"，默认值为 "驾车"
 
         Returns:
-            tuple: (路线点列表，预估时间)
-                  - 路线点列表：带海拔的坐标点列表，格式为 [(lat, lon, elevation), ..., None, ...]
-                    段之间用None分隔
-                  - 预估时间：路线总预估时间（秒）
+            tuple: (路线方案列表，默认方案索引)
+                  - 路线方案列表：每个方案包含 {
+                      'route_points': 带海拔的坐标点列表,
+                      'duration': 预估时间（秒）,
+                      'distance': 路线距离（米）,
+                      'tolls': 收费金额（元）,
+                      'traffic_lights': 红绿灯数量,
+                      'description': 路线描述
+                    }
+                  - 默认方案索引：默认选中的方案索引（通常为0）
                   规划失败时返回 ([], 0)
         """
         def log_cb(level, message):
@@ -192,119 +198,161 @@ class GaodeRoutingService(IRoutingService):
 
         # 将中文交通方式转换为英文标识
         mode = self.TRANSPORT_MODES.get(transport_mode, "driving")
-        # 存储完整路线点
-        route_points = []
-        # 总预估时间（秒）
-        total_duration = 0
 
         log_cb("INFO", f"开始规划路线，交通方式: {transport_mode} ({mode})")
 
+        # 只支持两点之间的路线规划（起点和终点）
+        if len(points) != 2:
+            log_cb("WARNING", f"当前仅支持起点和终点的路线规划，点数: {len(points)}")
+            # 如果有多个点，只取第一个和最后一个
+            if len(points) > 2:
+                points = [points[0], points[-1]]
+            else:
+                return [], 0
+
         try:
-            # 逐段规划路线（相邻点之间）
-            for i in range(len(points) - 1):
-                start = points[i]
-                end = points[i + 1]
+            start = points[0]
+            end = points[1]
 
-                log_cb("DEBUG", f"规划路段 {i+1}/{len(points)-1}: {start} -> {end}")
+            log_cb("DEBUG", f"规划路线: {start} -> {end}")
 
-                # 构建路线规划请求参数
-                params = {
-                    'key': self.api_key,                         # API密钥
-                    'origin': f"{start[1]},{start[0]}",          # 起点坐标，格式："lon,lat"
-                    'destination': f"{end[1]},{end[0]}",         # 终点坐标，格式："lon,lat"
-                    'output': 'json'                             # 返回格式为JSON
-                }
+            # 构建路线规划请求参数
+            params = {
+                'key': self.api_key,                         # API密钥
+                'origin': f"{start[1]},{start[0]}",          # 起点坐标，格式："lon,lat"
+                'destination': f"{end[1]},{end[0]}",         # 终点坐标，格式："lon,lat"
+                'output': 'json'                             # 返回格式为JSON
+            }
 
-                # 根据交通方式设置不同的策略参数
-                if mode == 'walking':
-                    # 步行路线策略：0=推荐路线
-                    params['strategy'] = '0'
-                elif mode == 'bicycling':
-                    # 骑行路线策略：0=推荐路线
-                    params['strategy'] = '0'
-                else:
-                    # 驾车路线策略：0=速度优先
-                    params['strategy'] = '0'
-                    params['extensions'] = 'base'                # 基础信息
+            # 根据交通方式设置不同的策略参数
+            if mode == 'walking':
+                # 步行路线策略：0=推荐路线（步行只返回一条路线）
+                params['strategy'] = '0'
+            elif mode == 'bicycling':
+                # 骑行路线策略：0=推荐路线（骑行只返回一条路线）
+                params['strategy'] = '0'
+            else:
+                # 驾车路线策略：11=返回三个结果（时间最短、距离最短、躲避拥堵）
+                params['strategy'] = '11'
+                params['extensions'] = 'all'                # 返回全部信息
 
-                # 如果配置了安全密钥，生成签名
-                if self.security_key:
-                    params['sig'] = self._sign(params)
+            # 如果配置了安全密钥，生成签名
+            if self.security_key:
+                params['sig'] = self._sign(params)
 
-                # 获取对应的API URL
-                url = self.DIRECTION_URLS.get(mode, self.DIRECTION_URLS["driving"])
-                # 发送GET请求到高德路线规划API
-                response = requests.get(url, params=params, timeout=10)
-                # 解析JSON响应
-                data = response.json()
+            # 获取对应的API URL
+            url = self.DIRECTION_URLS.get(mode, self.DIRECTION_URLS["driving"])
+            # 发送GET请求到高德路线规划API
+            response = requests.get(url, params=params, timeout=10)
+            # 解析JSON响应
+            data = response.json()
 
-                # 处理不同API版本的响应格式（骑行API使用v4版本，步行和驾车使用v3版本）
-                success = False
-                route_data = {}
-                paths = []
-                segment_duration = 0
+            # 处理不同API版本的响应格式
+            success = False
+            route_data = {}
+            paths = []
 
+            if mode == 'bicycling':
+                # v4版本的骑行API响应格式
+                if data.get('errcode') == 0:
+                    success = True
+                    route_data = data.get('data', {})
+                    paths = route_data.get('paths', [])
+            else:
+                # v3版本的API响应格式
+                if data.get('status') == '1':
+                    success = True
+                    route_data = data.get('route', {})
+                    paths = route_data.get('paths', [])
+
+            if not success or not paths:
+                # 处理路线规划失败
                 if mode == 'bicycling':
-                    # v4版本的骑行API响应格式
-                    if data.get('errcode') == 0:
-                        success = True
-                        route_data = data.get('data', {})
-                        paths = route_data.get('paths', [])
+                    error_msg = data.get('errmsg', '未知错误')
                 else:
-                    # v3版本的API响应格式
-                    if data.get('status') == '1':
-                        success = True
-                        route_data = data.get('route', {})
-                        paths = route_data.get('paths', [])
+                    error_msg = data.get('info', '未知错误')
+                log_cb("ERROR", f"路线规划失败: {error_msg}")
+                return [], 0
 
-                if success and paths:
-                    # 取第一条路线
-                    path = paths[0]
-                    # 获取路线步骤
-                    steps = path.get('steps', [])
+            # 解析所有路线方案
+            route_alternatives = []
+            for path_index, path in enumerate(paths):
+                # 获取路线步骤
+                steps = path.get('steps', [])
 
-                    # 处理持续时间（v4版本返回的是数字，v3版本返回的是字符串）
-                    duration_val = path.get('duration', 0)
-                    segment_duration = int(duration_val) if isinstance(duration_val, (str, int)) else 0
-                    total_duration += segment_duration
+                # 处理持续时间
+                duration_val = path.get('duration', 0)
+                duration = int(duration_val) if isinstance(duration_val, (str, int)) else 0
 
-                    # 解析路线点
-                    segment_points = []
-                    for step in steps:
-                        # 获取步骤的坐标串
-                        polyline = step.get('polyline', '')
-                        if polyline:
-                            # 解析坐标串，格式为 "lon,lat;lon,lat;..."
-                            coords = polyline.split(';')
-                            for coord in coords:
-                                parts = coord.split(',')
-                                if len(parts) == 2:
-                                    # 转换为 (lat, lon) 格式
-                                    segment_points.append((float(parts[1]), float(parts[0])))
+                # 处理距离
+                distance_val = path.get('distance', 0)
+                distance = int(distance_val) if isinstance(distance_val, (str, int)) else 0
 
-                    # 获取路线点的海拔数据
-                    if segment_points:
-                        segment_points_with_elevation = self._get_elevation(segment_points)
-                        route_points.extend(segment_points_with_elevation)
+                # 处理收费（仅驾车模式）
+                tolls = 0
+                traffic_lights = 0
+                if mode == 'driving':
+                    tolls_val = path.get('tolls', 0)
+                    tolls = int(tolls_val) if isinstance(tolls_val, (str, int)) else 0
+                    traffic_lights_val = path.get('traffic_lights', 0)
+                    traffic_lights = int(traffic_lights_val) if isinstance(traffic_lights_val, (str, int)) else 0
 
-                    log_cb("INFO", f"路段 {i+1} 规划成功")
-                else:
-                    # 处理路线规划失败
-                    if mode == 'bicycling':
-                        error_msg = data.get('errmsg', '未知错误')
-                    else:
-                        error_msg = data.get('info', '未知错误')
-                    log_cb("ERROR", f"路段 {i+1} 规划失败: {error_msg}")
+                # 记录原始数据用于调试
+                log_cb("DEBUG", f"路线 {path_index}: 距离={distance}米, 时间={duration}秒, "
+                              f"收费={tolls}元, 红绿灯={traffic_lights}个")
 
-                # 在路段之间添加None分隔符（最后一段不需要）
-                if i < len(points) - 2:
-                    route_points.append(None)
+                # 解析路线点
+                route_points = []
+                for step in steps:
+                    # 获取步骤的坐标串
+                    polyline = step.get('polyline', '')
+                    if polyline:
+                        # 解析坐标串，格式为 "lon,lat;lon,lat;..."
+                        coords = polyline.split(';')
+                        for coord in coords:
+                            parts = coord.split(',')
+                            if len(parts) == 2:
+                                # 转换为 (lat, lon) 格式
+                                route_points.append((float(parts[1]), float(parts[0])))
 
-            # 路线规划完成，记录日志
-            log_cb("INFO", f"路线规划完成，共 {len([p for p in route_points if p is not None])} 个坐标点，预估时间: {total_duration} 秒")
-            # 保存带海拔的路线点
-            self.last_route_points_with_elevation = route_points
-            return route_points, total_duration
+                # 获取路线点的海拔数据
+                route_points_with_elevation = []
+                if route_points:
+                    route_points_with_elevation = self._get_elevation(route_points)
+
+                # 暂时保存路线数据（不生成描述）
+                route_alternatives.append({
+                    'route_points': route_points_with_elevation,
+                    'duration': duration,
+                    'distance': distance,
+                    'tolls': tolls,
+                    'traffic_lights': traffic_lights,
+                    'description': ''  # 稍后生成
+                })
+
+                log_cb("INFO", f"方案 {path_index + 1}: {len(route_points_with_elevation)} 个坐标点，"
+                              f"距离 {distance/1000:.1f}km，时间 {duration//60}分钟")
+
+            # 为所有路线生成描述（需要所有路线数据来比较）
+            for path_index, route_alt in enumerate(route_alternatives):
+                route_alt['description'] = self._generate_route_description(
+                    route_alt,  # 传入route_alt而不是_path_data
+                    mode,
+                    path_index,
+                    route_alternatives  # 传入所有路线方案
+                )
+                # 删除临时数据（如果存在）
+                if '_path_data' in route_alt:
+                    del route_alt['_path_data']
+
+            # 路线规划完成
+            log_cb("INFO", f"路线规划完成，共 {len(route_alternatives)} 个方案")
+
+            # 保存第一个方案的带海拔路线点（兼容旧代码）
+            if route_alternatives:
+                self.last_route_points_with_elevation = route_alternatives[0]['route_points']
+
+            return route_alternatives, 0  # 默认选中第一个方案
 
         except Exception as e:
             # 捕获路线规划异常
@@ -312,6 +360,53 @@ class GaodeRoutingService(IRoutingService):
             # 重置路线点
             self.last_route_points_with_elevation = []
             return [], 0
+
+    def _generate_route_description(self, path: dict, mode: str, index: int, all_paths: list = None) -> str:
+        """生成路线描述
+
+        Args:
+            path: 当前路线数据
+            mode: 交通方式
+            index: 路线索引
+            all_paths: 所有路线数据列表（用于比较）
+
+        Returns:
+            路线描述字符串
+        """
+        # 根据路线特征生成描述
+        if mode == 'driving' and all_paths and len(all_paths) >= 2:
+            # 驾车模式，根据实际数据判断路线类型
+            current_distance = int(path.get('distance', 0))
+            current_duration = int(path.get('duration', 0))
+
+            # 获取所有路线的距离和时间
+            distances = [int(p.get('distance', 0)) for p in all_paths]
+            durations = [int(p.get('duration', 0)) for p in all_paths]
+
+            # 判断当前路线的特征
+            min_distance = min(distances)
+            min_duration = min(durations)
+
+            # 如果是距离最短的路线
+            if current_distance == min_distance and current_distance < min(d for d in distances if d != current_distance or distances.count(d) > 1):
+                return "距离最短"
+            # 如果是时间最短的路线
+            elif current_duration == min_duration and current_duration < min(d for d in durations if d != current_duration or durations.count(d) > 1):
+                return "推荐方案"
+            # 其他情况
+            else:
+                return "躲避拥堵"
+        elif mode == 'driving':
+            # 如果没有足够的数据，使用索引判断
+            strategy_map = {
+                0: "推荐方案",
+                1: "距离最短",
+                2: "躲避拥堵"
+            }
+            return strategy_map.get(index, f"方案{index + 1}")
+        else:
+            # 步行和骑行模式
+            return "推荐方案" if index == 0 else f"方案{index + 1}"
 
     def calculate_distance(self, route_points: List[tuple]) -> float:
         """

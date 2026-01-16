@@ -15,19 +15,9 @@ class MapConfig(IConfigService):
     """地图配置类"""
 
     def _get_config_path(self):
-        """获取配置文件路径，保存在用户目录下"""
-        if hasattr(sys, '_MEIPASS'):
-            # 打包后的环境
-            app_dir = os.path.join(os.path.expanduser("~"), "GPXStudio")
-        else:
-            # 开发环境
-            app_dir = os.path.join(os.path.expanduser("~"), "GPXStudio")
-
-        # 创建应用程序目录（如果不存在）
-        if not os.path.exists(app_dir):
-            os.makedirs(app_dir)
-
-        return os.path.join(app_dir, "map_config.json")
+        """获取配置文件路径"""
+        from app.data_paths import get_map_config_file
+        return get_map_config_file()
 
     def __init__(self):
         self.map_source = ""  # 首次运行时默认无地图源
@@ -67,11 +57,11 @@ class MapConfig(IConfigService):
             # 合并配置数据，保留现有的其他配置项
             merged_config = self._config_data.copy()
             merged_config.update(config_data)
-            
+
             config_file = self._get_config_path()
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(merged_config, f, ensure_ascii=False, indent=2)
-            
+
             self.map_source = merged_config.get('map_source', '')
             self.api_key = merged_config.get('api_key', '')
             self.security_key = merged_config.get('security_key', '')
