@@ -18,11 +18,34 @@
 git clone https://github.com/PingWangWang/gpx-studio.git
 cd gpx-studio
 
-# 2. 安装依赖
+# 2. 创建并激活虚拟环境（推荐）
+python -m venv .venv
+
+# Windows CMD 激活虚拟环境
+.venv\Scripts\activate
+
+# Windows PowerShell 激活虚拟环境
+# .venv\Scripts\Activate.ps1
+
+# Linux/macOS 激活虚拟环境
+# source .venv/bin/activate
+
+# 3. 安装依赖
 pip install -r requirements.txt
 
-# 3. 运行程序
+# 4. 运行程序
 python main.py
+
+# 退出虚拟环境
+deactivate
+
+# 删除虚拟环境（如需重新创建）
+# Windows CMD
+rmdir /s /q .venv
+# Windows PowerShell
+# Remove-Item -Recurse -Force .venv
+# Linux/macOS
+# rm -rf .venv
 ```
 
 ### 配置地图

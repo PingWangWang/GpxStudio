@@ -95,7 +95,9 @@ class RouteManager(QObject):
                 routing_service=routing_service,
                 points=points,
                 transport_mode=transport_mode,
-                map_source=map_source
+                map_source=map_source,
+                start_name=self.data_manager.start_name,
+                end_name=self.data_manager.end_name
             )
 
             self.logger.debug(f"路线规划任务已提交: {task_id}")
@@ -119,12 +121,31 @@ class RouteManager(QObject):
                 return
 
             # 执行路线规划（返回多条路线方案）
-            route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
+            # 检查服务是否支持起点终点名称参数
+            if hasattr(routing_service, 'plan_route'):
+                import inspect
+                sig = inspect.signature(routing_service.plan_route)
+                if 'start_name' in sig.parameters and 'end_name' in sig.parameters:
+                    # OSM服务支持起点终点名称
+                    route_alternatives, default_index = routing_service.plan_route(
+                        points, transport_mode, 
+                        start_name=self.data_manager.start_name, 
+                        end_name=self.data_manager.end_name)
+                else:
+                    # 高德服务不支持起点终点名称参数
+                    route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
+            else:
+                route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
 
             # 更新UI显示路线规划完成
             self.ui_updater['set_progress_complete']()
 
             if route_alternatives:
+                # 安全检查：确保default_index在有效范围内
+                if default_index >= len(route_alternatives):
+                    self.logger.warning(f"默认方案索引 {default_index} 超出范围，重置为0")
+                    default_index = 0
+
                 # 保存路线方案到数据管理器
                 self.data_manager.set_route_alternatives(route_alternatives, default_index)
 
@@ -168,6 +189,16 @@ class RouteManager(QObject):
             # 路线规划成功
             route_alternatives = result['alternatives']
             default_index = result.get('default_index', 0)
+
+            # 安全检查：确保default_index在有效范围内
+            if not route_alternatives:
+                self.logger.warning("路线方案列表为空")
+                self._handle_route_failure()
+                return
+                
+            if default_index >= len(route_alternatives):
+                self.logger.warning(f"默认方案索引 {default_index} 超出范围，重置为0")
+                default_index = 0
 
             # 保存路线方案
             self.data_manager.set_route_alternatives(route_alternatives, default_index)

@@ -90,18 +90,29 @@ class OsmRoutingService(IRoutingService):
             self._log("ERROR", f"获取海拔数据异常: {str(e)}")
             return [(lat, lon, 0.0) for lat, lon in points]
 
-    def plan_route(self, points: List[Tuple[float, float]], transport_mode: str = "驾车") -> Tuple[List[Tuple[float, float]], int]:
+    def plan_route(self, points: List[Tuple[float, float]], transport_mode: str = "驾车", 
+                   start_name: str = None, end_name: str = None) -> Tuple[List[Dict], int]:
         """
         使用OSRM API规划路线
 
         Args:
             points: 坐标点列表 [(lat, lon), ...]
             transport_mode: 交通方式（步行/骑行/驾车）
+            start_name: 起点名称（可选）
+            end_name: 终点名称（可选）
 
         Returns:
-            tuple: (路线点列表， estimated_duration_seconds)
-                  路线点列表段之间用None分隔
-                  estimated_duration_seconds为预估时间（秒）
+            tuple: (路线方案列表，默认方案索引)
+                  - 路线方案列表：每个方案包含 {
+                      'route_points': 带海拔的坐标点列表,
+                      'duration': 预估时间（秒）,
+                      'distance': 路线距离（米）,
+                      'tolls': 收费金额（元，OSM固定为0）,
+                      'traffic_lights': 红绿灯数量（OSM固定为0）,
+                      'description': 路线描述
+                    }
+                  - 默认方案索引：默认选中的方案索引（OSM只有一个方案，固定为0）
+                  规划失败时返回 ([], 0)
         """
         try:
             # 验证点数量
@@ -192,8 +203,23 @@ class OsmRoutingService(IRoutingService):
                 # 保存总距离和带海拔的点
                 self.last_route_distance = total_distance
                 self.last_route_points_with_elevation = route_points
+                
+                # 构建路线方案（OSM只返回一个方案）
+                description = self._generate_route_description(transport_mode, start_name, end_name)
+                
+                route_alternative = {
+                    'route_points': route_points,
+                    'duration': estimated_duration,
+                    'distance': int(total_distance * 1000),  # 转换为米
+                    'tolls': 0,  # OSM不提供收费信息
+                    'traffic_lights': 0,  # OSM不提供红绿灯信息
+                    'description': description
+                }
+                
+                route_alternatives = [route_alternative]
+                
                 self._log("INFO", f"OSM路线规划成功，路线点数量: {len([p for p in route_points if p is not None])}，总距离: {total_distance:.2f}公里，总预估时间: {estimated_duration}秒")
-                return route_points, estimated_duration
+                return route_alternatives, 0  # 默认选中第一个（也是唯一的）方案
             else:
                 # 重置距离和带海拔的点
                 self.last_route_distance = 0.0
@@ -231,6 +257,51 @@ class OsmRoutingService(IRoutingService):
         except Exception as e:
             self._log("ERROR", f"计算路线距离异常: {str(e)}")
             return 0.0
+
+    def _generate_route_description(self, transport_mode: str, start_name: str = None, end_name: str = None) -> str:
+        """
+        生成路线描述
+
+        Args:
+            transport_mode: 交通方式
+            start_name: 起点名称
+            end_name: 终点名称
+
+        Returns:
+            str: 路线描述
+        """
+        # 提取起点和终点的简短名称
+        start_short = self._extract_short_name(start_name) if start_name else "起点"
+        end_short = self._extract_short_name(end_name) if end_name else "终点"
+        
+        # 生成描述：起点 → 终点
+        return f"{start_short} → {end_short}"
+
+    def _extract_short_name(self, full_name: str) -> str:
+        """
+        从完整名称中提取简短名称
+
+        Args:
+            full_name: 完整的地点名称
+
+        Returns:
+            str: 提取的简短名称
+        """
+        if not full_name:
+            return ""
+            
+        # 移除分号及其后的内容
+        short_name = full_name.split(';')[0]
+        # 移除逗号及其后的内容
+        short_name = short_name.split(',')[0]
+        # 清理空白字符
+        short_name = short_name.strip()
+        
+        # 如果名称太长，截取前15个字符
+        if len(short_name) > 15:
+            short_name = short_name[:15] + "..."
+            
+        return short_name
 
     def _get_vehicle_type(self, transport_mode: str) -> str:
         """

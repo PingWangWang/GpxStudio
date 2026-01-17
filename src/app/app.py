@@ -33,8 +33,6 @@ from ui.styles import UIStyles
 from ui.panels.panel_factory import PanelFactory
 from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
-from ui.dialogs.map_config_dialog import MapConfigDialog
-from ui.dialogs.about_dialog import AboutDialog
 from ui.dialogs.map_context_menu import MapContextMenu
 from ui.layout.layout_manager import LayoutManager
 
@@ -313,6 +311,7 @@ class GpxStudio(QMainWindow):
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
         self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
         self.signal_manager.map_right_click.connect(self._on_map_right_click)
+        self.signal_manager.map_loaded.connect(self._on_map_loaded)
 
     def _connect_task_manager_signals(self):
         """连接任务管理器信号"""
@@ -541,6 +540,29 @@ class GpxStudio(QMainWindow):
             self.locate_button.setText("📍")
         self.locate_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.locate_button)
+
+        # 创建加载进度按钮
+        self.loading_button = QPushButton()
+        self.loading_button.setToolTip("加载状态指示器")
+        self.loading_button.setFixedSize(control_height, control_height)
+        loading_icon_path = resource_path('res/Loading.png')
+        if os.path.exists(loading_icon_path):
+            from PyQt5.QtGui import QIcon
+            self.loading_button.setIcon(QIcon(loading_icon_path))
+            from PyQt5.QtCore import QSize
+            self.loading_button.setIconSize(QSize(20, 20))
+        else:
+            self.loading_button.setText("⏳")
+        self.loading_button.setStyleSheet(right_button_style)
+        self.loading_button.show()  # 固定显示，不做显隐切换
+        right_buttons_layout.addWidget(self.loading_button)
+
+        # 创建加载动画定时器
+        from PyQt5.QtCore import QTimer
+        self.loading_timer = QTimer()
+        self.loading_timer.timeout.connect(self._animate_loading)
+        self.loading_rotation = 0  # 旋转角度
+        self.is_loading = False  # 加载状态标志
 
         # 创建比例尺信息标签（左下角）
         self.scale_info_label = QLabel()
@@ -839,6 +861,7 @@ class GpxStudio(QMainWindow):
             return
 
         self.logger.info(f"[搜索] 搜索地点: {search_text}")
+        self.show_loading()  # 显示加载状态
 
         # 保存当前搜索文本
         self.current_search_text = search_text
@@ -1078,7 +1101,7 @@ class GpxStudio(QMainWindow):
 
         # 顶部按钮 - 只保留地图配置按钮，并让它占满宽度
         config_button = QPushButton("⚙️ 地图配置")
-        config_button.clicked.connect(self.show_map_config)
+        config_button.clicked.connect(self.on_map_settings_clicked)  # 使用弹出面板方法
         config_button.setStyleSheet(UIStyles.LOCATE_BUTTON)
         left_layout.addWidget(config_button)
 
@@ -1371,6 +1394,7 @@ class GpxStudio(QMainWindow):
         参数:
             results: 格式化后的搜索结果列表
         """
+        self.hide_loading()  # 隐藏加载状态
         self.logger.debug(f"[搜索结果] 显示 {len(results)} 条搜索结果")
 
         if hasattr(self, 'search_results_popup') and results:
@@ -1559,6 +1583,7 @@ class GpxStudio(QMainWindow):
 
     def on_locate_clicked(self):
         """定位按钮点击"""
+        self.show_loading()  # 显示加载状态
         self.location_manager.get_current_location()
 
     def on_map_settings_clicked(self):
@@ -1690,6 +1715,7 @@ class GpxStudio(QMainWindow):
 
     def _on_geolocation_success(self, lat: float, lon: float, accuracy: float):
         """处理浏览器定位成功信号"""
+        self.hide_loading()  # 隐藏加载状态
         self.logger.info(f"[主应用] 收到浏览器定位成功信号: {lat}, {lon}, 精度: {accuracy}m")
         self.logger.debug(f"[主应用] location_manager存在: {hasattr(self, 'location_manager')}")
         if hasattr(self, 'location_manager'):
@@ -1701,8 +1727,14 @@ class GpxStudio(QMainWindow):
 
     def _on_geolocation_error(self, error_msg: str):
         """处理浏览器定位失败信号"""
+        self.hide_loading()  # 隐藏加载状态
         self.logger.warning(f"浏览器定位失败: {error_msg}")
         self.location_manager.handle_browser_location_error(error_msg)
+
+    def _on_map_loaded(self):
+        """处理地图加载完成信号"""
+        self.hide_loading()  # 隐藏加载状态
+        self.logger.debug("[主应用] 地图加载完成，停止加载动画")
 
     def _on_map_right_click(self, lat: float, lon: float):
         """处理地图右键点击事件"""
@@ -1963,24 +1995,6 @@ class GpxStudio(QMainWindow):
         """计算时间"""
         self.time_manager.calculate_times()
 
-    def show_map_config(self):
-        """显示地图配置对话框"""
-        dialog = MapConfigDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            map_source = map_config.get_map_source()
-            self.logger.info(f"地图数据源已更新: {map_source}")
-
-            # 更新服务配置
-            if map_source == "gaode":
-                api_key = map_config.get_api_key()
-                security_key = map_config.get_security_key()
-                self.service_manager.update_gaode_config(api_key, security_key)
-                self.logger.info("高德地图API配置已更新")
-
-            # 清空路线数据并重新加载地图
-            self.clear_route_data()
-            self._show_initial_map()
-
     def clear_route_data(self):
         """清空所有路线相关数据"""
         self.data_manager.clear_all_route_data()
@@ -2003,10 +2017,62 @@ class GpxStudio(QMainWindow):
 
         self.logger.info("已清空所有路线相关数据")
 
-    def show_about_dialog(self):
-        """显示关于对话框"""
-        dialog = AboutDialog(self)
-        dialog.exec_()
+    def show_loading(self):
+        """开始加载动画"""
+        if not self.is_loading:
+            self.is_loading = True
+            self.loading_button.setToolTip("正在加载...")
+            self.loading_timer.start(50)  # 每50ms更新一次，实现旋转动画
+            self.logger.debug("[加载] 开始加载动画")
+
+    def hide_loading(self):
+        """停止加载动画"""
+        if self.is_loading:
+            self.is_loading = False
+            self.loading_button.setToolTip("加载状态指示器")
+            self.loading_timer.stop()
+            self.loading_rotation = 0
+            # 恢复到初始状态的图标
+            self._reset_loading_icon()
+            self.logger.debug("[加载] 停止加载动画")
+
+    def _reset_loading_icon(self):
+        """重置加载图标到初始状态"""
+        from core.resource_path import resource_path
+        loading_icon_path = resource_path('res/Loading.png')
+        if os.path.exists(loading_icon_path):
+            from PyQt5.QtGui import QIcon
+            from PyQt5.QtCore import QSize
+            self.loading_button.setIcon(QIcon(loading_icon_path))
+            self.loading_button.setIconSize(QSize(20, 20))
+
+    def _animate_loading(self):
+        """加载动画效果"""
+        if not self.is_loading:
+            return
+            
+        self.loading_rotation = (self.loading_rotation + 10) % 360
+        
+        # 创建旋转的图标
+        from core.resource_path import resource_path
+        loading_icon_path = resource_path('res/Loading.png')
+        if os.path.exists(loading_icon_path):
+            from PyQt5.QtGui import QIcon, QPixmap, QTransform
+            from PyQt5.QtCore import QSize
+            
+            # 加载原始图标
+            original_pixmap = QPixmap(loading_icon_path)
+            
+            # 创建旋转变换
+            transform = QTransform()
+            transform.rotate(self.loading_rotation)
+            
+            # 应用旋转
+            rotated_pixmap = original_pixmap.transformed(transform, Qt.SmoothTransformation)
+            
+            # 设置旋转后的图标
+            self.loading_button.setIcon(QIcon(rotated_pixmap))
+            self.loading_button.setIconSize(QSize(20, 20))
 
     def closeEvent(self, event):
         """重写关闭事件"""
@@ -2047,9 +2113,11 @@ class GpxStudio(QMainWindow):
             self.search_manager.on_search_task_completed(task_id, result)
             self.task_progress_panel.task_completed("搜索完成")
         elif task_id.startswith('routing_'):
+            self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_completed(task_id, result)
             self.task_progress_panel.task_completed("路线规划完成")
         elif task_id.startswith('map_render_'):
+            self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_map_render_task_completed(task_id, result)
             self.task_progress_panel.task_completed("地图渲染完成")
             # 地图渲染完成后隐藏加载状态
@@ -2074,14 +2142,17 @@ class GpxStudio(QMainWindow):
         if task_id.startswith('location_'):
             self.location_manager.on_location_task_failed(task_id, error)
         elif task_id.startswith('search_'):
+            self.hide_loading()  # 隐藏主界面加载状态
             self.search_manager.on_search_task_failed(task_id, error)
         elif task_id.startswith('routing_'):
+            self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_failed(task_id, error)
             # 路线规划失败时隐藏加载状态并显示错误提示
             if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
                 self.route_plan_panel.hide_loading()
                 self.route_plan_panel.show_route_plan_error("路线规划失败，请重试")
         elif task_id.startswith('map_render_'):
+            self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_map_render_task_failed(task_id, error)
             # 地图渲染失败时隐藏加载状态并显示错误提示
             if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
@@ -2144,6 +2215,9 @@ class GpxStudio(QMainWindow):
 
         # 设置面板位置和大小（覆盖搜索容器）
         if hasattr(self, 'search_container') and hasattr(self, 'route_plan_panel'):
+            # 清空所有输入框内容
+            self.route_plan_panel.clear_all_inputs()
+            
             # 获取搜索容器的全局位置
             container_rect = self.search_container.rect()
             container_global_pos = self.search_container.mapToGlobal(container_rect.topLeft())
@@ -2208,6 +2282,7 @@ class GpxStudio(QMainWindow):
         }
 
         # 显示加载中状态
+        self.show_loading()  # 显示主界面加载状态
         self.route_plan_panel.show_loading()
 
         # 调用路线管理器进行路线规划

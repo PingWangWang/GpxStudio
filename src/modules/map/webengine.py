@@ -56,6 +56,11 @@ class ConsoleWebEnginePage(QWebEnginePage):
             print("[加载] ✅ 页面加载成功")
             print(f"[加载] URL: {url_str}")
 
+            # 发射地图加载完成信号
+            if self.signal_manager:
+                self.signal_manager.map_loaded.emit()
+                print("[加载] 已发射地图加载完成信号")
+
             # 直接执行JavaScript来测试
             test_script = """
             console.log('[测试] JavaScript执行测试 - 如果你看到这个，说明JS工作正常');
@@ -76,6 +81,10 @@ class ConsoleWebEnginePage(QWebEnginePage):
             def on_js_result(result):
                 if result == '页面加载成功':
                     print("[加载] ✅ 页面实际上加载成功，只是状态报告为失败")
+                    # 即使状态报告失败，但实际成功时也发射信号
+                    if self.signal_manager:
+                        self.signal_manager.map_loaded.emit()
+                        print("[加载] 已发射地图加载完成信号（状态修正）")
                 else:
                     print(f"[加载] ❌ 页面加载失败，JavaScript执行结果: {result}")
 

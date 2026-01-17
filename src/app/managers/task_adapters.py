@@ -160,7 +160,9 @@ class RouteTaskAdapter:
     def create_route_task(routing_service, points, transport_mode, map_source,
                          progress_callback: Callable,
                          log_callback: Callable,
-                         cancel_check: Callable) -> Optional[Dict[str, Any]]:
+                         cancel_check: Callable,
+                         start_name: str = None,
+                         end_name: str = None) -> Optional[Dict[str, Any]]:
         """
         路线规划任务函数
 
@@ -172,6 +174,8 @@ class RouteTaskAdapter:
             progress_callback: 进度回调
             log_callback: 日志回调
             cancel_check: 取消检查函数
+            start_name: 起点名称（可选）
+            end_name: 终点名称（可选）
 
         返回:
             路线规划结果字典 {'route_points': [...], 'duration': seconds} 或 None
@@ -196,7 +200,19 @@ class RouteTaskAdapter:
                 return None
 
             # 执行路线规划（返回多条路线方案）
-            route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
+            # 检查服务是否支持起点终点名称参数
+            if hasattr(routing_service, 'plan_route'):
+                import inspect
+                sig = inspect.signature(routing_service.plan_route)
+                if 'start_name' in sig.parameters and 'end_name' in sig.parameters:
+                    # OSM服务支持起点终点名称
+                    route_alternatives, default_index = routing_service.plan_route(
+                        points, transport_mode, start_name=start_name, end_name=end_name)
+                else:
+                    # 高德服务不支持起点终点名称参数
+                    route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
+            else:
+                route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
 
             if cancel_check():
                 return None

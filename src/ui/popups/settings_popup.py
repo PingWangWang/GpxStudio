@@ -6,13 +6,68 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QLineEdit, QPushButton, QLabel, QMessageBox,
-                             QTabWidget, QTextEdit, QComboBox, QFrame)
+                             QTabWidget, QTextEdit, QComboBox, QFrame, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIcon, QKeyEvent
+from PyQt5.QtGui import QIcon, QKeyEvent, QPainter, QPen, QBrush, QPolygon
+from PyQt5.QtCore import QPoint
 from services.config.map_config import map_config
 from core.logging_setup import clean_logs, open_log_directory, get_log_size, set_log_level
 from services.config import about_config
 import os
+
+
+class CustomArrowButton(QPushButton):
+    """自定义箭头按钮，绘制更美观的下拉箭头"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(30, 46)
+        self.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: #f8f9fa;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                border-left: 1px solid #e1e5e9;
+            }
+            QPushButton:hover {
+                background-color: #e9ecef;
+            }
+            QPushButton:pressed {
+                background-color: #dee2e6;
+            }
+        """)
+    
+    def paintEvent(self, event):
+        """绘制按钮和箭头"""
+        super().paintEvent(event)
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 设置箭头颜色
+        if self.isDown():
+            color = Qt.black
+        elif self.underMouse():
+            color = Qt.darkGray
+        else:
+            color = Qt.gray
+            
+        painter.setPen(QPen(color, 2))
+        painter.setBrush(QBrush(color))
+        
+        # 计算箭头位置（居中）
+        center_x = self.width() // 2
+        center_y = self.height() // 2
+        
+        # 绘制下拉箭头（三角形）
+        arrow = QPolygon([
+            QPoint(center_x - 5, center_y - 2),  # 左上角
+            QPoint(center_x + 5, center_y - 2),  # 右上角
+            QPoint(center_x, center_y + 3)       # 底部中心
+        ])
+        
+        painter.drawPolygon(arrow)
 
 
 class BaseSettingsPopup(QWidget):
@@ -30,14 +85,15 @@ class BaseSettingsPopup(QWidget):
         # 设置样式
         self.setStyleSheet("""
             BaseSettingsPopup {
-                background-color: white;
-                border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                border: 2px solid rgba(0, 123, 255, 0.2);
+                font-family: 'Microsoft YaHei';
             }
         """)
 
         # 设置固定宽度
-        self.setFixedWidth(450)
+        self.setFixedWidth(500)  # 增加宽度
 
     def keyPressEvent(self, event: QKeyEvent):
         """处理键盘事件"""
@@ -74,24 +130,25 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(500)
+        self.setFixedHeight(420)  # 减少高度，删除底部空白
         self._init_ui()
         self.load_current_config()
 
     def _init_ui(self):
         """初始化UI"""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
 
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("地图设置")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 16px;
+                font-size: 9pt;
                 font-weight: bold;
                 color: #333333;
+                font-family: 'Microsoft YaHei';
             }
         """)
         title_layout.addWidget(title_label)
@@ -99,18 +156,18 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         # 关闭按钮
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(28, 28)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
-                font-size: 18px;
+                font-size: 9pt;
                 color: #666666;
+                border-radius: 14px;
             }
             QPushButton:hover {
                 color: #333333;
                 background-color: #f0f0f0;
-                border-radius: 12px;
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -121,12 +178,8 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: #e0e0e0;")
+        line.setStyleSheet("background-color: #dee2e6; margin: 5px 0;")
         main_layout.addWidget(line)
-
-        # 配置表单
-        config_layout = QFormLayout()
-        config_layout.setSpacing(12)
 
         # 地图数据源选择
         self.map_source_combo = QComboBox()
@@ -134,124 +187,279 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.map_source_combo.addItem("OpenStreetMap")
         self.map_source_combo.addItem("高德地图")
         self.map_source_combo.currentIndexChanged.connect(self.on_map_source_changed)
+        self.map_source_combo.setMinimumHeight(50)  # 与输入框保持一致的高度
+        self.map_source_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # 水平扩展
+        
+        # 创建一个容器来包含下拉框和自定义箭头
+        combo_container = QWidget()
+        combo_layout = QHBoxLayout(combo_container)
+        combo_layout.setContentsMargins(0, 0, 0, 0)
+        combo_layout.setSpacing(0)
+        
+        # 设置下拉框样式（移除默认箭头）
         self.map_source_combo.setStyleSheet("""
             QComboBox {
-                padding: 6px 12px;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 10px 40px 10px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
                 background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+                min-height: 30px;
+            }
+            QComboBox:focus {
+                border-color: #007bff;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 0px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                selection-background-color: #007bff;
+                selection-color: white;
+                font-size: 9pt;
             }
         """)
-        config_layout.addRow("地图数据源:", self.map_source_combo)
+        
+        # 创建自定义箭头按钮
+        arrow_btn = CustomArrowButton()
+        arrow_btn.clicked.connect(lambda: self.map_source_combo.showPopup())
+        
+        combo_layout.addWidget(self.map_source_combo)
+        combo_layout.addWidget(arrow_btn)
 
-        # API Key 输入框和眼睛按钮
-        api_key_layout = QHBoxLayout()
+        # 创建输入框和相关控件
+        # API Key输入框
         self.api_key_edit = QLineEdit()
-        self.api_key_edit.setPlaceholderText("请输入高德地图Web服务API Key")
+        self.api_key_edit.setPlaceholderText("请输入高德地图API Key")
+        self.api_key_edit.setMinimumHeight(50)
         self.api_key_edit.setEchoMode(QLineEdit.Password)
         self.api_key_edit.setStyleSheet("""
             QLineEdit {
-                padding: 6px 12px;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 12px 45px 12px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
             }
         """)
-        api_key_layout.addWidget(self.api_key_edit)
 
         self.api_key_eye_btn = QPushButton("👁️")
-        self.api_key_eye_btn.setFixedSize(30, 30)
-        self.api_key_eye_btn.setStyleSheet("border: none; background: transparent;")
+        self.api_key_eye_btn.setFixedSize(40, 40)
         self.api_key_eye_btn.clicked.connect(self.toggle_api_key_visibility)
-        api_key_layout.addWidget(self.api_key_eye_btn)
-        config_layout.addRow("API Key:", api_key_layout)
-
-        # 安全密钥输入框和眼睛按钮
-        security_key_layout = QHBoxLayout()
-        self.security_key_edit = QLineEdit()
-        self.security_key_edit.setPlaceholderText("可选：签名校验密钥")
-        self.security_key_edit.setEchoMode(QLineEdit.Password)
-        self.security_key_edit.setStyleSheet("""
-            QLineEdit {
-                padding: 6px 12px;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+        self.api_key_eye_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: transparent;
+                font-size: 16px;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
             }
         """)
-        security_key_layout.addWidget(self.security_key_edit)
+
+        # 安全密钥输入框
+        self.security_key_edit = QLineEdit()
+        self.security_key_edit.setPlaceholderText("可选：安全密钥")
+        self.security_key_edit.setMinimumHeight(50)
+        self.security_key_edit.setEchoMode(QLineEdit.Normal)  # 初始为Normal模式显示placeholder
+        self.security_key_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 12px 45px 12px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+            }
+        """)
 
         self.security_key_eye_btn = QPushButton("👁️")
-        self.security_key_eye_btn.setFixedSize(30, 30)
-        self.security_key_eye_btn.setStyleSheet("border: none; background: transparent;")
+        self.security_key_eye_btn.setFixedSize(40, 40)
         self.security_key_eye_btn.clicked.connect(self.toggle_security_key_visibility)
-        security_key_layout.addWidget(self.security_key_eye_btn)
-        config_layout.addRow("安全密钥:", security_key_layout)
+        self.security_key_eye_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: transparent;
+                font-size: 16px;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+            }
+        """)
 
-        # 配置状态
-        self.status_label = QLabel("未配置")
+        # 配置状态标签
+        self.status_label = QLabel("未选择")
+        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # 水平扩展
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
-                padding: 6px;
-                border-radius: 4px;
-                background-color: #f5f5f5;
+                padding: 8px 16px;
+                border-radius: 18px;
+                font-weight: bold;
+                font-size: 9pt;
+                background-color: #f8f9fa;
+                border: 2px solid #e1e5e9;
+                color: #6c757d;
             }
         """)
-        config_layout.addRow("配置状态:", self.status_label)
+
+        # 配置表单 - 使用自定义布局确保垂直对齐
+        config_layout = QVBoxLayout()
+        config_layout.setSpacing(18)
+
+        # 地图数据源行
+        source_row = QHBoxLayout()
+        source_label = QLabel("地图数据源:")
+        source_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        source_label.setFixedWidth(100)  # 固定标签宽度
+        source_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        source_row.addWidget(source_label)
+        source_row.addSpacing(10)  # 标签和控件之间的间距
+        source_row.addWidget(combo_container)
+        config_layout.addLayout(source_row)
+
+        # API Key行
+        api_key_row = QHBoxLayout()
+        api_key_label = QLabel("API Key:")
+        api_key_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        api_key_label.setFixedWidth(100)  # 固定标签宽度
+        api_key_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        api_key_row.addWidget(api_key_label)
+        api_key_row.addSpacing(10)
+        
+        # API Key输入框容器
+        api_key_container = QWidget()
+        api_key_layout = QHBoxLayout(api_key_container)
+        api_key_layout.setContentsMargins(0, 0, 0, 0)
+        api_key_layout.addWidget(self.api_key_edit)
+        api_key_layout.addWidget(self.api_key_eye_btn)
+        api_key_row.addWidget(api_key_container)
+        config_layout.addLayout(api_key_row)
+
+        # 安全密钥行
+        security_key_row = QHBoxLayout()
+        security_key_label = QLabel("安全密钥:")
+        security_key_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        security_key_label.setFixedWidth(100)  # 固定标签宽度
+        security_key_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        security_key_row.addWidget(security_key_label)
+        security_key_row.addSpacing(10)
+        
+        # 安全密钥输入框容器
+        security_key_container = QWidget()
+        security_key_layout = QHBoxLayout(security_key_container)
+        security_key_layout.setContentsMargins(0, 0, 0, 0)
+        security_key_layout.addWidget(self.security_key_edit)
+        security_key_layout.addWidget(self.security_key_eye_btn)
+        security_key_row.addWidget(security_key_container)
+        config_layout.addLayout(security_key_row)
+
+        # 配置状态行
+        status_row = QHBoxLayout()
+        status_label = QLabel("配置状态:")
+        status_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        status_label.setFixedWidth(100)  # 固定标签宽度
+        status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        status_row.addWidget(status_label)
+        status_row.addSpacing(10)
+        status_row.addWidget(self.status_label)
+        config_layout.addLayout(status_row)
 
         main_layout.addLayout(config_layout)
 
         # 按钮区域
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch(1)
 
         self.test_btn = QPushButton("测试连接")
         self.test_btn.clicked.connect(self.test_connection)
+        self.test_btn.setMinimumWidth(100)
+        self.test_btn.setMinimumHeight(40)
         self.test_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 10px 20px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 9pt;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #5a6268;
+            }
+            QPushButton:disabled {
+                background-color: #e9ecef;
+                color: #6c757d;
             }
         """)
         btn_layout.addWidget(self.test_btn)
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
+        self.save_btn.setMinimumWidth(100)
+        self.save_btn.setMinimumHeight(40)
         self.save_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                background-color: #4A90E2;
+                padding: 10px 20px;
+                background-color: #007bff;
                 color: white;
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
+                font-size: 9pt;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: #3A80D2;
+                background-color: #0056b3;
             }
         """)
         btn_layout.addWidget(self.save_btn)
 
         self.clear_btn = QPushButton("清除配置")
         self.clear_btn.clicked.connect(self.clear_config)
+        self.clear_btn.setMinimumWidth(100)
+        self.clear_btn.setMinimumHeight(40)
         self.clear_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 10px 20px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 9pt;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #c82333;
             }
         """)
         btn_layout.addWidget(self.clear_btn)
+        
+        btn_layout.addStretch(1)
 
         main_layout.addLayout(btn_layout)
-        main_layout.addStretch()
+        # 删除底部的addStretch()，避免底部空白
 
     def on_map_source_changed(self, index):
         """地图数据源选择变化时的处理"""
@@ -262,7 +470,17 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_eye_btn.setEnabled(False)
             self.test_btn.setEnabled(False)
             self.status_label.setText("未选择")
-            self.status_label.setStyleSheet("QLabel { padding: 6px; border-radius: 4px; background-color: #f5f5f5; color: gray; }")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    padding: 8px 16px;
+                    border-radius: 18px;
+                    font-weight: bold;
+                    font-size: 9pt;
+                    background-color: #f8f9fa;
+                    border: 2px solid #e1e5e9;
+                    color: #6c757d;
+                }
+            """)
         elif index == 2:  # 高德地图
             self.api_key_edit.setEnabled(True)
             self.api_key_eye_btn.setEnabled(True)
@@ -271,10 +489,30 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.test_btn.setEnabled(True)
             if map_config.is_gaode_configured():
                 self.status_label.setText("已配置")
-                self.status_label.setStyleSheet("QLabel { padding: 6px; border-radius: 4px; background-color: #e8f5e9; color: green; }")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        padding: 8px 16px;
+                        border-radius: 18px;
+                        font-weight: bold;
+                        font-size: 9pt;
+                        background-color: #d4edda;
+                        border: 2px solid #c3e6cb;
+                        color: #155724;
+                    }
+                """)
             else:
                 self.status_label.setText("未配置")
-                self.status_label.setStyleSheet("QLabel { padding: 6px; border-radius: 4px; background-color: #ffebee; color: red; }")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        padding: 8px 16px;
+                        border-radius: 18px;
+                        font-weight: bold;
+                        font-size: 9pt;
+                        background-color: #f8d7da;
+                        border: 2px solid #f5c6cb;
+                        color: #721c24;
+                    }
+                """)
         else:  # OpenStreetMap
             self.api_key_edit.setEnabled(False)
             self.api_key_eye_btn.setEnabled(False)
@@ -282,7 +520,17 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_eye_btn.setEnabled(False)
             self.test_btn.setEnabled(False)
             self.status_label.setText("无需配置")
-            self.status_label.setStyleSheet("QLabel { padding: 6px; border-radius: 4px; background-color: #e3f2fd; color: blue; }")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    padding: 8px 16px;
+                    border-radius: 18px;
+                    font-weight: bold;
+                    font-size: 9pt;
+                    background-color: #cce7ff;
+                    border: 2px solid #b3d9ff;
+                    color: #004085;
+                }
+            """)
 
     def load_current_config(self):
         """加载当前配置"""
@@ -368,12 +616,12 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def toggle_security_key_visibility(self):
         """切换安全密钥的可见性"""
-        if self.security_key_edit.echoMode() == QLineEdit.Password:
-            self.security_key_edit.setEchoMode(QLineEdit.Normal)
-            self.security_key_eye_btn.setText("👁️‍🗨️")
-        else:
+        if self.security_key_edit.echoMode() == QLineEdit.Normal:
             self.security_key_edit.setEchoMode(QLineEdit.Password)
             self.security_key_eye_btn.setText("👁️")
+        else:
+            self.security_key_edit.setEchoMode(QLineEdit.Normal)
+            self.security_key_eye_btn.setText("👁️‍🗨️")
 
 
 
@@ -382,7 +630,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(400)
+        self.setFixedHeight(350)  # 减少高度，删除底部空白
         self._init_ui()
         self.load_current_config()
 
@@ -397,7 +645,7 @@ class LogSettingsPopup(BaseSettingsPopup):
         title_label = QLabel("日志设置")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 16px;
+                font-size: 9pt;
                 font-weight: bold;
                 color: #333333;
             }
@@ -535,7 +783,7 @@ class LogSettingsPopup(BaseSettingsPopup):
         """)
         main_layout.addWidget(self.log_size_label)
 
-        main_layout.addStretch()
+        # 删除底部的addStretch()，避免底部空白
 
     def load_current_config(self):
         """加载当前配置"""
@@ -578,7 +826,7 @@ class AboutPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(450)
+        self.setFixedHeight(400)  # 减少高度，删除底部空白
         self._init_ui()
 
     def _init_ui(self):
@@ -592,7 +840,7 @@ class AboutPopup(BaseSettingsPopup):
         title_label = QLabel("关于")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 16px;
+                font-size: 9pt;
                 font-weight: bold;
                 color: #333333;
             }
@@ -635,7 +883,7 @@ class AboutPopup(BaseSettingsPopup):
         about_label.setStyleSheet("padding: 10px;")
         main_layout.addWidget(about_label)
 
-        main_layout.addStretch()
+        # 删除底部的addStretch()，避免底部空白
 
     def _get_about_text(self):
         """获取关于内容的HTML"""
