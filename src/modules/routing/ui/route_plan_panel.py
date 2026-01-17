@@ -136,7 +136,7 @@ class RouteAlternativeItem(QWidget):
 
         layout.addLayout(first_row)
 
-        # 第二行：距离、红绿灯、收费信息
+        # 第二行：距离、红绿灯、收费信息、路线点位数量
         second_row = QHBoxLayout()
         second_row.setSpacing(12)
 
@@ -152,6 +152,21 @@ class RouteAlternativeItem(QWidget):
             }
         """)
         second_row.addWidget(distance_label)
+
+        # 路线点位数量
+        route_points = self.route_data.get('route_points', [])
+        if route_points:
+            # 计算有效点位数量（排除None分隔符）
+            valid_points_count = len([p for p in route_points if p is not None])
+            points_label = QLabel(f"{valid_points_count}个点位")
+            points_label.setStyleSheet("""
+                QLabel {
+                    color: rgba(255, 255, 255, 0.6);
+                    font-size: 11px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            second_row.addWidget(points_label)
 
         # 红绿灯数量（仅驾车模式）
         traffic_lights = self.route_data.get('traffic_lights', 0)

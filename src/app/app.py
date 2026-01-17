@@ -2466,107 +2466,126 @@ class GpxStudio(QMainWindow):
 
     def _on_route_history_selected(self, history_data: dict):
         """选择路线搜索历史"""
-        start = history_data.get('start', '')
-        end = history_data.get('end', '')
-        mode = history_data.get('mode', 'driving')
+        try:
+            start = history_data.get('start', '')
+            end = history_data.get('end', '')
+            mode = history_data.get('mode', 'driving')
 
-        # 获取坐标信息
-        start_coords = history_data.get('start_coords')
-        end_coords = history_data.get('end_coords')
-        waypoint_coords = history_data.get('waypoint_coords', [])
+            # 获取坐标信息
+            start_coords = history_data.get('start_coords')
+            end_coords = history_data.get('end_coords')
+            waypoint_coords = history_data.get('waypoint_coords', [])
 
-        # 获取保存的路线点数据
-        route_points = history_data.get('route_points', [])
-        distance = history_data.get('distance', 0)
-        duration = history_data.get('duration', 0)
+            # 获取保存的路线点数据
+            route_points = history_data.get('route_points', [])
+            distance = history_data.get('distance', 0)
+            duration = history_data.get('duration', 0)
 
-        self.logger.info(f"[路线面板] 选择历史记录: {start} → {end}")
-        self.logger.info(f"[路线面板] 起点坐标: {start_coords}, 终点坐标: {end_coords}")
-        self.logger.info(f"[路线面板] 路线点数量: {len(route_points)}, 距离: {distance}m, 时长: {duration}s")
+            self.logger.info(f"[路线面板] 选择历史记录: {start} → {end}")
+            self.logger.info(f"[路线面板] 起点坐标: {start_coords}, 终点坐标: {end_coords}")
+            self.logger.info(f"[路线面板] 路线点数量: {len(route_points)}, 距离: {distance}m, 时长: {duration}s")
 
-        # 清除旧的路线数据（重要：避免显示上一次的路线）
-        self.data_manager.clear_all_route_data()
+            # 显示加载状态
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel.show_loading()
 
-        # 清除旧的途径点数据
-        self.data_manager.clear_waypoints()
+            # 清除旧的路线数据（重要：避免显示上一次的路线）
+            self.data_manager.clear_all_route_data()
 
-        # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
-        if hasattr(self, 'route_plan_panel'):
-            self.route_plan_panel.restore_history_mode()
+            # 清除旧的途径点数据
+            self.data_manager.clear_waypoints()
 
-            # 清空所有输入框（重要：清除旧数据）
-            self.route_plan_panel.clear_all_inputs()
+            # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel.restore_history_mode()
 
-        # 填充到输入框
-        if hasattr(self, 'route_plan_panel'):
-            self.route_plan_panel.set_start_location(start)
-            self.route_plan_panel.set_end_location(end)
+                # 清空所有输入框（重要：清除旧数据）
+                self.route_plan_panel.clear_all_inputs()
 
-            # 切换交通方式
-            self.route_plan_panel._switch_transport_mode(mode)
+            # 填充到输入框
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel.set_start_location(start)
+                self.route_plan_panel.set_end_location(end)
 
-        # 如果历史记录中有坐标，直接恢复
-        has_coords = False
-        if start_coords and isinstance(start_coords, (list, tuple)) and len(start_coords) == 2:
-            self.data_manager.set_start_location(tuple(start_coords), start)
-            self.logger.info(f"[路线面板] 已恢复起点坐标: {start_coords}")
-            has_coords = True
+                # 切换交通方式
+                self.route_plan_panel._switch_transport_mode(mode)
 
-        if end_coords and isinstance(end_coords, (list, tuple)) and len(end_coords) == 2:
-            self.data_manager.set_end_location(tuple(end_coords), end)
-            self.logger.info(f"[路线面板] 已恢复终点坐标: {end_coords}")
-            has_coords = has_coords and True
-        else:
+            # 如果历史记录中有坐标，直接恢复
             has_coords = False
+            if start_coords and isinstance(start_coords, (list, tuple)) and len(start_coords) == 2:
+                self.data_manager.set_start_location(tuple(start_coords), start)
+                self.logger.info(f"[路线面板] 已恢复起点坐标: {start_coords}")
+                has_coords = True
 
-        # 恢复途径点坐标和UI
-        if waypoint_coords:
-            waypoints = history_data.get('waypoints', [])
-            for i, coords in enumerate(waypoint_coords):
-                if coords and isinstance(coords, (list, tuple)) and len(coords) == 2:
-                    waypoint_name = waypoints[i] if i < len(waypoints) else f"途径点{i+1}"
-                    # 添加到data_manager
-                    self.data_manager.add_waypoint(tuple(coords), waypoint_name)
-                    # 添加到UI
-                    if hasattr(self, 'route_plan_panel'):
-                        self.route_plan_panel._add_waypoint()
-                        # 设置途径点文本
-                        if i < len(self.route_plan_panel.waypoint_widgets):
-                            self.route_plan_panel.waypoint_widgets[i]['input'].setText(waypoint_name)
-                    self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords}")
-
-        # 如果没有坐标，自动搜索起点和终点
-        if not has_coords:
-            self.logger.info(f"[路线面板] 历史记录缺少坐标，开始自动搜索...")
-            self._auto_search_history_locations(start, end, mode)
-        else:
-            # 恢复路线点数据到data_manager
-            if route_points and len(route_points) > 0:
-                # 将路线点转换为元组格式 (lat, lon) 或 (lat, lon, elevation)
-                converted_route_points = []
-                for point in route_points:
-                    if isinstance(point, (list, tuple)) and len(point) >= 2:
-                        # 保留原始格式（可能包含海拔）
-                        converted_route_points.append(tuple(point))
-
-                if converted_route_points:
-                    # 设置路线点数据
-                    self.data_manager.route_points = converted_route_points
-                    self.data_manager.estimated_duration_seconds = duration
-                    # 注意：distance 在 data_manager 中没有直接存储，但可以通过 route_points 计算
-
-                    self.logger.info(f"[路线面板] 已恢复路线点数据: {len(converted_route_points)} 个点")
-
-                    # 在地图上渲染路线
-                    self.map_manager.show_route_on_map()
-                    self.logger.info(f"[路线面板] 路线已渲染到地图")
+            if end_coords and isinstance(end_coords, (list, tuple)) and len(end_coords) == 2:
+                self.data_manager.set_end_location(tuple(end_coords), end)
+                self.logger.info(f"[路线面板] 已恢复终点坐标: {end_coords}")
+                has_coords = has_coords and True
             else:
-                # 如果没有路线点数据，只显示起点和终点
-                self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
-                # 在地图上预览起点和终点
-                if self.data_manager.start_coords and self.data_manager.end_coords:
-                    # 更新地图预览，显示起点和终点
-                    self.map_manager.update_map_preview(auto_fit=True)
+                has_coords = False
+
+            # 恢复途径点坐标和UI
+            if waypoint_coords:
+                waypoints = history_data.get('waypoints', [])
+                for i, coords in enumerate(waypoint_coords):
+                    if coords and isinstance(coords, (list, tuple)) and len(coords) == 2:
+                        waypoint_name = waypoints[i] if i < len(waypoints) else f"途径点{i+1}"
+                        # 添加到data_manager
+                        self.data_manager.add_waypoint(tuple(coords), waypoint_name)
+                        # 添加到UI
+                        if hasattr(self, 'route_plan_panel'):
+                            self.route_plan_panel._add_waypoint()
+                            # 设置途径点文本
+                            if i < len(self.route_plan_panel.waypoint_widgets):
+                                self.route_plan_panel.waypoint_widgets[i]['input'].setText(waypoint_name)
+                        self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords}")
+
+            # 如果没有坐标，自动搜索起点和终点
+            if not has_coords:
+                self.logger.info(f"[路线面板] 历史记录缺少坐标，开始自动搜索...")
+                self._auto_search_history_locations(start, end, mode)
+            else:
+                # 恢复路线点数据到data_manager
+                if route_points and len(route_points) > 0:
+                    # 将路线点转换为元组格式 (lat, lon) 或 (lat, lon, elevation)
+                    converted_route_points = []
+                    for point in route_points:
+                        if isinstance(point, (list, tuple)) and len(point) >= 2:
+                            # 保留原始格式（可能包含海拔）
+                            converted_route_points.append(tuple(point))
+
+                    if converted_route_points:
+                        # 设置路线点数据
+                        self.data_manager.route_points = converted_route_points
+                        self.data_manager.estimated_duration_seconds = duration
+                        # 注意：distance 在 data_manager 中没有直接存储，但可以通过 route_points 计算
+
+                        self.logger.info(f"[路线面板] 已恢复路线点数据: {len(converted_route_points)} 个点")
+
+                        # 在地图上渲染路线
+                        self.map_manager.show_route_on_map()
+                        self.logger.info(f"[路线面板] 路线已渲染到地图")
+                        
+                        # 隐藏加载状态
+                        if hasattr(self, 'route_plan_panel'):
+                            self.route_plan_panel.hide_loading()
+                else:
+                    # 如果没有路线点数据，只显示起点和终点
+                    self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
+                    # 在地图上预览起点和终点
+                    if self.data_manager.start_coords and self.data_manager.end_coords:
+                        # 更新地图预览，显示起点和终点
+                        self.map_manager.update_map_preview(auto_fit=True)
+                    
+                    # 隐藏加载状态
+                    if hasattr(self, 'route_plan_panel'):
+                        self.route_plan_panel.hide_loading()
+
+        except Exception as e:
+            self.logger.error(f"[路线面板] 处理历史记录选择时出错: {str(e)}")
+            # 确保在异常情况下也隐藏加载状态
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel.hide_loading()
 
     def _auto_search_history_locations(self, start: str, end: str, mode: str):
         """自动搜索历史记录中的起点和终点坐标
@@ -2638,7 +2657,11 @@ class GpxStudio(QMainWindow):
                 self.logger.warning(f"[路线面板] 未能找到起点或终点的坐标")
 
         except Exception as e:
-            self.logger.error(f"[路线面板] 自动搜索坐标失败: {e}")
+            self.logger.error(f"[路线面板] 自动搜索历史记录位置失败: {str(e)}")
+        finally:
+            # 无论成功还是失败，都要隐藏加载状态
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel.hide_loading()
 
     def _on_route_alternative_selected(self, index: int):
         """用户选择路线方案"""
