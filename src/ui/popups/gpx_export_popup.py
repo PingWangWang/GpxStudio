@@ -195,7 +195,7 @@ class GpxExportPopup(QWidget):
         self.move(pos)
         self.show()
         self.raise_()
-        self.activateWindow()
+        self.activateWindow()  # 激活窗口以确保获得焦点
         # 自动设置焦点到弹出面板
         self.setFocus()
         print("[GPX导出] 显示弹出面板并设置焦点")
@@ -207,40 +207,19 @@ class GpxExportPopup(QWidget):
     
     def eventFilter(self, obj, event):
         """事件过滤器 - 监听焦点变化"""
-        if event.type() == QEvent.WindowDeactivate:
-            # 窗口失去焦点时延迟关闭（给用户一点时间）
-            QTimer.singleShot(100, self._check_and_close)
+        # 禁用自动关闭功能，只通过ESC键或按钮关闭
+        # 这样可以避免在弹出时间日期设置面板时自动关闭GPX面板
         return super().eventFilter(obj, event)
     
     def _check_and_close(self):
-        """检查并关闭弹出面板"""
-        # 检查当前焦点是否在弹出面板内或其子弹出窗口内
-        focused_widget = QApplication.focusWidget()
-        
-        # 如果焦点在弹出面板内，不关闭
-        if focused_widget and self.isAncestorOf(focused_widget):
-            return
-        
-        # 如果当前弹出面板有焦点，不关闭
-        if self.hasFocus():
-            return
-            
-        # 检查是否有日期时间选择器弹出窗口正在显示
-        if hasattr(self, 'datetime_edit') and hasattr(self.datetime_edit, 'picker_popup'):
-            if self.datetime_edit.picker_popup and self.datetime_edit.picker_popup.isVisible():
-                # 日期时间选择器正在显示，不关闭GPX导出面板
-                return
-        
-        # 如果焦点不在弹出面板内且没有子弹出窗口，则关闭
-        if self.isVisible():
-            self.hide()
-            self.closed.emit()
+        """检查并关闭弹出面板 - 已禁用自动关闭"""
+        # 不再自动关闭，只通过ESC键或按钮关闭
+        pass
     
     def focusOutEvent(self, event):
-        """焦点丢失事件"""
+        """焦点丢失事件 - 已禁用自动关闭"""
         super().focusOutEvent(event)
-        # 延迟检查，因为焦点可能转移到子控件
-        QTimer.singleShot(50, self._check_and_close)
+        # 不再延迟检查自动关闭
     
     def keyPressEvent(self, event):
         """键盘按键事件"""

@@ -160,6 +160,7 @@ class CustomDateTimeEdit(QWidget):
         self.picker_popup.adjustSize()
         self.picker_popup.show()
         self.picker_popup.raise_()
+        self.picker_popup.activateWindow()  # 激活窗口以确保获得焦点
         self.picker_popup.setFocus()  # 设置焦点以接收键盘事件
         
         print("[日期时间选择] 显示自定义选择器并设置焦点")

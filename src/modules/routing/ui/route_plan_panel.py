@@ -1006,19 +1006,34 @@ class RoutePlanPanel(QWidget):
     def keyPressEvent(self, event: QKeyEvent):
         """处理键盘事件"""
         if event.key() == Qt.Key_Escape:
-            # 检查是否有GPX导出面板正在显示
+            # 检查是否有任何子弹出窗口正在显示
             parent_app = self.parent()
             while parent_app and not hasattr(parent_app, 'gpx_export_popup'):
                 parent_app = parent_app.parent()
             
             if parent_app and hasattr(parent_app, 'gpx_export_popup'):
                 if parent_app.gpx_export_popup and parent_app.gpx_export_popup.isVisible():
-                    # 如果GPX导出面板正在显示，不处理ESC键，让GPX面板处理
-                    print("[路线面板] GPX导出面板正在显示，ESC键由GPX面板处理")
-                    super().keyPressEvent(event)
-                    return
+                    # 检查GPX面板是否有子弹出窗口（时间日期设置面板）
+                    gpx_popup = parent_app.gpx_export_popup
+                    has_child_popup = False
+                    
+                    # 检查日期时间选择器
+                    if hasattr(gpx_popup, 'datetime_edit') and hasattr(gpx_popup.datetime_edit, 'picker_popup'):
+                        if gpx_popup.datetime_edit.picker_popup and gpx_popup.datetime_edit.picker_popup.isVisible():
+                            has_child_popup = True
+                    
+                    if has_child_popup:
+                        # 如果有子弹出窗口，不处理ESC键，让子窗口处理
+                        print("[路线面板] 有子弹出窗口正在显示，ESC键由子窗口处理")
+                        super().keyPressEvent(event)
+                        return
+                    else:
+                        # 如果GPX面板显示但没有子窗口，不处理ESC键，让GPX面板处理
+                        print("[路线面板] GPX导出面板正在显示，ESC键由GPX面板处理")
+                        super().keyPressEvent(event)
+                        return
             
-            # 如果没有GPX导出面板显示，则关闭路线规划面板
+            # 如果没有任何子弹出窗口显示，则关闭路线规划面板
             print("[路线面板] ESC键关闭路线规划面板")
             self.cancel_clicked.emit()
             event.accept()
