@@ -443,8 +443,8 @@ class RoutePlanPanel(QWidget):
         """初始化路线规划面板"""
         super().__init__(parent)
 
-        # 设置窗口标志 - 使用Popup而不是ToolTip，以便能够接收键盘焦点
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        # 设置窗口标志 - 使用Tool而不是Popup，避免自动关闭
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)  # 不透明背景
 
         # 设置焦点策略以接收键盘事件
@@ -1017,10 +1017,9 @@ class RoutePlanPanel(QWidget):
                     gpx_popup = parent_app.gpx_export_popup
                     has_child_popup = False
                     
-                    # 检查日期时间选择器
-                    if hasattr(gpx_popup, 'datetime_edit') and hasattr(gpx_popup.datetime_edit, 'picker_popup'):
-                        if gpx_popup.datetime_edit.picker_popup and gpx_popup.datetime_edit.picker_popup.isVisible():
-                            has_child_popup = True
+                    # 检查新的日期时间选择器
+                    if hasattr(gpx_popup, 'picker_popup') and gpx_popup.picker_popup and gpx_popup.picker_popup.isVisible():
+                        has_child_popup = True
                     
                     if has_child_popup:
                         # 如果有子弹出窗口，不处理ESC键，让子窗口处理

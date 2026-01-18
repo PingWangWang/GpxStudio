@@ -178,7 +178,9 @@ class GpxStudio(QMainWindow):
 
     def _init_ui(self):
         """初始化用户界面"""
-        print("开始初始化UI")
+        # 先创建地图视图以确保它不被垃圾回收
+        self._create_map_view()
+        
         self.init_ui()
 
         # 初始化地图右键菜单
@@ -187,7 +189,138 @@ class GpxStudio(QMainWindow):
         self.map_context_menu.add_as_waypoint.connect(self._on_context_menu_add_waypoint)
         self.map_context_menu.set_as_end.connect(self._on_context_menu_set_end)
 
-        print("UI初始化完成")
+        # 初始化搜索相关的弹出面板
+        self._init_search_popups()
+
+        # 初始化设置相关的弹出面板
+        self._init_settings_popups()
+
+        # 初始化路线规划面板
+        self._init_route_plan_panel()
+
+    def _init_search_popups(self):
+        """初始化搜索相关的弹出面板"""
+        try:
+            from modules.search.ui.search_history_popup import SearchHistoryPopup
+            from modules.search.ui.search_results_popup import SearchResultsPopup
+            
+            # 创建搜索历史弹出面板
+            self.search_history_popup = SearchHistoryPopup(self)
+            self.search_history_popup.history_selected.connect(self._on_history_selected)
+            
+            # 创建搜索结果弹出面板
+            self.search_results_popup = SearchResultsPopup(self)
+            self.search_results_popup.result_selected.connect(self._on_result_selected)
+            
+        except ImportError as e:
+            if hasattr(self, 'logger'):
+                self.logger.error(f"无法导入搜索弹出面板: {e}")
+            else:
+                print(f"无法导入搜索弹出面板: {e}")
+
+    def _init_settings_popups(self):
+        """初始化设置相关的弹出面板"""
+        try:
+            from ui.popups.settings_popup import MapSettingsPopup, LogSettingsPopup, AboutPopup, RouteSettingsPopup
+            
+            # 创建地图设置弹出面板
+            self.map_settings_popup = MapSettingsPopup(self)
+            self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
+            self.map_settings_popup.closed.connect(self._on_map_settings_popup_closed)
+            
+            # 创建路线设置弹出面板
+            self.route_settings_popup = RouteSettingsPopup(self)
+            self.route_settings_popup.config_saved.connect(self._on_route_config_saved)
+            self.route_settings_popup.closed.connect(self._on_route_settings_popup_closed)
+            
+            # 创建日志设置弹出面板
+            self.log_settings_popup = LogSettingsPopup(self)
+            
+            # 创建关于弹出面板
+            self.about_popup = AboutPopup(self)
+            
+        except ImportError as e:
+            if hasattr(self, 'logger'):
+                self.logger.error(f"无法导入设置弹出面板: {e}")
+            else:
+                print(f"无法导入设置弹出面板: {e}")
+
+    def _init_route_plan_panel(self):
+        """初始化路线规划面板"""
+        try:
+            from modules.routing.ui.route_plan_panel import RoutePlanPanel
+            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            
+            # 创建路线历史存储
+            self.route_history_storage = RouteHistoryStorage()
+            
+            # 创建路线规划面板
+            self.route_plan_panel = RoutePlanPanel(self)
+            self.route_plan_panel.cancel_clicked.connect(self._on_route_panel_cancel)
+            self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)  # 修正信号名称
+            self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)  # 修正信号名称
+            self.route_plan_panel.search_location_clicked.connect(self._on_route_location_search)  # 修正信号名称
+            self.route_plan_panel.address_selected.connect(self._on_route_address_selected)
+            self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
+            self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)  # 修正信号名称
+            self.route_plan_panel.export_gpx_clicked.connect(self._on_export_gpx_clicked)
+            self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
+            
+        except ImportError as e:
+            if hasattr(self, 'logger'):
+                self.logger.error(f"无法导入路线规划面板: {e}")
+            else:
+                print(f"无法导入路线规划面板: {e}")
+
+    def _recreate_map_view(self):
+        """重新创建地图视图"""
+        try:
+            self.logger.info("开始重新创建地图视图")
+            
+            # 创建新的地图视图
+            self.map_view = QWebEngineView(self)
+            self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
+            self.web_page.set_geolocation_handler(self.geolocation_handler)
+            self.map_view.setPage(self.web_page)
+            
+            # 保持强引用
+            if hasattr(self, '_widget_refs'):
+                self._widget_refs.append(self.map_view)
+            
+            # 更新MapManager的引用
+            self.map_manager.map_view = self.map_view
+            
+            # 显示地图视图（即使没有添加到布局，也可以尝试加载）
+            self.map_view.show()
+            
+            self.logger.info(f"成功重新创建地图视图: {id(self.map_view)}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"重新创建地图视图失败: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return False
+
+    def _create_map_view(self):
+        """提前创建地图视图"""
+        # 强制处理事件，确保窗口完全初始化
+        from PyQt5.QtWidgets import QApplication
+        QApplication.processEvents()
+        
+        self.map_view = QWebEngineView(self)  # 明确设置父对象
+        
+        # 保持强引用防止垃圾回收
+        if not hasattr(self, '_widget_refs'):
+            self._widget_refs = []
+        self._widget_refs.append(self.map_view)
+        
+        self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
+        self.web_page.set_geolocation_handler(self.geolocation_handler)
+        self.map_view.setPage(self.web_page)
+        
+        # 再次强制处理事件
+        QApplication.processEvents()
 
     def _init_logging(self):
         """初始化日志系统"""
@@ -241,7 +374,7 @@ class GpxStudio(QMainWindow):
         )
 
         self.map_manager = MapManager(
-            self.data_manager, self.map_view, self.logger
+            self.data_manager, self.map_view, self.logger, self._recreate_map_view
         )
 
         self.search_manager = SearchManager(
@@ -394,12 +527,15 @@ class GpxStudio(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # 初始化隐藏的UI组件（必须在创建地图面板之前）
+        self._init_hidden_ui_components()
+
         # 只创建地图面板，铺满整个界面
         map_panel = self.create_map_panel()
         main_layout.addWidget(map_panel)
 
-        # 延迟加载初始地图
-        QTimer.singleShot(MAP_LOAD_DELAY_MS, self._show_initial_map)
+        # 延迟加载初始地图（增加延迟时间）
+        QTimer.singleShot(MAP_LOAD_DELAY_MS + 2000, self._show_initial_map)
 
     def create_map_panel(self):
         """创建地图面板（铺满整个界面）"""
@@ -411,12 +547,7 @@ class GpxStudio(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 创建地图视图
-        self.map_view = QWebEngineView()
-        self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
-        self.web_page.set_geolocation_handler(self.geolocation_handler)
-        self.map_view.setPage(self.web_page)
-
+        # 使用提前创建的地图视图
         # 设置User Agent
         profile = QWebEngineProfile.defaultProfile()
         profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -426,7 +557,25 @@ class GpxStudio(QMainWindow):
         map_container_layout = QVBoxLayout(map_container)
         map_container_layout.setContentsMargins(0, 0, 0, 0)
         map_container_layout.setSpacing(0)
+        
+        # 确保map_view存在且有效，如果不存在则重新创建
+        try:
+            if not hasattr(self, 'map_view') or self.map_view is None:
+                print("[调试] map_view不存在，重新创建")
+                self._create_map_view()
+            # 测试map_view是否有效
+            _ = self.map_view.size()
+            print(f"[调试] map_view有效: {id(self.map_view)}")
+        except (RuntimeError, AttributeError) as e:
+            # map_view已被删除或无效，重新创建
+            print(f"[调试] map_view无效: {e}，重新创建")
+            self._create_map_view()
+        
+        # 确保map_view有正确的父对象
+        self.map_view.setParent(map_container)
+        print(f"[调试] 准备添加map_view到布局: {self.map_view}")
         map_container_layout.addWidget(self.map_view)
+        print("[调试] map_view已添加到布局")
 
         # 获取项目根目录
         import os
@@ -468,12 +617,14 @@ class GpxStudio(QMainWindow):
         # 创建地图设置按钮（SVG动画齿轮按钮）
         from ui.icons import create_icon_button
         self.map_settings_button = create_icon_button('MapSetting', '地图设置')
+        print(f"[调试] 地图设置按钮: {self.map_settings_button}")
         self.map_settings_button.clicked.connect(self.on_map_settings_clicked)
         self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
         right_buttons_layout.addWidget(self.map_settings_button)
 
         # 创建路线设置按钮（第二个位置）
         self.route_settings_button = create_icon_button('RouteSetting', '路线设置')
+        print(f"[调试] 路线设置按钮: {self.route_settings_button}")
         self.route_settings_button.clicked.connect(self.on_route_settings_clicked)
         self.route_settings_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.route_settings_button)
@@ -481,30 +632,35 @@ class GpxStudio(QMainWindow):
         # 创建日志设置按钮
         # 创建日志设置按钮
         self.log_settings_button = create_icon_button('Log', '日志设置', self)
+        print(f"[调试] 日志设置按钮: {self.log_settings_button}")
         self.log_settings_button.clicked.connect(self.on_log_settings_clicked)
         self.log_settings_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.log_settings_button)
 
         # 创建关于按钮
         self.about_button = create_icon_button('About', '关于', self)
+        print(f"[调试] 关于按钮: {self.about_button}")
         self.about_button.clicked.connect(self.on_about_clicked)
         self.about_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.about_button)
 
         # 创建放大按钮
         self.zoom_in_button = create_icon_button('ZoomBig', '放大', self)
+        print(f"[调试] 放大按钮: {self.zoom_in_button}")
         self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
         self.zoom_in_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.zoom_in_button)
 
         # 创建缩小按钮
         self.zoom_out_button = create_icon_button('ZoomSmall', '缩小', self)
+        print(f"[调试] 缩小按钮: {self.zoom_out_button}")
         self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
         self.zoom_out_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.zoom_out_button)
 
         # 创建定位按钮
         self.locate_button = create_icon_button('Location', '定位到当前位置', self)
+        print(f"[调试] 定位按钮: {self.locate_button}")
         self.locate_button.clicked.connect(self.on_locate_clicked)
         self.locate_button.setFixedSize(control_height, control_height)
         right_buttons_layout.addWidget(self.locate_button)
@@ -512,6 +668,7 @@ class GpxStudio(QMainWindow):
         # 创建加载进度按钮
         # 创建加载进度按钮
         self.loading_button = create_icon_button('Loading', '加载状态指示器', self)
+        print(f"[调试] 加载按钮: {self.loading_button}")
         self.loading_button.setFixedSize(control_height, control_height)
         self.loading_button.show()  # 固定显示，不做显隐切换
         right_buttons_layout.addWidget(self.loading_button)
@@ -524,7 +681,7 @@ class GpxStudio(QMainWindow):
         self.is_loading = False  # 加载状态标志
 
         # 创建比例尺信息标签（左下角）
-        self.scale_info_label = QLabel()
+        self.scale_info_label = QLabel(map_container)  # 设置父对象为map_container
         self.scale_info_label.setStyleSheet("""
             QLabel {
                 background-color: rgba(255, 255, 255, 0.8);
@@ -616,72 +773,91 @@ class GpxStudio(QMainWindow):
         search_layout.addWidget(self.cancel_button)
         self.cancel_button.hide()  # 初始隐藏
 
-        self.scale_info_label.setParent(map_container)
-
         # 监听窗口大小变化，调整按钮位置
         map_container.resizeEvent = lambda event: self._update_button_positions(map_container)
 
         layout.addWidget(map_container)
+        
+        return map_widget  # 返回map_widget而不是None
 
-        # 初始化必要的UI组件（用于后台逻辑，但不显示）
-        self._init_hidden_ui_components()
+    def moveEvent(self, event):
+        """窗口移动事件 - 更新路线规划面板位置"""
+        super().moveEvent(event)
+        # 只有在应用完全初始化后才更新面板位置
+        if (hasattr(self, 'logger') and 
+            hasattr(self, 'search_container') and 
+            hasattr(self, 'route_plan_panel')):
+            self._update_route_panel_position()
 
-        # 创建搜索历史下拉列表
-        from modules.search import SearchHistoryPopup, SearchResultsPopup
-        self.search_history_popup = SearchHistoryPopup(map_container)
-        self.search_history_popup.history_selected.connect(self._on_history_selected)
-        self.search_history_popup.hide()
-        self._register_popup(self.search_history_popup)
+    def resizeEvent(self, event):
+        """窗口大小变化事件 - 更新路线规划面板位置"""
+        super().resizeEvent(event)
+        # 只有在应用完全初始化后才更新面板位置
+        if (hasattr(self, 'logger') and 
+            hasattr(self, 'search_container') and 
+            hasattr(self, 'route_plan_panel')):
+            self._update_route_panel_position()
 
-        # 创建搜索结果下拉列表
-        self.search_results_popup = SearchResultsPopup(map_container)
-        self.search_results_popup.result_selected.connect(self._on_result_selected)
-        self.search_results_popup.hide()
-        self._register_popup(self.search_results_popup)
+    def _update_route_panel_position(self):
+        """更新路线规划面板和相关弹出面板位置"""
+        try:
+            # 如果路线规划面板正在显示，更新其位置
+            if (hasattr(self, 'route_plan_panel') and 
+                hasattr(self, 'search_container') and 
+                self.route_plan_panel and
+                self.search_container and
+                self.route_plan_panel.isVisible()):
+                
+                # 获取搜索容器的全局位置
+                container_rect = self.search_container.rect()
+                container_global_pos = self.search_container.mapToGlobal(container_rect.topLeft())
 
-        # 创建路线规划面板
-        from modules.routing import RoutePlanPanel, RouteHistoryStorage
-        self.route_plan_panel = RoutePlanPanel(map_container)
-        self.route_plan_panel.cancel_clicked.connect(self._on_route_panel_cancel)
-        self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)
-        self.route_plan_panel.search_location_clicked.connect(self._on_route_location_search)
-        self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
-        self.route_plan_panel.address_selected.connect(self._on_route_address_selected)
-        self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)
-        self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)
-        self.route_plan_panel.export_gpx_clicked.connect(self._on_export_gpx_clicked)
-        self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
-        self.route_plan_panel.hide()
+                # 更新路线规划面板的位置
+                self.route_plan_panel.move(container_global_pos.x(), container_global_pos.y())
+                
+                # 只有在logger已初始化时才记录日志
+                if hasattr(self, 'logger'):
+                    self.logger.debug(f"[路线面板] 更新面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
 
-        # 初始化路线历史存储
-        self.route_history_storage = RouteHistoryStorage()
-
-        # 保存当前搜索文本（用于保存历史记录）
-        self.current_search_text = ""
-
-        # 创建设置弹出面板
-        from ui.popups import MapSettingsPopup, LogSettingsPopup, AboutPopup, RouteSettingsPopup
-        self.map_settings_popup = MapSettingsPopup(map_container)
-        self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
-        self.map_settings_popup.closed.connect(self._on_map_settings_popup_closed)
-        self.map_settings_popup.hide()
-        self._register_popup(self.map_settings_popup)
-
-        self.route_settings_popup = RouteSettingsPopup(map_container)
-        self.route_settings_popup.config_saved.connect(self._on_route_config_saved)
-        self.route_settings_popup.closed.connect(self._on_route_settings_popup_closed)
-        self.route_settings_popup.hide()
-        self._register_popup(self.route_settings_popup)
-
-        self.log_settings_popup = LogSettingsPopup(map_container)
-        self.log_settings_popup.hide()
-        self._register_popup(self.log_settings_popup)
-
-        self.about_popup = AboutPopup(map_container)
-        self.about_popup.hide()
-        self._register_popup(self.about_popup)
-
-        return map_widget
+            # 如果GPX导出弹出面板正在显示，更新其位置
+            if (hasattr(self, 'gpx_export_popup') and 
+                hasattr(self, 'route_plan_panel') and 
+                self.gpx_export_popup and 
+                self.route_plan_panel and
+                self.gpx_export_popup.isVisible() and 
+                self.route_plan_panel.isVisible()):
+                
+                # 重新计算GPX导出弹出面板的位置（相对于路线面板）
+                panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
+                panel_rect = self.route_plan_panel.rect()
+                
+                # 在面板右侧显示
+                popup_x = panel_global_pos.x() + panel_rect.width() + 10
+                popup_y = panel_global_pos.y() + 50
+                
+                # 确保不超出屏幕边界
+                from PyQt5.QtWidgets import QApplication
+                screen = QApplication.primaryScreen().geometry()
+                
+                if popup_x + self.gpx_export_popup.width() > screen.right():
+                    # 如果右侧空间不够，显示在左侧
+                    popup_x = panel_global_pos.x() - self.gpx_export_popup.width() - 10
+                
+                if popup_y + 200 > screen.bottom():  # 估算弹出面板高度
+                    popup_y = screen.bottom() - 250
+                
+                from PyQt5.QtCore import QPoint
+                self.gpx_export_popup.move(popup_x, popup_y)
+                
+                # 只有在logger已初始化时才记录日志
+                if hasattr(self, 'logger'):
+                    self.logger.debug(f"[GPX导出] 更新弹出面板位置: ({popup_x}, {popup_y})")
+        except Exception as e:
+            # 防止在初始化过程中出现错误
+            if hasattr(self, 'logger'):
+                self.logger.error(f"[面板位置] 更新面板位置时出错: {e}")
+            else:
+                print(f"[面板位置] 更新面板位置时出错: {e}")
 
     def _update_button_positions(self, container):
         """更新浮动按钮的位置"""
@@ -964,68 +1140,68 @@ class GpxStudio(QMainWindow):
     def _init_hidden_ui_components(self):
         """初始化隐藏的UI组件（用于后台逻辑）"""
         # 创建隐藏的搜索结果列表
-        self.search_results_list = QListWidget()
+        self.search_results_list = QListWidget(self)  # 设置父对象
         self.search_results_list.itemClicked.connect(self.on_search_result_clicked)
         self.search_results_list.hide()
 
         # 创建隐藏的搜索结果标题
-        self.search_results_title = QLabel("搜索结果")
+        self.search_results_title = QLabel("搜索结果", self)  # 设置父对象
         self.search_results_title.hide()
 
         # 创建隐藏的任务进度面板
         from ui.panels.task_progress_panel import TaskInfoPanel
-        self.task_progress_panel = TaskInfoPanel()
+        self.task_progress_panel = TaskInfoPanel(self)  # 设置父对象
         self.task_progress_panel.cancel_task_requested.connect(self._on_cancel_task_requested)
         self.task_progress_panel.hide()
 
         # 创建隐藏的地图缩放比例尺显示面板
-        self.scale_panel = ScalePanel()
+        self.scale_panel = ScalePanel(self)  # 设置父对象
         self.scale_panel.hide()
 
         # 创建隐藏的输入框和列表（用于后台逻辑）
-        self.start_input = QLineEdit()
+        self.start_input = QLineEdit(self)  # 设置父对象
         self.start_input.hide()
-        self.start_label = QLineEdit()
+        self.start_label = QLineEdit(self)  # 设置父对象
         self.start_label.hide()
-        self.start_list = QListWidget()
+        self.start_list = QListWidget(self)  # 设置父对象
         self.start_list.hide()
 
-        self.end_input = QLineEdit()
+        self.end_input = QLineEdit(self)  # 设置父对象
         self.end_input.hide()
-        self.end_label = QLineEdit()
+        self.end_label = QLineEdit(self)  # 设置父对象
         self.end_label.hide()
-        self.end_list = QListWidget()
+        self.end_list = QListWidget(self)  # 设置父对象
         self.end_list.hide()
 
-        self.waypoint_input = QLineEdit()
+        self.waypoint_input = QLineEdit(self)  # 设置父对象
         self.waypoint_input.hide()
-        self.waypoint_list = QListWidget()
+        self.waypoint_list = QListWidget(self)  # 设置父对象
         self.waypoint_list.hide()
 
         # 创建隐藏的交通方式选择框
-        self.transport_combo = QComboBox()
+        self.transport_combo = QComboBox(self)  # 设置父对象
         self.transport_combo.addItems(["驾车", "步行", "骑行", "公交"])
         self.transport_combo.hide()
 
         # 创建隐藏的时间编辑器
         from PyQt5.QtCore import QDateTime
-        self.start_time_edit = QTimeEdit()
+        self.start_time_edit = QTimeEdit(self)  # 设置父对象
         self.start_time_edit.setDateTime(QDateTime.currentDateTime())
         self.start_time_edit.hide()
 
-        self.end_time_edit = QTimeEdit()
+        self.end_time_edit = QTimeEdit(self)  # 设置父对象
         self.end_time_edit.setDateTime(QDateTime.currentDateTime())
         self.end_time_edit.hide()
 
-        self.duration_time_edit = QLineEdit()
+        self.duration_time_edit = QLineEdit(self)  # 设置父对象
         self.duration_time_edit.hide()
 
         # 创建隐藏的按钮
-        self.plan_button = QPushButton("规划路线")
+        self.plan_button = QPushButton("规划路线", self)  # 设置父对象
         self.plan_button.clicked.connect(self.on_plan_route_clicked)
         self.plan_button.hide()
 
-        self.export_button = QPushButton("导出GPX")
+        self.export_button = QPushButton("导出GPX", self)  # 设置父对象
         self.export_button.clicked.connect(self.on_export_gpx_clicked)
         self.export_button.hide()
 
@@ -1146,79 +1322,6 @@ class GpxStudio(QMainWindow):
         layout.addWidget(self.scale_panel)
 
         return middle_widget
-
-    def _create_right_panel_original(self):
-        """创建右侧地图面板"""
-        right_widget = QWidget()
-        right_widget.setMinimumWidth(LayoutManager.PANEL_SIZES[2])
-        layout = QVBoxLayout(right_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # 创建地图视图
-        self.map_view = QWebEngineView()
-        self.web_page = ConsoleWebEnginePage(signal_manager=self.signal_manager)
-        self.web_page.set_geolocation_handler(self.geolocation_handler)
-        self.map_view.setPage(self.web_page)
-
-        # 设置User Agent
-        profile = QWebEngineProfile.defaultProfile()
-        profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-
-        # 创建一个容器来放置地图和浮动按钮
-        map_container = QWidget()
-        map_container_layout = QVBoxLayout(map_container)
-        map_container_layout.setContentsMargins(0, 0, 0, 0)
-        map_container_layout.setSpacing(0)
-        map_container_layout.addWidget(self.map_view)
-
-        # 创建定位按钮（浮动在地图上）
-        self.locate_button = QPushButton()
-        self.locate_button.setToolTip("定位到当前位置")
-        self.locate_button.clicked.connect(self.on_locate_clicked)
-
-        # 加载图标
-        from core.resource_path import resource_path
-        icon_path = resource_path('res/Location.png')
-
-        if os.path.exists(icon_path):
-            from PyQt5.QtGui import QIcon
-            self.locate_button.setIcon(QIcon(icon_path))
-            from PyQt5.QtCore import QSize
-            self.locate_button.setIconSize(QSize(18, 18))
-        else:
-            self.locate_button.setText("📍")
-
-        # 设置按钮样式，与 leaflet 的缩放按钮保持一致
-        self.locate_button.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                border: 2px solid rgba(0, 0, 0, 0.2);
-                border-radius: 2px;
-                padding: 0px;
-                min-width: 30px;
-                min-height: 30px;
-                max-width: 30px;
-                max-height: 30px;
-            }
-            QPushButton:hover {
-                background-color: #f4f4f4;
-            }
-            QPushButton:pressed {
-                background-color: #e0e0e0;
-            }
-        """)
-
-        self.locate_button.setParent(map_container)
-        # 放置在左上角，放大缩小按钮下方
-        # leaflet 的缩放控件默认位置是 top-left，距离顶部10px，左侧10px
-        # 每个按钮高度约30px，加上1px边框，所以第三个按钮应该在 10 + 30 + 30 = 70px 处
-        self.locate_button.move(10, 70)
-        self.locate_button.raise_()
-
-        layout.addWidget(map_container)
-
-        return right_widget
 
     # ==================== UI更新回调方法 ====================
 
@@ -1519,6 +1622,11 @@ class GpxStudio(QMainWindow):
 
     def _show_initial_map(self):
         """显示初始地图"""
+        # 确保窗口已经显示
+        if not self.isVisible():
+            QTimer.singleShot(1000, self._show_initial_map)
+            return
+            
         self.map_manager.show_initial_map()
         self.scale_panel.update_zoom(10)
 
@@ -1672,14 +1780,22 @@ class GpxStudio(QMainWindow):
         self.logger.info(f"地图缩放级别变化: {zoom_level}")
 
         # 更新隐藏的比例尺面板（用于后台逻辑）
-        self.scale_panel.update_zoom(zoom_level)
+        if hasattr(self, 'scale_panel'):
+            self.scale_panel.update_zoom(zoom_level)
 
         # 更新显示的比例尺信息标签
-        if hasattr(self, 'scale_info_label'):
-            # 根据缩放级别计算比例尺
-            scale_text = self._get_scale_text(zoom_level)
-            self.scale_info_label.setText(f"缩放级别: {zoom_level}  {scale_text}")
-            self.scale_info_label.adjustSize()  # 调整标签大小以适应文本
+        try:
+            if hasattr(self, 'scale_info_label') and self.scale_info_label:
+                # 测试标签是否仍然有效
+                _ = self.scale_info_label.isVisible()
+                # 根据缩放级别计算比例尺
+                scale_text = self._get_scale_text(zoom_level)
+                self.scale_info_label.setText(f"缩放级别: {zoom_level}  {scale_text}")
+                self.scale_info_label.adjustSize()  # 调整标签大小以适应文本
+        except RuntimeError as e:
+            self.logger.warning(f"比例尺标签已被删除: {e}")
+        except Exception as e:
+            self.logger.error(f"更新比例尺标签时出错: {e}")
 
     def _get_scale_text(self, zoom_level: int) -> str:
         """根据缩放级别获取比例尺文本
@@ -2068,6 +2184,12 @@ class GpxStudio(QMainWindow):
         
         if obj == self:
             if event.type() == QEvent.WindowDeactivate:
+                # 检查是否有GPX导出面板正在显示时间日期选择器
+                if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup and self.gpx_export_popup.isVisible():
+                    if hasattr(self.gpx_export_popup, 'picker_popup') and self.gpx_export_popup.picker_popup and self.gpx_export_popup.picker_popup.isVisible():
+                        print("[应用程序] 时间日期选择器显示中，不关闭弹出面板")
+                        return super().eventFilter(obj, event)  # 不关闭面板
+                
                 # 主窗口失去焦点时关闭所有弹出面板
                 self._close_all_popups()
             elif event.type() == QEvent.Move:
@@ -2826,11 +2948,10 @@ class GpxStudio(QMainWindow):
             
             # 生成默认文件名
             description = route_data.get('description', '路线')
-            start_location = self.data_manager.get_start_location()
-            end_location = self.data_manager.get_end_location()
             
-            start_name = start_location.get('name', '起点') if start_location else '起点'
-            end_name = end_location.get('name', '终点') if end_location else '终点'
+            # 从DataManager获取起点和终点信息
+            start_name = self.data_manager.start_name if self.data_manager.start_name else '起点'
+            end_name = self.data_manager.end_name if self.data_manager.end_name else '终点'
             
             # 清理文件名中的特殊字符
             import re
@@ -2856,7 +2977,8 @@ class GpxStudio(QMainWindow):
             
             # 创建GPX导出服务
             def log_callback(level: str, message: str):
-                self.logger.log(getattr(self.logger, level.lower(), self.logger.info), f"[GPX导出] {message}")
+                log_func = getattr(self.logger, level.lower(), self.logger.info)
+                log_func(f"[GPX导出] {message}")
             
             gpx_service = GpxExportService(logger=log_callback)
             

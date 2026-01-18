@@ -22,7 +22,7 @@ class MapManager:
     - 管理地图上的标记和路线
     """
 
-    def __init__(self, data_manager, map_view, logger):
+    def __init__(self, data_manager, map_view, logger, recreate_callback=None):
         """
         初始化地图管理器
 
@@ -30,10 +30,12 @@ class MapManager:
             data_manager: 数据管理器实例，用于获取地图相关数据
             map_view: 地图视图组件，用于显示地图
             logger: 日志器，用于记录地图操作日志
+            recreate_callback: 重新创建地图视图的回调函数
         """
         self.data_manager = data_manager  # 数据管理器实例
         self.map_view = map_view  # 地图视图组件
         self.logger = logger  # 日志器
+        self._recreate_map_view = recreate_callback  # 重新创建回调
 
     def show_initial_map(self):
         """显示初始地图（默认北京中心）"""
@@ -47,8 +49,30 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
-        self.logger.info("初始地图已加载")
+        try:
+            if self.map_view and not self.map_view.isVisible():
+                self.logger.warning("地图视图不可见，尝试显示")
+                self.map_view.show()
+            
+            if self.map_view:
+                self.map_view.setUrl(url)
+                self.logger.info("初始地图已加载")
+            else:
+                self.logger.error("地图视图为None，无法加载地图")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除: {e}")
+            self.logger.info("尝试重新创建地图视图")
+            # 尝试重新创建地图视图
+            if self._recreate_map_view and self._recreate_map_view():
+                # 重新尝试加载地图
+                try:
+                    self.map_view.setUrl(url)
+                    self.logger.info("重新创建地图视图成功，初始地图已加载")
+                except RuntimeError as e2:
+                    self.logger.error(f"重新创建的地图视图也被删除: {e2}")
+            else:
+                self.logger.error("无法重新创建地图视图")
+            return
 
     def show_search_results_on_map(self, locations: List, location_type: str):
         """在地图上显示搜索结果
@@ -150,7 +174,13 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+            else:
+                self.logger.error("地图视图为None，无法显示搜索结果")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法显示搜索结果: {e}")
 
     def update_map_preview(self, auto_fit=False, keep_zoom=False):
         """更新地图预览，根据当前选中的点和搜索结果更新地图显示
@@ -212,7 +242,13 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+            else:
+                self.logger.error("地图视图为None，无法更新地图预览")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法更新地图预览: {e}")
 
     def update_map_preview_simple(self, center_coords: Tuple[float, float], zoom_level: int = 13):
         """简单更新地图预览，不改变缩放级别
@@ -237,7 +273,13 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+            else:
+                self.logger.error("地图视图为None，无法更新简单地图预览")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法更新简单地图预览: {e}")
 
     def _get_all_selected_coords(self):
         """获取所有已选择的坐标点
@@ -293,8 +335,14 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
-        self.logger.debug(f"预览搜索结果: {name} at {coords}, zoom_level: {zoom_level}")
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+                self.logger.debug(f"预览搜索结果: {name} at {coords}, zoom_level: {zoom_level}")
+            else:
+                self.logger.error("地图视图为None，无法预览搜索结果")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法预览搜索结果: {e}")
 
     def show_route_on_map(self):
         """在地图上显示路线"""
@@ -359,7 +407,13 @@ class MapManager:
         url = MapRenderer.save_and_get_url(m)
 
         # 在地图视图中加载地图
-        self.map_view.setUrl(url)
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+            else:
+                self.logger.error("地图视图为None，无法显示路线")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法显示路线: {e}")
 
     def show_location_on_map(self, lat: float, lon: float, popup_text: str):
         """在地图上显示定位结果
@@ -404,8 +458,14 @@ class MapManager:
 
         # 在地图视图中加载地图
         self.logger.debug("[MapManager] 设置地图视图URL")
-        self.map_view.setUrl(url)
-        self.logger.info(f"[MapManager] 地图显示完成: {lat}, {lon}")
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+                self.logger.info(f"[MapManager] 地图显示完成: {lat}, {lon}")
+            else:
+                self.logger.error("[MapManager] 地图视图为None，无法显示位置")
+        except RuntimeError as e:
+            self.logger.error(f"[MapManager] 地图视图已被删除，无法显示位置: {e}")
 
     def _add_selected_points_to_map(self, map_obj):
         """添加已选择的点到地图（内部方法）

@@ -4,10 +4,10 @@ GPX导出弹出面板
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QPushButton, QFrame, QApplication)
-from PyQt5.QtCore import Qt, QDateTime, pyqtSignal, QEvent, QTimer
+                             QPushButton, QFrame, QApplication, QLineEdit)
+from PyQt5.QtCore import Qt, QDateTime, pyqtSignal, QEvent, QTimer, QSize
 from PyQt5.QtGui import QFont
-from ui.widgets.custom_datetime_edit import CustomDateTimeEdit
+import os
 
 
 class GpxExportPopup(QWidget):
@@ -21,8 +21,8 @@ class GpxExportPopup(QWidget):
         self.route_data = route_data
         self._init_ui()
         
-        # 设置窗口标志 - 作为工具提示窗口，不抢夺焦点
-        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # 设置窗口标志 - 使用Tool而不是ToolTip，避免自动关闭
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)  # 不透明背景
         
         # 设置焦点策略以接收键盘事件
@@ -125,10 +125,58 @@ class GpxExportPopup(QWidget):
         time_label = QLabel("起始时间:")
         time_layout.addWidget(time_label)
         
-        # 自定义日期时间选择器
-        self.datetime_edit = CustomDateTimeEdit()
-        self.datetime_edit.setDateTime(QDateTime.currentDateTime())
-        time_layout.addWidget(self.datetime_edit, 1)
+        # 时间文本编辑框
+        from PyQt5.QtWidgets import QLineEdit
+        self.datetime_text_edit = QLineEdit()
+        self.datetime_text_edit.setText(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm"))
+        self.datetime_text_edit.setReadOnly(True)  # 设置为只读
+        self.datetime_text_edit.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                padding: 6px 8px;
+                font-size: 13px;
+                color: #333333;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: white;
+            }
+        """)
+        time_layout.addWidget(self.datetime_text_edit, 1)
+        
+        # 设置按钮
+        from PyQt5.QtGui import QIcon
+        from core.resource_path import resource_path
+        
+        self.settings_button = QPushButton()
+        self.settings_button.setFixedSize(32, 32)
+        self.settings_button.setToolTip("设置时间")
+        
+        # 加载Setting白色图标
+        setting_icon_path = resource_path('res/Setting_white.png')
+        if os.path.exists(setting_icon_path):
+            self.settings_button.setIcon(QIcon(setting_icon_path))
+            self.settings_button.setIconSize(QSize(18, 18))
+        
+        self.settings_button.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.7);
+            }
+        """)
+        self.settings_button.clicked.connect(self._show_datetime_picker)
+        time_layout.addWidget(self.settings_button)
         
         layout.addWidget(time_container)
         
@@ -174,9 +222,122 @@ class GpxExportPopup(QWidget):
             
         return f"路线: {description}\n距离: {distance_km:.1f}公里\n预计时间: {time_text}"
         
+    def _show_datetime_picker(self):
+        """显示日期时间选择器"""
+        # 导入自定义日期时间选择器
+        from ui.widgets.custom_datetime_picker import CustomDateTimePicker
+        from PyQt5.QtWidgets import QFrame
+        
+        # 如果已经有弹出窗口，先关闭
+        if hasattr(self, 'picker_popup') and self.picker_popup and self.picker_popup.isVisible():
+            self.picker_popup.hide()
+            return
+        
+        # 创建弹出窗口
+        self.picker_popup = QFrame()
+        self.picker_popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.picker_popup.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid rgba(0, 0, 0, 0.15);
+                border-radius: 6px;
+            }
+        """)
+        
+        # 设置焦点策略以接收键盘事件
+        self.picker_popup.setFocusPolicy(Qt.StrongFocus)
+        
+        # 设置父窗口，确保层级关系正确
+        self.picker_popup.setParent(self, Qt.Tool)
+        
+        # 重写键盘事件处理
+        def keyPressEvent(event):
+            if event.key() == Qt.Key_Escape:
+                print("[日期时间设置] ESC键关闭日期时间设置面板")
+                self.picker_popup.hide()
+                # 将焦点返回给GPX导出面板
+                self.setFocus()
+                print("[日期时间设置] 焦点返回给GPX导出面板")
+                event.accept()
+            else:
+                QFrame.keyPressEvent(self.picker_popup, event)
+        
+        self.picker_popup.keyPressEvent = keyPressEvent
+        
+        # 添加日期时间选择器
+        from PyQt5.QtWidgets import QVBoxLayout
+        popup_layout = QVBoxLayout(self.picker_popup)
+        popup_layout.setContentsMargins(0, 0, 0, 0)
+        
+        picker = CustomDateTimePicker()
+        # 设置当前时间
+        current_datetime_text = self.datetime_text_edit.text()
+        try:
+            current_datetime = QDateTime.fromString(current_datetime_text, "yyyy-MM-dd hh:mm")
+            if current_datetime.isValid():
+                picker.setDateTime(current_datetime)
+        except:
+            picker.setDateTime(QDateTime.currentDateTime())
+        
+        picker.dateTimeChanged.connect(self._on_datetime_changed)
+        popup_layout.addWidget(picker)
+        
+        # 计算弹出位置（在设置按钮下方）
+        button_global_pos = self.settings_button.mapToGlobal(self.settings_button.rect().bottomLeft())
+        popup_x = button_global_pos.x() - 200  # 向左偏移以避免超出屏幕
+        popup_y = button_global_pos.y() + 5
+        
+        # 确保不超出屏幕边界
+        from PyQt5.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().geometry()
+        
+        if popup_x < 0:
+            popup_x = 10
+        if popup_x + 400 > screen.right():  # 估算弹出面板宽度
+            popup_x = screen.right() - 410
+        
+        if popup_y + 250 > screen.bottom():  # 估算弹出面板高度
+            popup_y = button_global_pos.y() - 255  # 显示在按钮上方
+        
+        self.picker_popup.move(popup_x, popup_y)
+        
+        # 调整大小并显示
+        self.picker_popup.adjustSize()
+        self.picker_popup.show()
+        self.picker_popup.raise_()
+        self.picker_popup.activateWindow()  # 激活窗口以确保获得焦点
+        self.picker_popup.setFocus()  # 设置焦点以接收键盘事件
+        
+        print("[GPX导出] 显示日期时间设置面板并设置焦点")
+    
+    def _on_datetime_changed(self, datetime):
+        """日期时间改变处理"""
+        self.datetime_text_edit.setText(datetime.toString("yyyy-MM-dd hh:mm"))
+        
+        # 关闭日期时间选择器弹出窗口
+        if hasattr(self, 'picker_popup') and self.picker_popup:
+            self.picker_popup.hide()
+        
+        # 将焦点返回给GPX导出面板
+        self.setFocus()
+        print("[GPX导出] 日期时间选择完成，焦点返回给GPX导出面板")
+        
+        print(f"[GPX导出] 选择的时间: {datetime.toString('yyyy-MM-dd hh:mm')}")
+    
+    def get_start_time(self):
+        """获取设置的起始时间"""
+        datetime_text = self.datetime_text_edit.text()
+        try:
+            datetime = QDateTime.fromString(datetime_text, "yyyy-MM-dd hh:mm")
+            if datetime.isValid():
+                return datetime
+        except:
+            pass
+        return QDateTime.currentDateTime()
+        
     def _on_export_clicked(self):
         """确认导出按钮点击"""
-        start_time = self.datetime_edit.dateTime()
+        start_time = self.get_start_time()
         self.export_confirmed.emit(start_time)
         self.hide()
         self.closed.emit()
@@ -186,10 +347,6 @@ class GpxExportPopup(QWidget):
         self.hide()
         self.closed.emit()
         
-    def get_start_time(self):
-        """获取设置的起始时间"""
-        return self.datetime_edit.dateTime()
-    
     def show_at_position(self, pos):
         """在指定位置显示弹出面板"""
         self.move(pos)
@@ -207,8 +364,12 @@ class GpxExportPopup(QWidget):
     
     def eventFilter(self, obj, event):
         """事件过滤器 - 监听焦点变化"""
-        # 禁用自动关闭功能，只通过ESC键或按钮关闭
-        # 这样可以避免在弹出时间日期设置面板时自动关闭GPX面板
+        # 如果正在显示时间日期选择器，忽略焦点丢失事件
+        if hasattr(self, 'picker_popup') and self.picker_popup and self.picker_popup.isVisible():
+            if event.type() == QEvent.WindowDeactivate or event.type() == QEvent.FocusOut:
+                print("[GPX导出] 时间日期选择器显示中，忽略焦点丢失事件")
+                return True  # 拦截事件，防止自动关闭
+        
         return super().eventFilter(obj, event)
     
     def _check_and_close(self):
@@ -225,15 +386,14 @@ class GpxExportPopup(QWidget):
         """键盘按键事件"""
         if event.key() == Qt.Key_Escape:
             # 检查是否有日期时间选择器弹出窗口正在显示
-            if hasattr(self, 'datetime_edit') and hasattr(self.datetime_edit, 'picker_popup'):
-                if self.datetime_edit.picker_popup and self.datetime_edit.picker_popup.isVisible():
-                    # 如果日期时间选择器正在显示，优先关闭它
-                    self.datetime_edit.picker_popup.hide()
-                    # 重新设置焦点到GPX导出面板
-                    self.setFocus()
-                    print("[GPX导出] ESC键关闭日期时间选择器，焦点回到GPX导出面板")
-                    event.accept()
-                    return
+            if hasattr(self, 'picker_popup') and self.picker_popup and self.picker_popup.isVisible():
+                # 如果日期时间选择器正在显示，优先关闭它
+                self.picker_popup.hide()
+                # 重新设置焦点到GPX导出面板
+                self.setFocus()
+                print("[GPX导出] ESC键关闭日期时间选择器，焦点回到GPX导出面板")
+                event.accept()
+                return
             
             # 如果没有子弹出窗口，则关闭GPX导出面板
             print("[GPX导出] ESC键关闭GPX导出面板")

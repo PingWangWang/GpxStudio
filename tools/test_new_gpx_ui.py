@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
-完整的层级ESC键关闭功能测试
-测试两个场景：
-1. 路线规划面板 → 路线历史记录列表 → GPX设置面板 → 时间日期设置面板
-2. 路线规划面板 → 路线规划列表 → GPX设置面板 → 时间日期设置面板
+测试新的GPX设置界面
+测试文本编辑框 + 设置按钮的UI，以及防止自动关闭的功能
 """
 
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
-                             QWidget, QPushButton, QLabel, QLineEdit, QListWidget, 
-                             QListWidgetItem, QFrame)
+                             QWidget, QPushButton, QLabel, QLineEdit, QFrame)
 from PyQt5.QtCore import Qt, pyqtSignal, QDateTime, QTimer
 from PyQt5.QtGui import QFont
 
@@ -54,99 +51,8 @@ class MockDateTimePicker(QWidget):
         super().keyPressEvent(event)
 
 
-class MockDateTimeEdit(QWidget):
-    """模拟日期时间编辑控件"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.picker_popup = None
-        self._init_ui()
-    
-    def _init_ui(self):
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.text_edit = QLineEdit()
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setText(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm"))
-        layout.addWidget(self.text_edit)
-        
-        dropdown_btn = QPushButton("▼")
-        dropdown_btn.setFixedSize(30, 30)
-        dropdown_btn.clicked.connect(self._show_picker)
-        layout.addWidget(dropdown_btn)
-    
-    def _show_picker(self):
-        if self.picker_popup and self.picker_popup.isVisible():
-            self.picker_popup.hide()
-            return
-        
-        # 创建弹出窗口
-        self.picker_popup = QFrame()
-        self.picker_popup.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.picker_popup.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #ccc;
-                border-radius: 6px;
-            }
-        """)
-        self.picker_popup.setFocusPolicy(Qt.StrongFocus)
-        
-        # 重写键盘事件
-        def keyPressEvent(event):
-            if event.key() == Qt.Key_Escape:
-                print("[日期时间编辑] ESC键关闭弹出窗口")
-                self.picker_popup.hide()
-                # 将焦点返回给父级GPX面板
-                parent_popup = self.parent()
-                while parent_popup:
-                    if parent_popup.__class__.__name__ == 'MockGpxExportPopup':
-                        parent_popup.setFocus()
-                        print("[日期时间编辑] 焦点返回给GPX导出面板")
-                        break
-                    parent_popup = parent_popup.parent()
-                event.accept()
-            else:
-                QFrame.keyPressEvent(self.picker_popup, event)
-        
-        self.picker_popup.keyPressEvent = keyPressEvent
-        
-        # 添加选择器
-        popup_layout = QVBoxLayout(self.picker_popup)
-        popup_layout.setContentsMargins(0, 0, 0, 0)
-        
-        picker = MockDateTimePicker()
-        picker.dateTimeChanged.connect(self._on_datetime_changed)
-        popup_layout.addWidget(picker)
-        
-        # 显示弹出窗口
-        global_pos = self.mapToGlobal(self.rect().bottomLeft())
-        self.picker_popup.move(global_pos)
-        self.picker_popup.adjustSize()
-        self.picker_popup.show()
-        self.picker_popup.raise_()
-        self.picker_popup.setFocus()
-        
-        print("[日期时间编辑] 显示时间日期设置面板并设置焦点")
-    
-    def _on_datetime_changed(self, datetime):
-        self.text_edit.setText(datetime.toString("yyyy-MM-dd hh:mm"))
-        if self.picker_popup:
-            self.picker_popup.hide()
-        
-        # 将焦点返回给父级GPX面板
-        parent_popup = self.parent()
-        while parent_popup:
-            if parent_popup.__class__.__name__ == 'MockGpxExportPopup':
-                parent_popup.setFocus()
-                print("[日期时间编辑] 选择完成，焦点返回给GPX导出面板")
-                break
-            parent_popup = parent_popup.parent()
-
-
 class MockGpxExportPopup(QWidget):
-    """模拟GPX导出弹出面板（第3层）"""
+    """模拟GPX导出弹出面板（第3层）- 新UI版本"""
     
     closed = pyqtSignal()
     
@@ -154,6 +60,7 @@ class MockGpxExportPopup(QWidget):
         super().__init__(parent)
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.picker_popup = None
         self._init_ui()
     
     def _init_ui(self):
@@ -179,6 +86,14 @@ class MockGpxExportPopup(QWidget):
             QPushButton:hover {
                 background-color: white;
             }
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                padding: 6px 8px;
+                font-size: 13px;
+                color: #333333;
+            }
         """)
         
         layout = QVBoxLayout(self)
@@ -186,7 +101,7 @@ class MockGpxExportPopup(QWidget):
         layout.setSpacing(12)
         
         # 标题
-        title_label = QLabel("GPX设置面板（第3层）")
+        title_label = QLabel("GPX设置面板（第3层）- 新UI")
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
@@ -205,10 +120,11 @@ class MockGpxExportPopup(QWidget):
         """)
         layout.addWidget(info_label)
         
-        # 时间设置
+        # 时间设置区域
         time_container = QWidget()
         time_layout = QHBoxLayout(time_container)
         time_layout.setContentsMargins(0, 0, 0, 0)
+        time_layout.setSpacing(8)
         
         time_label = QLabel("起始时间:")
         time_layout.addWidget(time_label)
@@ -217,41 +133,30 @@ class MockGpxExportPopup(QWidget):
         self.datetime_text_edit = QLineEdit()
         self.datetime_text_edit.setText(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm"))
         self.datetime_text_edit.setReadOnly(True)
-        self.datetime_text_edit.setStyleSheet("""
-            QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 4px;
-                padding: 6px 8px;
-                font-size: 13px;
-                color: #333333;
-            }
-        """)
         time_layout.addWidget(self.datetime_text_edit, 1)
         
         # 设置按钮
-        settings_btn = QPushButton("⚙")
-        settings_btn.setFixedSize(30, 30)
-        settings_btn.setToolTip("设置时间")
-        settings_btn.clicked.connect(self._show_datetime_picker)
-        settings_btn.setStyleSheet("""
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setFixedSize(32, 32)
+        self.settings_btn.setToolTip("设置时间")
+        self.settings_btn.clicked.connect(self._show_datetime_picker)
+        self.settings_btn.setStyleSheet("""
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #4A90E2;
-                border: none;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: white;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.5);
             }
         """)
-        time_layout.addWidget(settings_btn)
+        time_layout.addWidget(self.settings_btn)
         
         layout.addWidget(time_container)
         
-        # 按钮
+        # 按钮区域
         button_container = QWidget()
         button_layout = QHBoxLayout(button_container)
         button_layout.addStretch()
@@ -270,7 +175,7 @@ class MockGpxExportPopup(QWidget):
     
     def _show_datetime_picker(self):
         """显示日期时间选择器"""
-        if hasattr(self, 'picker_popup') and self.picker_popup and self.picker_popup.isVisible():
+        if self.picker_popup and self.picker_popup.isVisible():
             self.picker_popup.hide()
             return
         
@@ -307,20 +212,24 @@ class MockGpxExportPopup(QWidget):
         picker.dateTimeChanged.connect(self._on_datetime_changed)
         popup_layout.addWidget(picker)
         
-        # 显示弹出窗口
-        global_pos = self.mapToGlobal(self.rect().bottomLeft())
-        self.picker_popup.move(global_pos)
+        # 显示弹出窗口（在设置按钮下方）
+        button_global_pos = self.settings_btn.mapToGlobal(self.settings_btn.rect().bottomLeft())
+        popup_x = button_global_pos.x() - 200  # 向左偏移
+        popup_y = button_global_pos.y() + 5
+        
+        self.picker_popup.move(popup_x, popup_y)
         self.picker_popup.adjustSize()
         self.picker_popup.show()
         self.picker_popup.raise_()
         self.picker_popup.setFocus()
         
         print("[GPX设置] 显示时间日期设置面板并设置焦点")
+        print("[GPX设置] 注意：GPX面板应该保持显示，不应该自动关闭")
     
     def _on_datetime_changed(self, datetime):
         """日期时间改变处理"""
         self.datetime_text_edit.setText(datetime.toString("yyyy-MM-dd hh:mm"))
-        if hasattr(self, 'picker_popup') and self.picker_popup:
+        if self.picker_popup:
             self.picker_popup.hide()
         self.setFocus()
         print("[GPX设置] 选择完成，焦点返回给GPX设置面板")
@@ -333,6 +242,8 @@ class MockGpxExportPopup(QWidget):
         print("[GPX设置] 确认导出")
         self.hide()
         self.closed.emit()
+    
+    def show_at_position(self, pos):
         self.move(pos)
         self.show()
         self.raise_()
@@ -343,30 +254,18 @@ class MockGpxExportPopup(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             # 检查是否有时间日期设置面板正在显示
-            if hasattr(self, 'datetime_edit') and hasattr(self.datetime_edit, 'picker_popup'):
-                if self.datetime_edit.picker_popup and self.datetime_edit.picker_popup.isVisible():
-                    # 如果时间日期设置面板正在显示，优先关闭它
-                    self.datetime_edit.picker_popup.hide()
-                    self.setFocus()
-                    print("[GPX设置] ESC键关闭时间日期设置面板，焦点回到GPX设置面板")
-                    event.accept()
-                    return
+            if self.picker_popup and self.picker_popup.isVisible():
+                # 如果时间日期设置面板正在显示，优先关闭它
+                self.picker_popup.hide()
+                self.setFocus()
+                print("[GPX设置] ESC键关闭时间日期设置面板，焦点回到GPX设置面板")
+                event.accept()
+                return
             
             # 如果没有子弹出窗口，则关闭GPX设置面板
             print("[GPX设置] ESC键关闭GPX设置面板")
             self.hide()
             self.closed.emit()
-            
-            # 将焦点返回给路线规划面板
-            parent_app = self.parent()
-            while parent_app and not hasattr(parent_app, 'route_plan_panel'):
-                parent_app = parent_app.parent()
-            
-            if parent_app and hasattr(parent_app, 'route_plan_panel'):
-                if parent_app.route_plan_panel and parent_app.route_plan_panel.isVisible():
-                    parent_app.route_plan_panel.setFocus()
-                    print("[GPX设置] 焦点返回给路线规划面板")
-            
             event.accept()
         else:
             super().keyPressEvent(event)
@@ -381,7 +280,6 @@ class MockRoutePlanPanel(QWidget):
         super().__init__(parent)
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.current_mode = "history"  # "history" 或 "planning"
         self._init_ui()
     
     def _init_ui(self):
@@ -408,12 +306,6 @@ class MockRoutePlanPanel(QWidget):
             QPushButton:hover {
                 background-color: white;
             }
-            QListWidget {
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 4px;
-                color: white;
-            }
         """)
         
         layout = QVBoxLayout(self)
@@ -424,50 +316,13 @@ class MockRoutePlanPanel(QWidget):
         title_label = QLabel("路线规划面板（第1层）")
         layout.addWidget(title_label)
         
-        # 模式切换按钮
-        mode_container = QWidget()
-        mode_layout = QHBoxLayout(mode_container)
-        
-        self.history_mode_btn = QPushButton("历史记录模式")
-        self.history_mode_btn.clicked.connect(lambda: self._switch_mode("history"))
-        mode_layout.addWidget(self.history_mode_btn)
-        
-        self.planning_mode_btn = QPushButton("路线规划模式")
-        self.planning_mode_btn.clicked.connect(lambda: self._switch_mode("planning"))
-        mode_layout.addWidget(self.planning_mode_btn)
-        
-        layout.addWidget(mode_container)
-        
-        # 历史记录列表（第2层）
-        self.history_label = QLabel("路线历史记录列表（第2层）")
-        layout.addWidget(self.history_label)
-        
-        self.history_list = QListWidget()
-        self.history_list.setMaximumHeight(100)
-        
-        # 添加测试历史记录
-        for i in range(3):
-            item = QListWidgetItem(f"历史记录 {i+1}: 起点 → 终点")
-            self.history_list.addItem(item)
-        
-        layout.addWidget(self.history_list)
-        
-        # 路线规划列表（第2层）
-        self.planning_label = QLabel("路线规划列表（第2层）")
-        layout.addWidget(self.planning_label)
-        
-        self.planning_list = QListWidget()
-        self.planning_list.setMaximumHeight(100)
-        
-        # 添加测试路线方案
-        for i in range(3):
-            item = QListWidgetItem(f"路线方案 {i+1}: 推荐路线")
-            self.planning_list.addItem(item)
-        
-        layout.addWidget(self.planning_list)
+        # 说明
+        info_label = QLabel("点击'显示GPX设置面板'按钮，然后点击设置按钮测试")
+        info_label.setStyleSheet("QLabel { font-size: 12px; }")
+        layout.addWidget(info_label)
         
         # 导出GPX按钮
-        export_btn = QPushButton("导出GPX（显示第3层）")
+        export_btn = QPushButton("显示GPX设置面板")
         export_btn.clicked.connect(self._show_gpx_popup)
         layout.addWidget(export_btn)
         
@@ -476,30 +331,7 @@ class MockRoutePlanPanel(QWidget):
         close_button.clicked.connect(self._on_close_clicked)
         layout.addWidget(close_button)
         
-        self.setFixedSize(400, 500)
-        
-        # 初始模式
-        self._switch_mode("history")
-    
-    def _switch_mode(self, mode):
-        """切换模式"""
-        self.current_mode = mode
-        if mode == "history":
-            self.history_label.show()
-            self.history_list.show()
-            self.planning_label.hide()
-            self.planning_list.hide()
-            self.history_mode_btn.setStyleSheet("QPushButton { background-color: white; }")
-            self.planning_mode_btn.setStyleSheet("")
-            print(f"[路线规划] 切换到历史记录模式")
-        else:
-            self.history_label.hide()
-            self.history_list.hide()
-            self.planning_label.show()
-            self.planning_list.show()
-            self.planning_mode_btn.setStyleSheet("QPushButton { background-color: white; }")
-            self.history_mode_btn.setStyleSheet("")
-            print(f"[路线规划] 切换到路线规划模式")
+        self.setFixedSize(300, 200)
     
     def _show_gpx_popup(self):
         """显示GPX导出面板"""
@@ -525,9 +357,8 @@ class MockRoutePlanPanel(QWidget):
                     has_child_popup = False
                     
                     # 检查时间日期设置面板
-                    if hasattr(gpx_popup, 'datetime_edit') and hasattr(gpx_popup.datetime_edit, 'picker_popup'):
-                        if gpx_popup.datetime_edit.picker_popup and gpx_popup.datetime_edit.picker_popup.isVisible():
-                            has_child_popup = True
+                    if hasattr(gpx_popup, 'picker_popup') and gpx_popup.picker_popup and gpx_popup.picker_popup.isVisible():
+                        has_child_popup = True
                     
                     if has_child_popup:
                         # 如果有子弹出窗口，不处理ESC键，让子窗口处理
@@ -557,7 +388,7 @@ class MockRoutePlanPanel(QWidget):
 class TestWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("完整层级ESC键关闭功能测试")
+        self.setWindowTitle("新GPX设置界面测试")
         self.setGeometry(100, 100, 900, 700)
         
         central_widget = QWidget()
@@ -566,26 +397,25 @@ class TestWindow(QMainWindow):
         
         # 说明
         info_label = QLabel("""
-完整层级ESC键关闭功能测试：
+新GPX设置界面测试：
 
-测试场景：
-1. 历史记录场景：路线规划面板 → 路线历史记录列表 → GPX设置面板 → 时间日期设置面板
-2. 路线规划场景：路线规划面板 → 路线规划列表 → GPX设置面板 → 时间日期设置面板
+主要变化：
+1. 将时间日期控件改为文本编辑框（只读）+ 设置按钮
+2. 设置按钮使用Setting_white.png图标（这里用⚙符号代替）
+3. 点击设置按钮弹出日期时间设置界面
+4. 重要：弹出时间日期设置界面时，GPX面板和路线规划面板不应该自动关闭
 
-层级关系（从上到下）：
-- 第4层：时间日期设置面板（最上层）
-- 第3层：GPX设置面板
-- 第2层：路线历史记录列表 或 路线规划列表
-- 第1层：路线规划面板（底层）
+测试步骤：
+1. 点击'显示路线规划面板'
+2. 点击'显示GPX设置面板'
+3. 点击时间设置右侧的⚙按钮
+4. 观察：GPX面板和路线规划面板应该保持显示
+5. 按ESC键测试层级关闭功能
 
-ESC键行为：
-- 第一次按ESC：关闭时间日期设置面板（如果显示）
-- 第二次按ESC：关闭GPX设置面板（如果显示）
-- 第三次按ESC：关闭路线规划面板
-
-重要特性：
-- 在GPX设置面板点击弹出时间日期设置面板时，已经弹出的面板不能自动关闭
-- 关闭上层面板后，焦点自动返回到下层面板
+预期行为：
+- 第1次ESC：关闭时间日期设置面板
+- 第2次ESC：关闭GPX设置面板
+- 第3次ESC：关闭路线规划面板
         """)
         info_label.setWordWrap(True)
         info_label.setStyleSheet("""
@@ -662,17 +492,15 @@ ESC键行为：
         hierarchy = []
         
         if self.route_plan_panel.isVisible():
-            mode = "历史记录" if self.route_plan_panel.current_mode == "history" else "路线规划"
-            hierarchy.append(f"第1层: 路线规划面板({mode}模式)")
+            hierarchy.append("第1层: 路线规划面板")
         
         if self.gpx_export_popup and self.gpx_export_popup.isVisible():
             hierarchy.append("第3层: GPX设置面板")
             
             # 检查时间日期设置面板
-            if (hasattr(self.gpx_export_popup, 'datetime_edit') and 
-                hasattr(self.gpx_export_popup.datetime_edit, 'picker_popup') and
-                self.gpx_export_popup.datetime_edit.picker_popup and 
-                self.gpx_export_popup.datetime_edit.picker_popup.isVisible()):
+            if (hasattr(self.gpx_export_popup, 'picker_popup') and 
+                self.gpx_export_popup.picker_popup and 
+                self.gpx_export_popup.picker_popup.isVisible()):
                 hierarchy.append("第4层: 时间日期设置面板")
         
         if hierarchy:
@@ -718,9 +546,8 @@ ESC键行为：
         self.status_label.setText("状态: 隐藏所有面板")
         
         if self.gpx_export_popup:
-            if hasattr(self.gpx_export_popup, 'datetime_edit') and hasattr(self.gpx_export_popup.datetime_edit, 'picker_popup'):
-                if self.gpx_export_popup.datetime_edit.picker_popup:
-                    self.gpx_export_popup.datetime_edit.picker_popup.hide()
+            if hasattr(self.gpx_export_popup, 'picker_popup') and self.gpx_export_popup.picker_popup:
+                self.gpx_export_popup.picker_popup.hide()
             self.gpx_export_popup.hide()
         
         self.route_plan_panel.hide()
@@ -742,18 +569,12 @@ def main():
     window = TestWindow()
     window.show()
     
-    print("=== 完整层级ESC键关闭功能测试 ===")
-    print("测试场景:")
-    print("1. 历史记录场景: 路线规划面板 → 历史记录列表 → GPX设置面板 → 时间日期设置面板")
-    print("2. 路线规划场景: 路线规划面板 → 路线规划列表 → GPX设置面板 → 时间日期设置面板")
-    print()
-    print("测试步骤:")
-    print("1. 点击'显示路线规划面板'")
-    print("2. 在面板中切换'历史记录模式'或'路线规划模式'")
-    print("3. 点击'导出GPX'按钮显示GPX设置面板")
-    print("4. 点击时间设置的下拉按钮显示时间日期设置面板")
-    print("5. 按ESC键测试层级关闭功能")
-    print("6. 观察右下角的层级状态显示")
+    print("=== 新GPX设置界面测试 ===")
+    print("测试重点：")
+    print("1. 文本编辑框 + 设置按钮的新UI")
+    print("2. 点击设置按钮弹出时间日期设置界面")
+    print("3. 弹出时间日期设置界面时，GPX面板和路线规划面板不应该自动关闭")
+    print("4. ESC键层级关闭功能")
     
     sys.exit(app.exec_())
 

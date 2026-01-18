@@ -54,6 +54,7 @@ def main():
         ('Cancel.png', 'Cancel_white.png'),
         ('History.png', 'History_white.png'),
         ('Downloading.png', 'Downloading_white.png'),
+        ('Setting.png', 'Setting_white.png'),
     ]
 
     print("开始创建白色图标...")

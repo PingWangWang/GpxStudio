@@ -62,6 +62,7 @@ class IconManager:
         # PNG图标 (使用PNG文件而非SVG)
         self.register_png_icon('Downloading', 'res/Downloading.png', 'res/Downloading_white.png', '下载中')
         self.register_png_icon('DownloadingGray', 'res/Downloading_gray.png', 'res/Downloading_gray.png', '下载中(禁用)')
+        self.register_png_icon('Setting', 'res/Setting.png', 'res/Setting_white.png', '设置')
     
     def register_icon(self, name: str, svg_path: str, description: str = "", animation_type: str = "simple"):
         """
