@@ -156,8 +156,8 @@ class TransformAnimatedButton(QPushButton):
     
     def _draw_icon(self, painter, rect):
         """绘制图标"""
-        # 设置绘制参数
-        margin = 6
+        # 设置绘制参数 - ZoomBig图标需要更小的边距
+        margin = 3 if self.icon_name == 'ZoomBig' else 6  # ZoomBig使用更小边距
         icon_rect = rect.adjusted(margin, margin, -margin, -margin)
         
         # 计算中心点
@@ -183,8 +183,6 @@ class TransformAnimatedButton(QPushButton):
         # 根据图标类型绘制不同的图标
         if self.icon_name == 'Search':
             self._draw_search_icon(painter)
-        elif self.icon_name == 'Location':
-            self._draw_location_icon(painter)
         elif self.icon_name == 'ZoomBig':
             self._draw_zoom_big_icon(painter)
         elif self.icon_name == 'Loading':
@@ -209,18 +207,13 @@ class TransformAnimatedButton(QPushButton):
             offset_y = progress * -4 * math.sin(progress * math.pi)
             painter.translate(offset_x, offset_y)
         
-        elif self.icon_name == 'Location':
-            # 位置图标：上下跳跃动画
-            bounce_y = -5 * math.sin(progress * math.pi)
-            painter.translate(0, bounce_y)
-        
         elif self.icon_name == 'ZoomBig':
             # 放大图标：旋转动画
             rotation = progress * 180
             painter.rotate(rotation)
         
         elif self.icon_name == 'Loading':
-            # 加载图标：旋转动画
+            # 加载图标：旋转动画 (TSX中是50度旋转)
             rotation = progress * 50
             painter.rotate(rotation)
         
@@ -235,21 +228,6 @@ class TransformAnimatedButton(QPushButton):
         # 绘制搜索柄
         painter.drawLine(17, 17, 21, 21)  # m21 21-4.3-4.3 -> 16.7,16.7 to 21,21
     
-    def _draw_location_icon(self, painter):
-        """绘制位置图标"""
-        # 绘制位置标记外形
-        # M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0
-        # 简化为椭圆形状
-        painter.drawEllipse(4, 2, 16, 16)  # 外圆
-        
-        # 绘制内圆
-        progress = self._animation_progress
-        if progress > 0.3:  # 延迟出现
-            inner_progress = min(1.0, (progress - 0.3) / 0.7)
-            inner_radius = 3 * inner_progress
-            painter.drawEllipse(int(12 - inner_radius), int(10 - inner_radius), 
-                              int(inner_radius * 2), int(inner_radius * 2))
-    
     def _draw_zoom_big_icon(self, painter):
         """绘制放大图标"""
         # 绘制加号
@@ -258,12 +236,17 @@ class TransformAnimatedButton(QPushButton):
     
     def _draw_loading_icon(self, painter):
         """绘制加载图标"""
-        # 绘制圆弧和箭头
-        # M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8
-        # 简化为圆弧
-        painter.drawArc(3, 3, 18, 18, 0, 270 * 16)  # 3/4圆弧
+        # 根据SVG路径绘制Loading图标
+        # 第一个路径: M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8
+        # 这是一个从右侧开始的圆弧，逆时针到上方
         
-        # 绘制箭头
+        # 绘制主圆弧 (从0度开始，逆时针270度)
+        # 圆心在(12,12)，半径9
+        # Qt的角度：0度=3点钟方向，正值=逆时针
+        painter.drawArc(3, 3, 18, 18, 0 * 16, -270 * 16)
+        
+        # 第二个路径: M21 3v5h-5 (箭头)
+        # 从(21,3)开始，垂直向下5个单位到(21,8)，然后水平向左5个单位到(16,8)
         painter.drawLine(21, 3, 21, 8)   # 垂直线
         painter.drawLine(16, 8, 21, 8)   # 水平线
 

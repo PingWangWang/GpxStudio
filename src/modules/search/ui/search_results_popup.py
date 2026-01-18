@@ -44,7 +44,7 @@ class SearchResultsPopup(QListWidget):
         # 设置属性
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # 显示时不激活窗口
-        self.setFocusPolicy(Qt.NoFocus)
+        self.setFocusPolicy(Qt.StrongFocus)  # 改为StrongFocus以接收键盘事件
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
@@ -147,6 +147,14 @@ class SearchResultsPopup(QListWidget):
 
         # 隐藏下拉列表
         self.hide()
+
+    def keyPressEvent(self, event):
+        """处理键盘事件"""
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def hideEvent(self, event):
         """重写隐藏事件"""

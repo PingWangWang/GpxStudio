@@ -11,6 +11,8 @@ from ui.widgets.slider_animated_button import SliderAnimatedButton
 from ui.widgets.path_draw_animated_button import PathDrawAnimatedButton
 from ui.widgets.transform_animated_button import TransformAnimatedButton
 from ui.widgets.complex_animated_button import ComplexAnimatedButton
+from ui.widgets.location_animated_button import LocationAnimatedButton
+from ui.widgets.output_animated_button import OutputAnimatedButton
 
 
 class IconManager:
@@ -19,6 +21,7 @@ class IconManager:
     def __init__(self):
         self._icons: Dict[str, str] = {}  # 图标名称 -> SVG路径
         self._animation_types: Dict[str, str] = {}  # 图标名称 -> 动画类型
+        self._png_icons: Dict[str, tuple] = {}  # PNG图标名称 -> (普通路径, 白色路径)
         self._register_default_icons()
     
     def _register_default_icons(self):
@@ -37,21 +40,28 @@ class IconManager:
         
         # 变换动画图标 (Transform)
         self.register_icon('Search', 'res/icons/Search.svg', '搜索', 'transform')
-        self.register_icon('Location', 'res/icons/Location.svg', '位置', 'transform')
         self.register_icon('ZoomBig', 'res/icons/ZoomBig.svg', '放大', 'transform')
         self.register_icon('ZoomSmall', 'res/icons/ZoomSmall.svg', '缩小', 'transform')
-        self.register_icon('Loading', 'res/icons/Loading.svg', '加载', 'transform')
+        self.register_icon('Loading', 'res/icons/Loading.svg', '加载', 'rotation')
         self.register_icon('Add', 'res/icons/Add.svg', '添加', 'transform')
+        
+        # 位置动画图标 (Location)
+        self.register_icon('Location', 'res/icons/Location.svg', '位置', 'location')
         
         # 复杂动画图标 (Complex)
         self.register_icon('History', 'res/icons/History.svg', '历史', 'complex')
         
-        # 简单SVG图标 (无特殊动画)
+        # 简单SVG图标 (无特殊动画，但支持悬停效果)
         self.register_icon('Download', 'res/icons/Download.svg', '下载', 'simple')
         self.register_icon('Eye', 'res/icons/Eye.svg', '显示', 'simple')
         self.register_icon('EyeOff', 'res/icons/EyeOff.svg', '隐藏', 'simple')
         self.register_icon('Log', 'res/icons/Log.svg', '日志', 'simple')
         self.register_icon('About', 'res/icons/About.svg', '关于', 'simple')
+        self.register_icon('OutPut', 'res/icons/OutPut.svg', '导出', 'output')
+        
+        # PNG图标 (使用PNG文件而非SVG)
+        self.register_png_icon('Downloading', 'res/Downloading.png', 'res/Downloading_white.png', '下载中')
+        self.register_png_icon('DownloadingGray', 'res/Downloading_gray.png', 'res/Downloading_gray.png', '下载中(禁用)')
     
     def register_icon(self, name: str, svg_path: str, description: str = "", animation_type: str = "simple"):
         """
@@ -71,6 +81,26 @@ class IconManager:
         else:
             print(f"[图标管理器] 警告: 图标文件不存在: {svg_path}")
     
+    def register_png_icon(self, name: str, normal_path: str, white_path: str, description: str = ""):
+        """
+        注册PNG图标
+        
+        Args:
+            name: 图标名称
+            normal_path: 普通PNG文件路径
+            white_path: 白色PNG文件路径
+            description: 图标描述
+        """
+        normal_full_path = resource_path(normal_path)
+        white_full_path = resource_path(white_path)
+        
+        if os.path.exists(normal_full_path) and os.path.exists(white_full_path):
+            self._png_icons[name] = (normal_full_path, white_full_path)
+            self._animation_types[name] = 'png'
+            print(f"[图标管理器] 注册PNG图标: {name} -> {normal_path}, {white_path} ({description})")
+        else:
+            print(f"[图标管理器] 警告: PNG图标文件不存在: {normal_path} 或 {white_path}")
+    
     def get_icon_path(self, name: str) -> Optional[str]:
         """获取图标路径"""
         return self._icons.get(name)
@@ -79,13 +109,17 @@ class IconManager:
         """获取图标动画类型"""
         return self._animation_types.get(name, 'simple')
     
+    def get_png_icon_paths(self, name: str) -> Optional[tuple]:
+        """获取PNG图标路径"""
+        return self._png_icons.get(name)
+    
     def has_icon(self, name: str) -> bool:
         """检查图标是否存在"""
-        return name in self._icons
+        return name in self._icons or name in self._png_icons
     
     def list_icons(self) -> list:
         """列出所有已注册的图标"""
-        return list(self._icons.keys())
+        return list(self._icons.keys()) + list(self._png_icons.keys())
     
     def create_button(self, icon_name: str, tooltip: str = None, parent=None):
         """
@@ -114,6 +148,10 @@ class IconManager:
                 button = TransformAnimatedButton(icon_name, parent)
             elif animation_type == 'complex':
                 button = ComplexAnimatedButton(icon_name, parent)
+            elif animation_type == 'location':
+                button = LocationAnimatedButton(parent)
+            elif animation_type == 'output':
+                button = OutputAnimatedButton(parent)
             else:  # 'rotation' or 'simple'
                 button = LucideSvgButton(icon_name, parent)
         

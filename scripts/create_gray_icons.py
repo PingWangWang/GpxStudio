@@ -1,18 +1,19 @@
 """
-创建白色版本的图标
-将交通方式和切换按钮的图标转换为白色，以便在蓝色背景上显示更清晰
+创建灰色版本的图标
+将导出按钮的图标转换为灰色，用于禁用状态显示
 """
 
 from PIL import Image
 import os
 
-def create_white_icon(input_path, output_path):
+def create_gray_icon(input_path, output_path, gray_value=128):
     """
-    将图标转换为白色版本
+    将图标转换为灰色版本
 
     Args:
         input_path: 输入图标路径
         output_path: 输出图标路径
+        gray_value: 灰色值 (0-255)，默认128为中等灰色
     """
     try:
         # 打开图像
@@ -27,16 +28,16 @@ def create_white_icon(input_path, output_path):
             for x in range(width):
                 r, g, b, a = pixels[x, y]
 
-                # 如果像素不是完全透明的，将其转换为白色，保持透明度
+                # 如果像素不是完全透明的，将其转换为灰色，保持透明度
                 if a > 0:
-                    pixels[x, y] = (255, 255, 255, a)
+                    pixels[x, y] = (gray_value, gray_value, gray_value, a)
 
         # 保存图像
         img.save(output_path)
-        print(f"✓ 已创建白色图标: {output_path}")
+        print(f"✓ 已创建灰色图标: {output_path}")
 
     except Exception as e:
-        print(f"✗ 创建白色图标失败 {input_path}: {e}")
+        print(f"✗ 创建灰色图标失败 {input_path}: {e}")
 
 def main():
     """主函数"""
@@ -47,16 +48,10 @@ def main():
 
     # 需要转换的图标列表
     icons_to_convert = [
-        ('Driving.png', 'Driving_white.png'),
-        ('Cycling.png', 'Cycling_white.png'),
-        ('Waking.png', 'Waking_white.png'),
-        ('Switch.png', 'Switch_white.png'),
-        ('Cancel.png', 'Cancel_white.png'),
-        ('History.png', 'History_white.png'),
-        ('Downloading.png', 'Downloading_white.png'),
+        ('Downloading.png', 'Downloading_gray.png'),
     ]
 
-    print("开始创建白色图标...")
+    print("开始创建灰色图标...")
     print("=" * 60)
 
     for input_name, output_name in icons_to_convert:
@@ -64,12 +59,12 @@ def main():
         output_path = os.path.join(res_dir, output_name)
 
         if os.path.exists(input_path):
-            create_white_icon(input_path, output_path)
+            create_gray_icon(input_path, output_path, gray_value=128)  # 使用中等灰色
         else:
             print(f"✗ 找不到图标文件: {input_path}")
 
     print("=" * 60)
-    print("白色图标创建完成！")
+    print("灰色图标创建完成！")
 
 if __name__ == '__main__':
     main()

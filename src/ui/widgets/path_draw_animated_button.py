@@ -236,32 +236,60 @@ class PathDrawAnimatedButton(QPushButton):
         """绘制路线图标的路径"""
         progress = self._animation_progress
         
-        # 绘制圆点和连接线，按顺序出现
-        elements = [
-            ('circle', 12, 4.5, 2.5),      # 顶部圆点
-            ('line', 10.2, 6.3, 6.3, 10.2), # 左上连线
-            ('circle', 4.5, 12, 2.5),      # 左侧圆点
-            ('line', 7, 12, 17, 12),       # 水平连线
-            ('circle', 19.5, 12, 2.5),     # 右侧圆点
-            ('line', 13.8, 17.7, 17.7, 13.8), # 右下连线
-            ('circle', 12, 19.5, 2.5),     # 底部圆点
+        # Route图标使用路径长度动画，每个元素有不同的延迟
+        # 圆形元素 (custom=0, 无延迟)
+        circles = [
+            (12, 4.5, 2.5),    # 顶部圆点
+            (4.5, 12, 2.5),    # 左侧圆点  
+            (19.5, 12, 2.5),   # 右侧圆点
+            (12, 19.5, 2.5),   # 底部圆点
         ]
         
-        elements_per_step = len(elements)
-        for i, element in enumerate(elements):
-            element_progress = max(0, min(1, (progress * elements_per_step) - i))
+        # 路径元素 (custom=1,2,3, 有延迟)
+        paths = [
+            (10.2, 6.3, 6.3, 10.2, 1),    # 左上连线 (custom=1, delay=0.15)
+            (7, 12, 17, 12, 2),            # 水平连线 (custom=2, delay=0.30)
+            (13.8, 17.7, 17.7, 13.8, 3),  # 右下连线 (custom=3, delay=0.45)
+        ]
+        
+        # 设置基础画笔
+        base_color = QColor(32, 32, 32)
+        
+        # 绘制圆形 (custom=0, 无延迟)
+        # 透明度动画：opacity: [0, 1], delay: 0.1 * 0 = 0
+        circle_alpha = int(255 * min(1.0, progress))
+        if circle_alpha > 0:
+            pen = QPen(QColor(32, 32, 32, circle_alpha), 2)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+            painter.setPen(pen)
             
-            if element_progress > 0:
-                if element[0] == 'circle':
-                    # 绘制圆形
-                    _, cx, cy, r = element
-                    painter.drawEllipse(int(cx - r), int(cy - r), int(r * 2), int(r * 2))
-                elif element[0] == 'line':
-                    # 绘制线段
-                    _, x1, y1, x2, y2 = element
-                    end_x = x1 + (x2 - x1) * element_progress
-                    end_y = y1 + (y2 - y1) * element_progress
-                    painter.drawLine(int(x1), int(y1), int(end_x), int(end_y))
+            for cx, cy, r in circles:
+                painter.drawEllipse(int(cx - r), int(cy - r), int(r * 2), int(r * 2))
+        
+        # 绘制路径 (custom=1,2,3, 有延迟)
+        for x1, y1, x2, y2, custom in paths:
+            # 计算延迟
+            path_delay = 0.15 * custom
+            opacity_delay = 0.1 * custom
+            
+            # 路径长度动画
+            if progress > path_delay:
+                path_progress = min(1.0, (progress - path_delay) / (1.0 - path_delay))
+                end_x = x1 + (x2 - x1) * path_progress
+                end_y = y1 + (y2 - y1) * path_progress
+                
+                # 透明度动画
+                if progress > opacity_delay:
+                    alpha_progress = min(1.0, (progress - opacity_delay) / (1.0 - opacity_delay))
+                    alpha = int(255 * alpha_progress)
+                    
+                    if alpha > 0:
+                        pen = QPen(QColor(32, 32, 32, alpha), 2)
+                        pen.setCapStyle(Qt.RoundCap)
+                        pen.setJoinStyle(Qt.RoundJoin)
+                        painter.setPen(pen)
+                        painter.drawLine(int(x1), int(y1), int(end_x), int(end_y))
 
 
 def create_path_draw_button(icon_name, tooltip=None, parent=None):

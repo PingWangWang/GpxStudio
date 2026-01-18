@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QMessageBox, QSplitter, QListWidgetItem, QScrollArea,
                              QApplication, QDialog, QTimeEdit, QMenuBar, QMenu, QAction,
                              QComboBox, QLineEdit)
-from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt5.QtCore import Qt, QTimer, QSize, QPoint
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
@@ -84,7 +84,10 @@ class GpxStudio(QMainWindow):
         self._update_splash(60, "正在初始化信号系统...")
         self._init_signals()
 
-        self._update_splash(75, "正在加载用户界面...")
+        self._update_splash(70, "正在初始化弹出面板管理...")
+        self._init_popup_management()
+
+        self._update_splash(80, "正在加载用户界面...")
         self._init_ui()
 
         self._update_splash(90, "正在初始化日志系统...")
@@ -208,6 +211,21 @@ class GpxStudio(QMainWindow):
         self._connect_signals()
 
         self.logger.debug("日志系统初始化完成")
+
+    def _init_popup_management(self):
+        """初始化弹出面板管理系统"""
+        print("开始初始化弹出面板管理")
+        
+        # 弹出面板列表
+        self.active_popups = []
+        
+        # 安装事件过滤器以监听窗口事件
+        self.installEventFilter(self)
+        
+        # 记录窗口初始位置和大小
+        self.last_window_geometry = self.geometry()
+        
+        print("弹出面板管理初始化完成")
 
     def _init_functional_managers(self):
         """初始化功能管理器（需要在UI和logger之后）"""
@@ -613,11 +631,13 @@ class GpxStudio(QMainWindow):
         self.search_history_popup = SearchHistoryPopup(map_container)
         self.search_history_popup.history_selected.connect(self._on_history_selected)
         self.search_history_popup.hide()
+        self._register_popup(self.search_history_popup)
 
         # 创建搜索结果下拉列表
         self.search_results_popup = SearchResultsPopup(map_container)
         self.search_results_popup.result_selected.connect(self._on_result_selected)
         self.search_results_popup.hide()
+        self._register_popup(self.search_results_popup)
 
         # 创建路线规划面板
         from modules.routing import RoutePlanPanel, RouteHistoryStorage
@@ -629,6 +649,8 @@ class GpxStudio(QMainWindow):
         self.route_plan_panel.address_selected.connect(self._on_route_address_selected)
         self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)
         self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)
+        self.route_plan_panel.export_gpx_clicked.connect(self._on_export_gpx_clicked)
+        self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
         self.route_plan_panel.hide()
 
         # 初始化路线历史存储
@@ -643,17 +665,21 @@ class GpxStudio(QMainWindow):
         self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
         self.map_settings_popup.closed.connect(self._on_map_settings_popup_closed)
         self.map_settings_popup.hide()
+        self._register_popup(self.map_settings_popup)
 
         self.route_settings_popup = RouteSettingsPopup(map_container)
         self.route_settings_popup.config_saved.connect(self._on_route_config_saved)
         self.route_settings_popup.closed.connect(self._on_route_settings_popup_closed)
         self.route_settings_popup.hide()
+        self._register_popup(self.route_settings_popup)
 
         self.log_settings_popup = LogSettingsPopup(map_container)
         self.log_settings_popup.hide()
+        self._register_popup(self.log_settings_popup)
 
         self.about_popup = AboutPopup(map_container)
         self.about_popup.hide()
+        self._register_popup(self.about_popup)
 
         return map_widget
 
@@ -2036,6 +2062,61 @@ class GpxStudio(QMainWindow):
         """重写关闭事件"""
         self.window_manager.handle_close_event(event)
 
+    def eventFilter(self, obj, event):
+        """事件过滤器 - 处理窗口焦点和移动事件"""
+        from PyQt5.QtCore import QEvent
+        
+        if obj == self:
+            if event.type() == QEvent.WindowDeactivate:
+                # 主窗口失去焦点时关闭所有弹出面板
+                self._close_all_popups()
+            elif event.type() == QEvent.Move:
+                # 窗口移动时更新弹出面板位置
+                self._update_popup_positions()
+            elif event.type() == QEvent.Resize:
+                # 窗口大小改变时更新弹出面板位置
+                self._update_popup_positions()
+        
+        return super().eventFilter(obj, event)
+
+    def _register_popup(self, popup):
+        """注册弹出面板"""
+        if popup not in self.active_popups:
+            self.active_popups.append(popup)
+            # 连接关闭信号以便从列表中移除
+            if hasattr(popup, 'closed'):
+                popup.closed.connect(lambda: self._unregister_popup(popup))
+
+    def _unregister_popup(self, popup):
+        """注销弹出面板"""
+        if popup in self.active_popups:
+            self.active_popups.remove(popup)
+
+    def _close_all_popups(self):
+        """关闭所有弹出面板"""
+        for popup in self.active_popups[:]:  # 使用副本避免在迭代时修改列表
+            if popup and popup.isVisible():
+                popup.hide()
+
+    def _update_popup_positions(self):
+        """更新所有弹出面板的位置"""
+        current_geometry = self.geometry()
+        
+        # 计算窗口位置的变化
+        if hasattr(self, 'last_window_geometry'):
+            dx = current_geometry.x() - self.last_window_geometry.x()
+            dy = current_geometry.y() - self.last_window_geometry.y()
+            
+            # 更新所有弹出面板的位置
+            for popup in self.active_popups:
+                if popup and popup.isVisible():
+                    current_pos = popup.pos()
+                    new_pos = current_pos + QPoint(dx, dy)
+                    popup.move(new_pos)
+        
+        # 更新记录的窗口位置
+        self.last_window_geometry = current_geometry
+
     # ==================== 任务管理器事件处理方法 ====================
 
     def _on_task_started(self, task_id: str, task_type: str):
@@ -2074,6 +2155,27 @@ class GpxStudio(QMainWindow):
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_completed(task_id, result)
             self.task_progress_panel.task_completed("路线规划完成")
+            
+            # 检查是否有待导出的历史记录
+            if hasattr(self, '_pending_export_history') and self._pending_export_history:
+                self.logger.info("[GPX导出] 路线规划完成，准备导出历史记录")
+                # 获取规划好的路线数据
+                if result and result.get('alternatives'):
+                    route_alternatives = result['alternatives']
+                    if route_alternatives:
+                        # 使用第一个路线方案
+                        selected_route = route_alternatives[0]
+                        route_data = {
+                            'description': f"{self._pending_export_history.get('start', '起点')} → {self._pending_export_history.get('end', '终点')}",
+                            'distance': selected_route.get('distance', 0),
+                            'duration': selected_route.get('duration', 0),
+                            'route_points': selected_route.get('route_points', [])
+                        }
+                        # 显示导出面板
+                        self._show_gpx_export_popup(route_data)
+                        
+                # 清除待导出标记
+                self._pending_export_history = None
         elif task_id.startswith('map_render_'):
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_map_render_task_completed(task_id, result)
@@ -2195,11 +2297,13 @@ class GpxStudio(QMainWindow):
             # 显示面板
             self.route_plan_panel.show()
             self.route_plan_panel.raise_()
+            # 设置焦点以接收键盘事件
+            self.route_plan_panel.setFocus()
 
             self.logger.debug(f"[路线面板] 面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
             self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 400")
 
-            self.logger.debug("[路线面板] 路线规划面板已显示")
+            self.logger.debug("[路线面板] 路线规划面板已显示并设置焦点")
 
     def _on_route_panel_cancel(self):
         """路线规划面板取消按钮点击"""
@@ -2458,6 +2562,9 @@ class GpxStudio(QMainWindow):
 
                 # 清空所有输入框（重要：清除旧数据）
                 self.route_plan_panel.clear_all_inputs()
+                
+                # 设置当前选中的历史记录（重要：保持选中状态）
+                self.route_plan_panel.set_selected_history(history_data)
 
             # 填充到输入框
             if hasattr(self, 'route_plan_panel'):
@@ -2500,7 +2607,7 @@ class GpxStudio(QMainWindow):
             # 如果没有坐标，自动搜索起点和终点
             if not has_coords:
                 self.logger.info(f"[路线面板] 历史记录缺少坐标，开始自动搜索...")
-                self._auto_search_history_locations(start, end, mode)
+                self._auto_search_history_locations(start, end, mode, history_data)
             else:
                 # 恢复路线点数据到data_manager
                 if route_points and len(route_points) > 0:
@@ -2523,12 +2630,21 @@ class GpxStudio(QMainWindow):
                         self.map_manager.show_route_on_map()
                         self.logger.info(f"[路线面板] 路线已渲染到地图")
                         
+                        # 通知路线面板该历史记录有完整路线数据
+                        if hasattr(self, 'route_plan_panel'):
+                            self.route_plan_panel.update_history_route_data_status(history_data, True)
+                        
                         # 隐藏加载状态
                         if hasattr(self, 'route_plan_panel'):
                             self.route_plan_panel.hide_loading()
                 else:
                     # 如果没有路线点数据，只显示起点和终点
                     self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
+                    
+                    # 通知路线面板该历史记录没有完整路线数据
+                    if hasattr(self, 'route_plan_panel'):
+                        self.route_plan_panel.update_history_route_data_status(history_data, False)
+                    
                     # 在地图上预览起点和终点
                     if self.data_manager.start_coords and self.data_manager.end_coords:
                         # 更新地图预览，显示起点和终点
@@ -2544,13 +2660,14 @@ class GpxStudio(QMainWindow):
             if hasattr(self, 'route_plan_panel'):
                 self.route_plan_panel.hide_loading()
 
-    def _auto_search_history_locations(self, start: str, end: str, mode: str):
+    def _auto_search_history_locations(self, start: str, end: str, mode: str, history_data: dict):
         """自动搜索历史记录中的起点和终点坐标
 
         Args:
             start: 起点名称
             end: 终点名称
             mode: 交通方式
+            history_data: 历史记录数据
         """
         # 获取地理编码服务
         map_source = map_config.get_map_source()
@@ -2617,6 +2734,9 @@ class GpxStudio(QMainWindow):
             # 无论成功还是失败，都要隐藏加载状态
             if hasattr(self, 'route_plan_panel'):
                 self.route_plan_panel.hide_loading()
+                
+                # 自动搜索的历史记录没有完整路线数据，只有起点终点坐标
+                self.route_plan_panel.update_history_route_data_status(history_data, False)
 
     def _on_route_alternative_selected(self, index: int):
         """用户选择路线方案"""
@@ -2627,6 +2747,253 @@ class GpxStudio(QMainWindow):
 
         # 调用路线管理器选择路线方案
         self.route_manager.select_route_alternative(index)
+
+    def _on_export_gpx_clicked(self, route_data: dict):
+        """导出GPX按钮点击"""
+        self.logger.info(f"[GPX导出] 用户点击导出GPX按钮")
+        
+        try:
+            # 导入弹出面板
+            from ui.popups.gpx_export_popup import GpxExportPopup
+            
+            # 如果已经有弹出面板，先关闭
+            if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup.isVisible():
+                self.gpx_export_popup.hide()
+            
+            # 创建弹出面板
+            self.gpx_export_popup = GpxExportPopup(route_data, self)
+            self.gpx_export_popup.export_confirmed.connect(lambda start_time: self._export_gpx_file(route_data, start_time))
+            self.gpx_export_popup.closed.connect(self._on_gpx_popup_closed)
+            
+            # 注册弹出面板到管理系统
+            self._register_popup(self.gpx_export_popup)
+            
+            # 计算弹出位置（在路线面板右侧）
+            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                # 获取路线面板在屏幕上的位置
+                panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
+                panel_rect = self.route_plan_panel.rect()
+                
+                # 在面板右侧显示
+                popup_x = panel_global_pos.x() + panel_rect.width() + 10
+                popup_y = panel_global_pos.y() + 50
+                
+                # 确保不超出屏幕边界
+                from PyQt5.QtWidgets import QApplication
+                screen = QApplication.primaryScreen().geometry()
+                
+                if popup_x + self.gpx_export_popup.width() > screen.right():
+                    # 如果右侧空间不够，显示在左侧
+                    popup_x = panel_global_pos.x() - self.gpx_export_popup.width() - 10
+                
+                if popup_y + 200 > screen.bottom():  # 估算弹出面板高度
+                    popup_y = screen.bottom() - 250
+                
+                from PyQt5.QtCore import QPoint
+                popup_pos = QPoint(popup_x, popup_y)
+                self.gpx_export_popup.show_at_position(popup_pos)
+            else:
+                # 如果路线面板不可见，在屏幕中央显示
+                from PyQt5.QtWidgets import QApplication
+                from PyQt5.QtCore import QPoint
+                screen = QApplication.primaryScreen().geometry()
+                center_x = screen.center().x() - self.gpx_export_popup.width() // 2
+                center_y = screen.center().y() - 100
+                self.gpx_export_popup.show_at_position(QPoint(center_x, center_y))
+            
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 创建导出弹出面板失败: {e}")
+            self._show_warning("导出失败", f"无法创建导出面板: {str(e)}")
+
+    def _on_gpx_popup_closed(self):
+        """GPX导出弹出面板关闭"""
+        self.logger.debug("[GPX导出] 弹出面板已关闭")
+
+    def _export_gpx_file(self, route_data: dict, start_time):
+        """执行GPX文件导出"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            from modules.gpx.gpx_export import GpxExportService
+            import os
+            
+            self.logger.info(f"[GPX导出] 开始导出GPX文件")
+            
+            # 获取路线点数据
+            route_points = route_data.get('route_points', [])
+            if not route_points:
+                self._show_warning("导出失败", "路线数据为空，无法导出GPX文件")
+                return
+            
+            # 生成默认文件名
+            description = route_data.get('description', '路线')
+            start_location = self.data_manager.get_start_location()
+            end_location = self.data_manager.get_end_location()
+            
+            start_name = start_location.get('name', '起点') if start_location else '起点'
+            end_name = end_location.get('name', '终点') if end_location else '终点'
+            
+            # 清理文件名中的特殊字符
+            import re
+            safe_start = re.sub(r'[\\/:*?"<>|]', '', start_name)
+            safe_end = re.sub(r'[\\/:*?"<>|]', '', end_name)
+            default_filename = f"{safe_start}_{safe_end}.gpx"
+            
+            # 显示文件保存对话框
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "保存GPX文件",
+                default_filename,
+                "GPX文件 (*.gpx);;所有文件 (*)"
+            )
+            
+            if not file_path:
+                self.logger.info("[GPX导出] 用户取消了文件保存")
+                return
+            
+            # 确保文件扩展名为.gpx
+            if not file_path.lower().endswith('.gpx'):
+                file_path += '.gpx'
+            
+            # 创建GPX导出服务
+            def log_callback(level: str, message: str):
+                self.logger.log(getattr(self.logger, level.lower(), self.logger.info), f"[GPX导出] {message}")
+            
+            gpx_service = GpxExportService(logger=log_callback)
+            
+            # 执行导出
+            success = gpx_service.export_to_gpx(
+                route_points=route_points,
+                start_datetime=start_time,
+                file_path=file_path,
+                start_name=start_name,
+                end_name=end_name
+            )
+            
+            if success:
+                self.logger.info(f"[GPX导出] GPX文件导出成功: {file_path}")
+                self._show_info("导出成功", f"GPX文件已保存到:\n{file_path}")
+            else:
+                self.logger.error(f"[GPX导出] GPX文件导出失败")
+                self._show_warning("导出失败", "GPX文件导出失败，请检查文件路径和权限")
+                
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 导出过程中发生错误: {e}")
+            self._show_warning("导出失败", f"导出过程中发生错误: {str(e)}")
+
+    def _on_history_export_gpx_clicked(self, history_data: dict):
+        """历史记录导出GPX按钮点击"""
+        self.logger.info(f"[GPX导出] 用户点击历史记录导出GPX按钮")
+        
+        try:
+            # 检查历史记录是否有完整的路线数据
+            route_points = history_data.get('route_points', [])
+            
+            if route_points:
+                # 有完整路线数据，直接导出
+                self.logger.info(f"[GPX导出] 历史记录有完整路线数据，直接导出")
+                route_data = {
+                    'description': f"{history_data.get('start', '起点')} → {history_data.get('end', '终点')}",
+                    'distance': history_data.get('distance', 0),
+                    'duration': history_data.get('duration', 0),
+                    'route_points': route_points
+                }
+                self._show_gpx_export_popup(route_data)
+            else:
+                # 没有完整路线数据，需要重新规划路线
+                self.logger.info(f"[GPX导出] 历史记录没有完整路线数据，需要重新规划路线")
+                
+                # 检查是否有起点和终点坐标
+                start_coords = history_data.get('start_coords')
+                end_coords = history_data.get('end_coords')
+                
+                if start_coords and end_coords:
+                    # 有坐标，可以重新规划路线
+                    self._replan_and_export_route(history_data)
+                else:
+                    # 没有坐标，提示用户
+                    self._show_warning("导出失败", "该历史记录缺少位置坐标信息，无法重新规划路线。请重新搜索起点和终点。")
+                    
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 处理历史记录导出时出错: {str(e)}")
+            self._show_warning("导出失败", f"处理导出请求时发生错误: {str(e)}")
+
+    def _show_gpx_export_popup(self, route_data: dict):
+        """显示GPX导出弹出面板"""
+        try:
+            # 导入弹出面板
+            from ui.popups.gpx_export_popup import GpxExportPopup
+            
+            # 如果已经有弹出面板，先关闭
+            if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup.isVisible():
+                self.gpx_export_popup.hide()
+            
+            # 创建弹出面板
+            self.gpx_export_popup = GpxExportPopup(route_data, self)
+            self.gpx_export_popup.export_confirmed.connect(lambda start_time: self._export_gpx_file(route_data, start_time))
+            self.gpx_export_popup.closed.connect(self._on_gpx_popup_closed)
+            
+            # 注册弹出面板到管理系统
+            self._register_popup(self.gpx_export_popup)
+            
+            # 计算弹出位置（在路线面板右侧）
+            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                # 获取路线面板在屏幕上的位置
+                panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
+                panel_rect = self.route_plan_panel.rect()
+                
+                # 在面板右侧显示
+                popup_x = panel_global_pos.x() + panel_rect.width() + 10
+                popup_y = panel_global_pos.y() + 50
+                
+                # 确保不超出屏幕边界
+                from PyQt5.QtWidgets import QApplication
+                screen = QApplication.primaryScreen().geometry()
+                
+                if popup_x + self.gpx_export_popup.width() > screen.right():
+                    # 如果右侧空间不够，显示在左侧
+                    popup_x = panel_global_pos.x() - self.gpx_export_popup.width() - 10
+                
+                if popup_y + 200 > screen.bottom():  # 估算弹出面板高度
+                    popup_y = screen.bottom() - 250
+                
+                from PyQt5.QtCore import QPoint
+                popup_pos = QPoint(popup_x, popup_y)
+                self.gpx_export_popup.show_at_position(popup_pos)
+            else:
+                # 如果路线面板不可见，在屏幕中央显示
+                from PyQt5.QtWidgets import QApplication
+                from PyQt5.QtCore import QPoint
+                screen = QApplication.primaryScreen().geometry()
+                center_x = screen.center().x() - self.gpx_export_popup.width() // 2
+                center_y = screen.center().y() - 100
+                self.gpx_export_popup.show_at_position(QPoint(center_x, center_y))
+                
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 创建导出弹出面板失败: {e}")
+            self._show_warning("导出失败", f"无法创建导出面板: {str(e)}")
+
+    def _replan_and_export_route(self, history_data: dict):
+        """重新规划路线并导出"""
+        self.logger.info(f"[GPX导出] 开始重新规划路线用于导出")
+        
+        # 显示提示信息
+        self._show_info("正在处理", "该历史记录没有完整路线数据，正在重新规划路线...")
+        
+        # 设置起点和终点坐标到data_manager
+        start_coords = history_data.get('start_coords')
+        end_coords = history_data.get('end_coords')
+        
+        if start_coords:
+            self.data_manager.set_start_location(tuple(start_coords), history_data.get('start', ''))
+        if end_coords:
+            self.data_manager.set_end_location(tuple(end_coords), history_data.get('end', ''))
+        
+        # 保存历史数据，用于规划完成后的导出
+        self._pending_export_history = history_data
+        
+        # 调用路线管理器进行路线规划
+        mode = history_data.get('mode', 'driving')
+        self.route_manager.plan_route(mode)
 
     def _show_route_alternatives(self, alternatives: list, selected_index: int = 0):
         """显示路线待选列表"""
