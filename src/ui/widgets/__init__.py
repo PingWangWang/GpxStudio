@@ -4,9 +4,21 @@ UI组件模块
 """
 
 from .svg_animated_button import SvgAnimatedButton, LucideSvgButton, create_lucide_button
+from .slider_animated_button import SliderAnimatedButton, create_slider_button
+from .path_draw_animated_button import PathDrawAnimatedButton, create_path_draw_button
+from .transform_animated_button import TransformAnimatedButton, create_transform_button
+from .complex_animated_button import ComplexAnimatedButton, create_complex_button
 
 __all__ = [
     'SvgAnimatedButton',
     'LucideSvgButton',
-    'create_lucide_button'
+    'create_lucide_button',
+    'SliderAnimatedButton',
+    'create_slider_button',
+    'PathDrawAnimatedButton',
+    'create_path_draw_button',
+    'TransformAnimatedButton',
+    'create_transform_button',
+    'ComplexAnimatedButton',
+    'create_complex_button',
 ]

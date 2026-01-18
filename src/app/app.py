@@ -27,6 +27,7 @@ from modules.geolocation.geolocation import GeolocationHandler
 from modules.map.webengine import ConsoleWebEnginePage
 from modules.map.map_renderer import MapRenderer
 from services.config.map_config import map_config
+from ui.icons.icon_manager import create_icon_button
 
 # 导入UI组件
 from ui.styles import UIStyles
@@ -460,98 +461,40 @@ class GpxStudio(QMainWindow):
         right_buttons_layout.addWidget(self.route_settings_button)
 
         # 创建日志设置按钮
-        self.log_settings_button = QPushButton()
-        self.log_settings_button.setToolTip("日志设置")
+        # 创建日志设置按钮
+        self.log_settings_button = create_icon_button('Log', '日志设置', self)
         self.log_settings_button.clicked.connect(self.on_log_settings_clicked)
         self.log_settings_button.setFixedSize(control_height, control_height)
-        log_icon_path = resource_path('res/Log.png')
-        if os.path.exists(log_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.log_settings_button.setIcon(QIcon(log_icon_path))
-            from PyQt5.QtCore import QSize
-            self.log_settings_button.setIconSize(QSize(20, 20))
-        else:
-            self.log_settings_button.setText("📋")
-        self.log_settings_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.log_settings_button)
 
         # 创建关于按钮
-        self.about_button = QPushButton()
-        self.about_button.setToolTip("关于")
+        self.about_button = create_icon_button('About', '关于', self)
         self.about_button.clicked.connect(self.on_about_clicked)
         self.about_button.setFixedSize(control_height, control_height)
-        about_icon_path = resource_path('res/About.png')
-        if os.path.exists(about_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.about_button.setIcon(QIcon(about_icon_path))
-            from PyQt5.QtCore import QSize
-            self.about_button.setIconSize(QSize(20, 20))
-        else:
-            self.about_button.setText("ℹ️")
-        self.about_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.about_button)
 
         # 创建放大按钮
-        self.zoom_in_button = QPushButton()
-        self.zoom_in_button.setToolTip("放大")
+        self.zoom_in_button = create_icon_button('ZoomBig', '放大', self)
         self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
         self.zoom_in_button.setFixedSize(control_height, control_height)
-        zoom_in_icon_path = resource_path('res/ZoomBig.png')
-        if os.path.exists(zoom_in_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.zoom_in_button.setIcon(QIcon(zoom_in_icon_path))
-            from PyQt5.QtCore import QSize
-            self.zoom_in_button.setIconSize(QSize(20, 20))
-        else:
-            self.zoom_in_button.setText("+")
-        self.zoom_in_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.zoom_in_button)
 
         # 创建缩小按钮
-        self.zoom_out_button = QPushButton()
-        self.zoom_out_button.setToolTip("缩小")
+        self.zoom_out_button = create_icon_button('ZoomSmall', '缩小', self)
         self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
         self.zoom_out_button.setFixedSize(control_height, control_height)
-        zoom_out_icon_path = resource_path('res/ZoomSamll.png')
-        if os.path.exists(zoom_out_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.zoom_out_button.setIcon(QIcon(zoom_out_icon_path))
-            from PyQt5.QtCore import QSize
-            self.zoom_out_button.setIconSize(QSize(20, 20))
-        else:
-            self.zoom_out_button.setText("-")
-        self.zoom_out_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.zoom_out_button)
 
         # 创建定位按钮
-        self.locate_button = QPushButton()
-        self.locate_button.setToolTip("定位到当前位置")
+        self.locate_button = create_icon_button('Location', '定位到当前位置', self)
         self.locate_button.clicked.connect(self.on_locate_clicked)
         self.locate_button.setFixedSize(control_height, control_height)
-        location_icon_path = resource_path('res/Location.png')
-        if os.path.exists(location_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.locate_button.setIcon(QIcon(location_icon_path))
-            from PyQt5.QtCore import QSize
-            self.locate_button.setIconSize(QSize(20, 20))
-        else:
-            self.locate_button.setText("📍")
-        self.locate_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.locate_button)
 
         # 创建加载进度按钮
-        self.loading_button = QPushButton()
-        self.loading_button.setToolTip("加载状态指示器")
+        # 创建加载进度按钮
+        self.loading_button = create_icon_button('Loading', '加载状态指示器', self)
         self.loading_button.setFixedSize(control_height, control_height)
-        loading_icon_path = resource_path('res/Loading.png')
-        if os.path.exists(loading_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.loading_button.setIcon(QIcon(loading_icon_path))
-            from PyQt5.QtCore import QSize
-            self.loading_button.setIconSize(QSize(20, 20))
-        else:
-            self.loading_button.setText("⏳")
-        self.loading_button.setStyleSheet(right_button_style)
         self.loading_button.show()  # 固定显示，不做显隐切换
         right_buttons_layout.addWidget(self.loading_button)
 
@@ -637,51 +580,21 @@ class GpxStudio(QMainWindow):
         """
 
         # 搜索按钮
-        self.search_button = QPushButton()
-        self.search_button.setToolTip("搜索")
+        self.search_button = create_icon_button('Search', '搜索', self)
         self.search_button.clicked.connect(self.on_search_button_clicked)
         self.search_button.setFixedSize(control_height, control_height)
-        search_icon_path = resource_path('res/Search.png')
-        if os.path.exists(search_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.search_button.setIcon(QIcon(search_icon_path))
-            from PyQt5.QtCore import QSize
-            self.search_button.setIconSize(QSize(20, 20))
-        else:
-            self.search_button.setText("🔍")
-        self.search_button.setStyleSheet(search_button_style)
         search_layout.addWidget(self.search_button)
 
         # 路线按钮
-        self.route_button = QPushButton()
-        self.route_button.setToolTip("路线")
+        self.route_button = create_icon_button('Route', '路线', self)
         self.route_button.clicked.connect(self.on_route_button_clicked)
         self.route_button.setFixedSize(control_height, control_height)
-        route_icon_path = resource_path('res/Route.png')
-        if os.path.exists(route_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.route_button.setIcon(QIcon(route_icon_path))
-            from PyQt5.QtCore import QSize
-            self.route_button.setIconSize(QSize(20, 20))
-        else:
-            self.route_button.setText("🗺️")
-        self.route_button.setStyleSheet(search_button_style)
         search_layout.addWidget(self.route_button)
 
         # 关闭按钮（初始隐藏，显示搜索结果时替换路线按钮）
-        self.cancel_button = QPushButton()
-        self.cancel_button.setToolTip("关闭")
+        self.cancel_button = create_icon_button('Cancel', '关闭', self)
         self.cancel_button.clicked.connect(self.on_cancel_button_clicked)
         self.cancel_button.setFixedSize(control_height, control_height)
-        cancel_icon_path = resource_path('res/Cancel.png')
-        if os.path.exists(cancel_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.cancel_button.setIcon(QIcon(cancel_icon_path))
-            from PyQt5.QtCore import QSize
-            self.cancel_button.setIconSize(QSize(20, 20))
-        else:
-            self.cancel_button.setText("✕")
-        self.cancel_button.setStyleSheet(search_button_style)
         search_layout.addWidget(self.cancel_button)
         self.cancel_button.hide()  # 初始隐藏
 
@@ -2089,7 +2002,9 @@ class GpxStudio(QMainWindow):
         if not self.is_loading:
             self.is_loading = True
             self.loading_button.setToolTip("正在加载...")
-            self.loading_timer.start(50)  # 每50ms更新一次，实现旋转动画
+            # 使用新的动画按钮
+            if hasattr(self.loading_button, 'start_animation'):
+                self.loading_button.start_animation()
             self.logger.debug("[加载] 开始加载动画")
 
     def hide_loading(self):
@@ -2097,49 +2012,25 @@ class GpxStudio(QMainWindow):
         if self.is_loading:
             self.is_loading = False
             self.loading_button.setToolTip("加载状态指示器")
-            self.loading_timer.stop()
-            self.loading_rotation = 0
-            # 恢复到初始状态的图标
-            self._reset_loading_icon()
+            # 使用新的动画按钮
+            if hasattr(self.loading_button, 'stop_animation'):
+                self.loading_button.stop_animation()
             self.logger.debug("[加载] 停止加载动画")
 
     def _reset_loading_icon(self):
         """重置加载图标到初始状态"""
-        from core.resource_path import resource_path
-        loading_icon_path = resource_path('res/Loading.png')
-        if os.path.exists(loading_icon_path):
-            from PyQt5.QtGui import QIcon
-            from PyQt5.QtCore import QSize
-            self.loading_button.setIcon(QIcon(loading_icon_path))
-            self.loading_button.setIconSize(QSize(20, 20))
+        # 新的动画按钮会自动处理重置
+        if hasattr(self.loading_button, 'stop_animation'):
+            self.loading_button.stop_animation()
 
     def _animate_loading(self):
         """加载动画效果"""
         if not self.is_loading:
             return
-            
-        self.loading_rotation = (self.loading_rotation + 10) % 360
         
-        # 创建旋转的图标
-        from core.resource_path import resource_path
-        loading_icon_path = resource_path('res/Loading.png')
-        if os.path.exists(loading_icon_path):
-            from PyQt5.QtGui import QIcon, QPixmap, QTransform
-            from PyQt5.QtCore import QSize
-            
-            # 加载原始图标
-            original_pixmap = QPixmap(loading_icon_path)
-            
-            # 创建旋转变换
-            transform = QTransform()
-            transform.rotate(self.loading_rotation)
-            
-            # 应用旋转
-            rotated_pixmap = original_pixmap.transformed(transform, Qt.SmoothTransformation)
-            
-            # 设置旋转后的图标
-            self.loading_button.setIcon(QIcon(rotated_pixmap))
-            self.loading_button.setIconSize(QSize(20, 20))
+        # 新的动画按钮会自动处理动画，这里只需要确保动画在运行
+        if hasattr(self.loading_button, 'is_animating') and not self.loading_button.is_animating():
+            self.loading_button.start_animation()
 
     def closeEvent(self, event):
         """重写关闭事件"""
