@@ -623,6 +623,11 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEchoMode(QLineEdit.Normal)
             self.security_key_eye_btn.setText("👁️‍🗨️")
 
+    def hide(self):
+        """隐藏弹出面板并发出关闭信号"""
+        super().hide()
+        self.closed.emit()
+
 
 
 class LogSettingsPopup(BaseSettingsPopup):

@@ -320,7 +320,6 @@ class RouteManager(QObject):
         if self.task_manager:
             self.logger.info("使用后台线程渲染路线地图")
             from .task_adapters import MapRenderTaskAdapter
-            from services.config.map_config import map_config
 
             map_source = map_config.get_map_source()
 
@@ -367,7 +366,6 @@ class RouteManager(QObject):
         if self.task_manager:
             self.logger.info("使用后台线程渲染选中的路线")
             from .task_adapters import MapRenderTaskAdapter
-            from services.config.map_config import map_config
 
             map_source = map_config.get_map_source()
 

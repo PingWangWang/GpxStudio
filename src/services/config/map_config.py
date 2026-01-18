@@ -98,6 +98,42 @@ class MapConfig(IConfigService):
         except Exception:
             return False
 
+    # 路线优化相关配置方法
+    def is_route_optimization_enabled(self) -> bool:
+        """检查是否启用路线优化"""
+        route_opt = self._config_data.get('route_optimization', {})
+        return route_opt.get('enabled', True)  # 默认启用
+
+    def get_max_points_per_segment(self) -> int:
+        """获取每段路线的最大点数"""
+        route_opt = self._config_data.get('route_optimization', {})
+        return route_opt.get('max_points_per_segment', 500)
+
+    def is_auto_zoom_calculation_enabled(self) -> bool:
+        """检查是否启用自动缩放级别计算"""
+        route_opt = self._config_data.get('route_optimization', {})
+        return route_opt.get('auto_zoom_calculation', True)
+
+    def set_route_optimization_enabled(self, enabled: bool) -> bool:
+        """设置路线优化开关"""
+        try:
+            if 'route_optimization' not in self._config_data:
+                self._config_data['route_optimization'] = {}
+            self._config_data['route_optimization']['enabled'] = enabled
+            return self.save_config(self._config_data)
+        except Exception:
+            return False
+
+    def set_max_points_per_segment(self, max_points: int) -> bool:
+        """设置每段路线的最大点数"""
+        try:
+            if 'route_optimization' not in self._config_data:
+                self._config_data['route_optimization'] = {}
+            self._config_data['route_optimization']['max_points_per_segment'] = max_points
+            return self.save_config(self._config_data)
+        except Exception:
+            return False
+
     def get_map_source(self) -> str:
         """获取地图数据源"""
         return self.map_source

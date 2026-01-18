@@ -333,7 +333,25 @@ class MapRenderTaskAdapter:
 
             # 添加路线
             log_callback("DEBUG", "添加路线到地图")
-            MapRenderer.add_route(m, data_manager.route_points)
+            
+            # 使用配置的路线优化设置
+            from modules.map.route_optimizer import RouteOptimizer
+            
+            valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
+            optimal_zoom = None
+            if map_config.is_auto_zoom_calculation_enabled():
+                optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
+            
+            original_count = len([p for p in data_manager.route_points if p is not None])
+            log_callback("INFO", f"路线渲染: 原始点数 {original_count}")
+            if optimal_zoom:
+                log_callback("INFO", f"建议缩放级别: {optimal_zoom}")
+            
+            MapRenderer.add_route(
+                m, 
+                data_manager.route_points, 
+                zoom_level=optimal_zoom
+            )
 
             progress_callback(80, "正在调整地图边界...")
 

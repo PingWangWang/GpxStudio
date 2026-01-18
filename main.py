@@ -70,8 +70,8 @@ def main():
     # 显示主窗口
     window.show()
 
-    # 关闭启动画面
-    splash.finish(window)
+    # 简单隐藏启动画面，不使用finish方法
+    splash.hide()
 
     # 进入应用程序的事件循环，等待用户交互
     sys.exit(app.exec_())

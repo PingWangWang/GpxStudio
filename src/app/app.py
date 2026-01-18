@@ -158,7 +158,6 @@ class GpxStudio(QMainWindow):
         print("开始初始化服务")
 
         # 重新加载地图配置（确保使用正确的数据目录）
-        from services.config.map_config import map_config
         map_config._load_config()
 
         self.service_manager.initialize_services()
@@ -385,6 +384,9 @@ class GpxStudio(QMainWindow):
 
     def create_map_panel(self):
         """创建地图面板（铺满整个界面）"""
+        # 导入资源路径函数
+        from core.resource_path import resource_path
+        
         map_widget = QWidget()
         layout = QVBoxLayout(map_widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -444,21 +446,11 @@ class GpxStudio(QMainWindow):
             }
         """
 
-        # 创建地图设置按钮
-        self.map_settings_button = QPushButton()
-        self.map_settings_button.setToolTip("地图设置")
+        # 创建地图设置按钮（SVG动画齿轮按钮）
+        from ui.icons import create_icon_button
+        self.map_settings_button = create_icon_button('MapSetting', '地图设置')
         self.map_settings_button.clicked.connect(self.on_map_settings_clicked)
         self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
-        from core.resource_path import resource_path
-        settings_icon_path = resource_path('res/Setting.png')
-        if os.path.exists(settings_icon_path):
-            from PyQt5.QtGui import QIcon
-            self.map_settings_button.setIcon(QIcon(settings_icon_path))
-            from PyQt5.QtCore import QSize
-            self.map_settings_button.setIconSize(QSize(20, 20))  # 与搜索框按钮图标大小一致
-        else:
-            self.map_settings_button.setText("⚙️")
-        self.map_settings_button.setStyleSheet(right_button_style)
         right_buttons_layout.addWidget(self.map_settings_button)
 
         # 创建日志设置按钮
@@ -730,6 +722,7 @@ class GpxStudio(QMainWindow):
         from ui.popups import MapSettingsPopup, LogSettingsPopup, AboutPopup
         self.map_settings_popup = MapSettingsPopup(map_container)
         self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
+        self.map_settings_popup.closed.connect(self._on_map_settings_popup_closed)
         self.map_settings_popup.hide()
 
         self.log_settings_popup = LogSettingsPopup(map_container)
@@ -1598,6 +1591,10 @@ class GpxStudio(QMainWindow):
 
         # 显示地图设置popup
         if hasattr(self, 'map_settings_popup'):
+            # 开始齿轮动画
+            if hasattr(self.map_settings_button, 'start_animation'):
+                self.map_settings_button.start_animation()
+            
             self.map_settings_popup.show_popup(self.map_settings_button)
 
     def on_log_settings_clicked(self):
@@ -1632,8 +1629,11 @@ class GpxStudio(QMainWindow):
         """地图配置保存后的处理"""
         self.logger.info("[设置] 地图配置已保存，重新加载地图")
 
+        # 停止齿轮动画
+        if hasattr(self.map_settings_button, 'stop_animation'):
+            self.map_settings_button.stop_animation()
+
         # 重新加载配置
-        from services.config.map_config import map_config
         map_config._load_config()
 
         # 重新初始化服务（使用新的API Key）
@@ -1641,6 +1641,16 @@ class GpxStudio(QMainWindow):
 
         # 重新加载地图
         self._show_initial_map()
+
+    def _on_map_settings_popup_closed(self):
+        """地图设置弹出面板关闭时的处理"""
+        # 检查logger是否已初始化
+        if hasattr(self, 'logger'):
+            self.logger.debug("[设置] 地图设置面板已关闭")
+        
+        # 停止齿轮动画
+        if hasattr(self.map_settings_button, 'stop_animation'):
+            self.map_settings_button.stop_animation()
 
     def on_plan_route_clicked(self):
         """规划路线按钮点击"""
@@ -1749,7 +1759,6 @@ class GpxStudio(QMainWindow):
             try:
                 log_callback("INFO", "开始获取位置信息")
 
-                from services.config.map_config import map_config
                 map_source = map_config.get_map_source()
 
                 # 获取对应的地理编码服务
@@ -2311,7 +2320,6 @@ class GpxStudio(QMainWindow):
         self.route_plan_panel.show_loading()
 
         # 获取当前地图源
-        from services.config.map_config import map_config
         map_source = map_config.get_map_source()
 
         # 获取对应的地理编码服务
@@ -2595,8 +2603,6 @@ class GpxStudio(QMainWindow):
             end: 终点名称
             mode: 交通方式
         """
-        from services.config.map_config import map_config
-
         # 获取地理编码服务
         map_source = map_config.get_map_source()
         geocoding_service = self.service_manager.get_geocoding_service(map_source)

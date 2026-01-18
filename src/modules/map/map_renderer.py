@@ -9,6 +9,7 @@ import tempfile
 from PyQt5.QtCore import QUrl
 
 from .gaode_tiles import GaodeTileService
+from services.config.map_config import map_config
 
 
 class MapRenderer:
@@ -427,9 +428,9 @@ class MapRenderer:
         ).add_to(map_obj)
 
     @staticmethod
-    def add_route(map_obj, route_points, color='blue', weight=5, opacity=0.7):
+    def add_route(map_obj, route_points, color='blue', weight=5, opacity=0.7, optimize=None, zoom_level=None):
         """
-        添加路线
+        添加路线（优化版本）
 
         Args:
             map_obj: folium地图对象
@@ -437,31 +438,88 @@ class MapRenderer:
             color: 线条颜色
             weight: 线条宽度
             opacity: 透明度
+            optimize: 是否启用路线优化（None表示根据配置决定）
+            zoom_level: 当前缩放级别，用于优化计算
         """
-        route_segment = []
+        if not route_points:
+            return
+        
+        # 根据配置决定是否启用优化
+        if optimize is None:
+            optimize = map_config.is_route_optimization_enabled()
+        
+        # 如果启用优化且点数较多，进行路线优化
+        valid_point_count = len([p for p in route_points if p is not None])
+        if optimize and valid_point_count > 100:
+            from .route_optimizer import RouteOptimizer
+            
+            # 如果没有提供缩放级别，根据路线范围计算
+            if zoom_level is None:
+                if map_config.is_auto_zoom_calculation_enabled():
+                    valid_points = [(p[0], p[1]) for p in route_points if p is not None and len(p) >= 2]
+                    zoom_level = RouteOptimizer.calculate_optimal_zoom(valid_points)
+                else:
+                    zoom_level = 12  # 默认缩放级别
+            elif zoom_level is None:
+                zoom_level = 12  # 默认缩放级别
+            
+            # 获取配置的最大点数
+            max_points = map_config.get_max_points_per_segment()
+            
+            # 优化路线点位
+            route_points = RouteOptimizer.optimize_route_for_rendering(
+                route_points, 
+                zoom_level=zoom_level, 
+                max_points=max_points
+            )
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            optimized_count = len([p for p in route_points if p is not None])
+            reduction = valid_point_count - optimized_count
+            logger.info(f"[路线优化] 原始: {valid_point_count}点 → 优化: {optimized_count}点 (减少{reduction}点, 缩放级别: {zoom_level})")
+        
+        # 使用批量渲染优化
+        route_segments = []
+        current_segment = []
+        
         for point in route_points:
             if point is None:
-                if len(route_segment) > 1:
-                    folium.PolyLine(
-                        locations=route_segment,
-                        color=color,
-                        weight=weight,
-                        opacity=opacity
-                    ).add_to(map_obj)
-                route_segment = []
+                if len(current_segment) > 1:
+                    route_segments.append(current_segment)
+                current_segment = []
             else:
                 # 提取点的前两个元素（纬度和经度），忽略海拔数据
                 lat_lon_point = point[:2] if len(point) >= 2 else point
-                route_segment.append(lat_lon_point)
+                current_segment.append(lat_lon_point)
 
         # 添加最后一段路线
-        if len(route_segment) > 1:
-            folium.PolyLine(
-                locations=route_segment,
-                color=color,
-                weight=weight,
-                opacity=opacity
-            ).add_to(map_obj)
+        if len(current_segment) > 1:
+            route_segments.append(current_segment)
+        
+        # 批量添加所有路线段
+        if route_segments:
+            # 如果只有一段路线，直接添加
+            if len(route_segments) == 1:
+                folium.PolyLine(
+                    locations=route_segments[0],
+                    color=color,
+                    weight=weight,
+                    opacity=opacity,
+                    smooth_factor=1.0  # 启用平滑因子
+                ).add_to(map_obj)
+            else:
+                # 多段路线，使用FeatureGroup批量添加
+                route_group = folium.FeatureGroup(name="route")
+                for segment in route_segments:
+                    folium.PolyLine(
+                        locations=segment,
+                        color=color,
+                        weight=weight,
+                        opacity=opacity,
+                        smooth_factor=1.0
+                    ).add_to(route_group)
+                route_group.add_to(map_obj)
 
     @staticmethod
     def save_and_get_url(map_obj, use_http_server=True):

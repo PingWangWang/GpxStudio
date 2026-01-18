@@ -331,8 +331,26 @@ class MapManager:
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
 
-        # 添加路线到地图
-        MapRenderer.add_route(m, self.data_manager.route_points)
+        # 添加路线到地图（使用配置的优化设置）
+        # 计算最优缩放级别
+        from modules.map.route_optimizer import RouteOptimizer
+        
+        valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
+        optimal_zoom = None
+        if map_config.is_auto_zoom_calculation_enabled():
+            optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
+        
+        # 记录优化信息
+        original_count = len([p for p in self.data_manager.route_points if p is not None])
+        self.logger.info(f"[路线渲染] 原始路线点数: {original_count}")
+        if optimal_zoom:
+            self.logger.info(f"[路线渲染] 建议缩放级别: {optimal_zoom}")
+        
+        MapRenderer.add_route(
+            m, 
+            self.data_manager.route_points, 
+            zoom_level=optimal_zoom
+        )
 
         # 调整地图边界以显示完整路线
         MapRenderer.fit_bounds(m, combined_coords)

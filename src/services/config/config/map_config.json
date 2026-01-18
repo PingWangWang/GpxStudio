@@ -1,5 +1,10 @@
 {
   "map_source": "osm",
   "api_key": "",
-  "security_key": ""
+  "security_key": "",
+  "route_optimization": {
+    "enabled": true,
+    "max_points_per_segment": 500,
+    "auto_zoom_calculation": true
+  }
 }
