@@ -5,7 +5,7 @@ SVG动画按钮组件
 
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QTimer
-from PyQt5.QtGui import QPainter, QColor, QTransform, QPen, QBrush
+from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
 from PyQt5.QtSvg import QSvgRenderer
 import os
 from core.resource_path import resource_path
@@ -169,34 +169,46 @@ class SvgAnimatedButton(QPushButton):
         
         # 绘制SVG图标
         if self._svg_renderer and self._svg_renderer.isValid():
-            # 先计算SVG绘制区域（在变换前）
+            # 计算SVG绘制区域，确保居中
             margin = 6
-            svg_rect = rect.adjusted(margin, margin, -margin, -margin)
+            size = min(rect.width(), rect.height()) - 2 * margin
             
-            # 然后应用旋转变换
-            center = rect.center()
+            # 计算居中位置
+            center_x = rect.center().x()
+            center_y = rect.center().y()
             
-            transform = QTransform()
-            transform.translate(center.x(), center.y())
-            transform.rotate(self._rotation)
-            transform.translate(-center.x(), -center.y())
-            painter.setTransform(transform)
+            svg_rect = rect.__class__(
+                center_x - size // 2,
+                center_y - size // 2,
+                size,
+                size
+            )
             
-            # 渲染SVG（转换为QRectF）
+            # 如果有旋转，应用变换
+            if self._rotation != 0:
+                painter.save()
+                painter.translate(center_x, center_y)
+                painter.rotate(self._rotation)
+                painter.translate(-center_x, -center_y)
+            
+            # 渲染SVG
             from PyQt5.QtCore import QRectF
             svg_rectf = QRectF(svg_rect)
             self._svg_renderer.render(painter, svg_rectf)
+            
+            # 恢复变换状态
+            if self._rotation != 0:
+                painter.restore()
         else:
             # 备用：绘制Unicode齿轮字符
-            painter.resetTransform()
-            
-            # 应用旋转变换
             center = rect.center()
-            transform = QTransform()
-            transform.translate(center.x(), center.y())
-            transform.rotate(self._rotation)
-            transform.translate(-center.x(), -center.y())
-            painter.setTransform(transform)
+            
+            # 如果有旋转，应用变换
+            if self._rotation != 0:
+                painter.save()
+                painter.translate(center.x(), center.y())
+                painter.rotate(self._rotation)
+                painter.translate(-center.x(), -center.y())
             
             # 设置文字颜色
             color = QColor(102, 102, 102)
@@ -214,6 +226,10 @@ class SvgAnimatedButton(QPushButton):
             
             text_rect = rect.adjusted(0, -1, 0, -1)
             painter.drawText(text_rect, Qt.AlignCenter, "⚙")
+            
+            # 恢复变换状态
+            if self._rotation != 0:
+                painter.restore()
 
 
 class LucideSvgButton(SvgAnimatedButton):
@@ -262,24 +278,36 @@ class LucideSvgButton(SvgAnimatedButton):
         
         # 绘制SVG图标
         if self._svg_renderer and self._svg_renderer.isValid():
-            # 先计算SVG绘制区域（在变换前）
+            # 计算SVG绘制区域，确保居中
             margin = 6
-            svg_rect = rect.adjusted(margin, margin, -margin, -margin)
+            size = min(rect.width(), rect.height()) - 2 * margin
             
-            # 然后应用旋转变换
-            center = rect.center()
+            # 计算居中位置
+            center_x = rect.center().x()
+            center_y = rect.center().y()
             
-            transform = QTransform()
-            transform.translate(center.x(), center.y())
-            transform.rotate(self._rotation)
-            transform.translate(-center.x(), -center.y())
-            painter.setTransform(transform)
+            svg_rect = rect.__class__(
+                center_x - size // 2,
+                center_y - size // 2,
+                size,
+                size
+            )
             
-            # 设置SVG颜色（通过currentColor）
-            # 注意：这里需要修改SVG的stroke颜色
+            # 如果有旋转，应用变换
+            if self._rotation != 0:
+                painter.save()
+                painter.translate(center_x, center_y)
+                painter.rotate(self._rotation)
+                painter.translate(-center_x, -center_y)
+            
+            # 渲染SVG
             from PyQt5.QtCore import QRectF
             svg_rectf = QRectF(svg_rect)
             self._svg_renderer.render(painter, svg_rectf)
+            
+            # 恢复变换状态
+            if self._rotation != 0:
+                painter.restore()
         else:
             # 备用方案
             super().paintEvent(event)
