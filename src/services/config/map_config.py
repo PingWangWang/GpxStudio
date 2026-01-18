@@ -27,24 +27,82 @@ class MapConfig(IConfigService):
         self._config_data = {}
         self._load_config()
 
+    def _ensure_complete_config(self):
+        """确保配置文件包含所有必要的配置项"""
+        config_updated = False
+        
+        # 检查并添加缺失的路线优化配置
+        if 'route_optimization' not in self._config_data:
+            self._config_data['route_optimization'] = {
+                'enabled': True,
+                'max_points_per_segment': 500,
+                'auto_zoom_calculation': True
+            }
+            config_updated = True
+            print("[地图配置] 添加缺失的路线优化配置")
+        else:
+            # 检查路线优化子配置项
+            route_opt = self._config_data['route_optimization']
+            if 'enabled' not in route_opt:
+                route_opt['enabled'] = True
+                config_updated = True
+            if 'max_points_per_segment' not in route_opt:
+                route_opt['max_points_per_segment'] = 500
+                config_updated = True
+            if 'auto_zoom_calculation' not in route_opt:
+                route_opt['auto_zoom_calculation'] = True
+                config_updated = True
+        
+        # 如果配置有更新，保存到文件
+        if config_updated:
+            try:
+                config_file = self._get_config_path()
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump(self._config_data, f, ensure_ascii=False, indent=2)
+                print("[地图配置] ✅ 已更新运行时配置文件，添加缺失配置项")
+            except Exception as e:
+                print(f"[地图配置] ❌ 保存配置失败: {e}")
+
     def _load_config(self):
-        """从配置文件加载配置"""
+        """从运行时配置文件加载配置（仅使用用户配置）"""
         try:
             config_file = self._get_config_path()
+            print(f"[地图配置] 配置文件路径: {config_file}")
+            
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     try:
                         self._config_data = json.load(f)
-                    except json.JSONDecodeError:
-                        # 如果JSON解析失败，使用默认配置
+                        print(f"[地图配置] ✅ 成功加载运行时配置")
+                    except json.JSONDecodeError as e:
+                        print(f"[地图配置] ❌ JSON解析失败: {e}")
                         self._config_data = {}
+                    
+                    # 更新实例属性
                     self.map_source = self._config_data.get('map_source', '')
                     self.api_key = self._config_data.get('api_key', '')
                     self.security_key = self._config_data.get('security_key', '')
                     self.is_configured = True
-        except Exception:
+                    
+                    print(f"[地图配置] 当前配置 - 地图源: {self.map_source}, API配置: {'已配置' if self.api_key else '未配置'}")
+            else:
+                print(f"[地图配置] ⚠ 运行时配置文件不存在，使用空配置")
+                self._config_data = {}
+                self.map_source = ""
+                self.api_key = ""
+                self.security_key = ""
+                self.is_configured = False
+                
+        except Exception as e:
+            print(f"[地图配置] ❌ 加载配置失败: {e}")
             self._config_data = {}
+            self.map_source = ""
+            self.api_key = ""
+            self.security_key = ""
             self.is_configured = False
+        
+        # 确保配置文件包含所有必要的配置项
+        self._ensure_complete_config()
 
     def load_config(self) -> Dict[str, Any]:
         """加载配置"""
@@ -102,7 +160,7 @@ class MapConfig(IConfigService):
     def is_route_optimization_enabled(self) -> bool:
         """检查是否启用路线优化"""
         route_opt = self._config_data.get('route_optimization', {})
-        return route_opt.get('enabled', True)  # 默认启用
+        return route_opt.get('enabled', True)  # 默认启用（会通过_ensure_complete_config自动添加）
 
     def get_max_points_per_segment(self) -> int:
         """获取每段路线的最大点数"""
@@ -112,7 +170,7 @@ class MapConfig(IConfigService):
     def is_auto_zoom_calculation_enabled(self) -> bool:
         """检查是否启用自动缩放级别计算"""
         route_opt = self._config_data.get('route_optimization', {})
-        return route_opt.get('auto_zoom_calculation', True)
+        return route_opt.get('auto_zoom_calculation', True)  # 默认启用（会通过_ensure_complete_config自动添加）
 
     def set_route_optimization_enabled(self, enabled: bool) -> bool:
         """设置路线优化开关"""

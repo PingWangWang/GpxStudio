@@ -1,4 +1,7 @@
 {
+  "_comment": "这是配置模板文件，仅供参考。程序运行时使用 dist/GPXStudioData/config/map_config.json",
+  "_template_version": "1.0",
+  "_description": "默认配置模板，包含所有可用的配置选项和默认值",
   "map_source": "osm",
   "api_key": "",
   "security_key": "",

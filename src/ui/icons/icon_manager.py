@@ -20,6 +20,7 @@ class IconManager:
         """注册默认图标"""
         # 基础图标
         self.register_icon('MapSetting', 'res/icons/MapSetting.svg', '地图设置')
+        self.register_icon('RouteSetting', 'res/icons/RouteSetting.svg', '路线设置')
         
         # 可以继续添加更多图标
         # self.register_icon('user', 'res/icons/user.svg', '用户')

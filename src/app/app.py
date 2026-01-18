@@ -453,6 +453,12 @@ class GpxStudio(QMainWindow):
         self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
         right_buttons_layout.addWidget(self.map_settings_button)
 
+        # 创建路线设置按钮（第二个位置）
+        self.route_settings_button = create_icon_button('RouteSetting', '路线设置')
+        self.route_settings_button.clicked.connect(self.on_route_settings_clicked)
+        self.route_settings_button.setFixedSize(control_height, control_height)
+        right_buttons_layout.addWidget(self.route_settings_button)
+
         # 创建日志设置按钮
         self.log_settings_button = QPushButton()
         self.log_settings_button.setToolTip("日志设置")
@@ -719,11 +725,16 @@ class GpxStudio(QMainWindow):
         self.current_search_text = ""
 
         # 创建设置弹出面板
-        from ui.popups import MapSettingsPopup, LogSettingsPopup, AboutPopup
+        from ui.popups import MapSettingsPopup, LogSettingsPopup, AboutPopup, RouteSettingsPopup
         self.map_settings_popup = MapSettingsPopup(map_container)
         self.map_settings_popup.config_saved.connect(self._on_map_config_saved)
         self.map_settings_popup.closed.connect(self._on_map_settings_popup_closed)
         self.map_settings_popup.hide()
+
+        self.route_settings_popup = RouteSettingsPopup(map_container)
+        self.route_settings_popup.config_saved.connect(self._on_route_config_saved)
+        self.route_settings_popup.closed.connect(self._on_route_settings_popup_closed)
+        self.route_settings_popup.hide()
 
         self.log_settings_popup = LogSettingsPopup(map_container)
         self.log_settings_popup.hide()
@@ -1584,6 +1595,8 @@ class GpxStudio(QMainWindow):
         self.logger.info("[设置] 打开地图设置面板")
 
         # 隐藏其他popup
+        if hasattr(self, 'route_settings_popup'):
+            self.route_settings_popup.hide()
         if hasattr(self, 'log_settings_popup'):
             self.log_settings_popup.hide()
         if hasattr(self, 'about_popup'):
@@ -1604,6 +1617,8 @@ class GpxStudio(QMainWindow):
         # 隐藏其他popup
         if hasattr(self, 'map_settings_popup'):
             self.map_settings_popup.hide()
+        if hasattr(self, 'route_settings_popup'):
+            self.route_settings_popup.hide()
         if hasattr(self, 'about_popup'):
             self.about_popup.hide()
 
@@ -1618,6 +1633,8 @@ class GpxStudio(QMainWindow):
         # 隐藏其他popup
         if hasattr(self, 'map_settings_popup'):
             self.map_settings_popup.hide()
+        if hasattr(self, 'route_settings_popup'):
+            self.route_settings_popup.hide()
         if hasattr(self, 'log_settings_popup'):
             self.log_settings_popup.hide()
 
@@ -1651,6 +1668,47 @@ class GpxStudio(QMainWindow):
         # 停止齿轮动画
         if hasattr(self.map_settings_button, 'stop_animation'):
             self.map_settings_button.stop_animation()
+
+    def on_route_settings_clicked(self):
+        """路线设置按钮点击"""
+        self.logger.info("[设置] 打开路线设置面板")
+
+        # 隐藏其他popup
+        if hasattr(self, 'map_settings_popup'):
+            self.map_settings_popup.hide()
+        if hasattr(self, 'log_settings_popup'):
+            self.log_settings_popup.hide()
+        if hasattr(self, 'about_popup'):
+            self.about_popup.hide()
+
+        # 显示路线设置popup
+        if hasattr(self, 'route_settings_popup'):
+            # 开始滑块动画
+            if hasattr(self.route_settings_button, 'start_animation'):
+                self.route_settings_button.start_animation()
+            
+            self.route_settings_popup.show_popup(self.route_settings_button)
+
+    def _on_route_config_saved(self):
+        """路线配置保存后的处理"""
+        self.logger.info("[设置] 路线配置已保存")
+
+        # 停止滑块动画
+        if hasattr(self.route_settings_button, 'stop_animation'):
+            self.route_settings_button.stop_animation()
+
+        # 重新加载配置
+        map_config._load_config()
+
+    def _on_route_settings_popup_closed(self):
+        """路线设置弹出面板关闭时的处理"""
+        # 检查logger是否已初始化
+        if hasattr(self, 'logger'):
+            self.logger.debug("[设置] 路线设置面板已关闭")
+        
+        # 停止滑块动画
+        if hasattr(self.route_settings_button, 'stop_animation'):
+            self.route_settings_button.stop_animation()
 
     def on_plan_route_clicked(self):
         """规划路线按钮点击"""

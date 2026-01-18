@@ -939,3 +939,300 @@ class AboutPopup(BaseSettingsPopup):
         """
 
         return html
+
+
+class RouteSettingsPopup(BaseSettingsPopup):
+    """路线设置弹出面板"""
+
+    config_saved = pyqtSignal()  # 配置保存信号
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(380)
+        self._init_ui()
+        self.load_current_config()
+
+    def _init_ui(self):
+        """初始化UI"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
+
+        # 标题栏
+        title_layout = QHBoxLayout()
+        title_label = QLabel("路线设置")
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 9pt;
+                font-weight: bold;
+                color: #333333;
+                font-family: 'Microsoft YaHei';
+            }
+        """)
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+
+        # 关闭按钮
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 9pt;
+                color: #666666;
+                border-radius: 14px;
+            }
+            QPushButton:hover {
+                color: #333333;
+                background-color: #f0f0f0;
+            }
+        """)
+        close_btn.clicked.connect(self.hide)
+        title_layout.addWidget(close_btn)
+
+        main_layout.addLayout(title_layout)
+
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background-color: #dee2e6; margin: 5px 0;")
+        main_layout.addWidget(line)
+
+        # 路线优化设置说明
+        info_label = QLabel()
+        info_label.setTextFormat(Qt.RichText)
+        info_label.setText("""
+        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px;">
+            <p style="margin: 0; color: #333;">路线渲染优化可以减少显示的路线点数，提高地图性能。</p>
+            <p style="margin: 5px 0 0 0; color: #666;">当路线包含大量GPS点时，建议启用优化功能。</p>
+        </div>
+        """)
+        info_label.setWordWrap(True)
+        main_layout.addWidget(info_label)
+
+        # 配置表单
+        config_layout = QVBoxLayout()
+        config_layout.setSpacing(18)
+
+        # 启用路线优化
+        enable_row = QHBoxLayout()
+        enable_label = QLabel("启用路线优化:")
+        enable_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        enable_label.setFixedWidth(120)
+        enable_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        enable_row.addWidget(enable_label)
+        enable_row.addSpacing(10)
+
+        self.enable_combo = QComboBox()
+        self.enable_combo.addItem("启用", True)
+        self.enable_combo.addItem("禁用", False)
+        self.enable_combo.setMinimumHeight(40)
+        self.enable_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+            }
+            QComboBox:focus {
+                border-color: #007bff;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                selection-background-color: #007bff;
+                selection-color: white;
+                font-size: 9pt;
+            }
+        """)
+        enable_row.addWidget(self.enable_combo)
+        config_layout.addLayout(enable_row)
+
+        # 最大点数设置
+        max_points_row = QHBoxLayout()
+        max_points_label = QLabel("最大点数限制:")
+        max_points_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        max_points_label.setFixedWidth(120)
+        max_points_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        max_points_row.addWidget(max_points_label)
+        max_points_row.addSpacing(10)
+
+        self.max_points_edit = QLineEdit()
+        self.max_points_edit.setPlaceholderText("例如: 500")
+        self.max_points_edit.setMinimumHeight(40)
+        self.max_points_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 8px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+            }
+        """)
+        max_points_row.addWidget(self.max_points_edit)
+        config_layout.addLayout(max_points_row)
+
+        # 自动缩放计算
+        auto_zoom_row = QHBoxLayout()
+        auto_zoom_label = QLabel("自动缩放计算:")
+        auto_zoom_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
+        auto_zoom_label.setFixedWidth(120)
+        auto_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        auto_zoom_row.addWidget(auto_zoom_label)
+        auto_zoom_row.addSpacing(10)
+
+        self.auto_zoom_combo = QComboBox()
+        self.auto_zoom_combo.addItem("启用", True)
+        self.auto_zoom_combo.addItem("禁用", False)
+        self.auto_zoom_combo.setMinimumHeight(40)
+        self.auto_zoom_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 9pt;
+                font-family: 'Microsoft YaHei';
+            }
+            QComboBox:focus {
+                border-color: #007bff;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #e1e5e9;
+                border-radius: 6px;
+                background-color: white;
+                selection-background-color: #007bff;
+                selection-color: white;
+                font-size: 9pt;
+            }
+        """)
+        auto_zoom_row.addWidget(self.auto_zoom_combo)
+        config_layout.addLayout(auto_zoom_row)
+
+        main_layout.addLayout(config_layout)
+
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch(1)
+
+        self.reset_btn = QPushButton("重置默认")
+        self.reset_btn.clicked.connect(self.reset_to_defaults)
+        self.reset_btn.setMinimumWidth(100)
+        self.reset_btn.setMinimumHeight(40)
+        self.reset_btn.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 9pt;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei';
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        btn_layout.addWidget(self.reset_btn)
+
+        self.save_btn = QPushButton("保存")
+        self.save_btn.clicked.connect(self.save_config)
+        self.save_btn.setMinimumWidth(100)
+        self.save_btn.setMinimumHeight(40)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 9pt;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei';
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        btn_layout.addWidget(self.save_btn)
+
+        btn_layout.addStretch(1)
+        main_layout.addLayout(btn_layout)
+
+    def load_current_config(self):
+        """加载当前配置"""
+        # 启用状态
+        enabled = map_config.is_route_optimization_enabled()
+        self.enable_combo.setCurrentIndex(0 if enabled else 1)
+
+        # 最大点数
+        max_points = map_config.get_max_points_per_segment()
+        self.max_points_edit.setText(str(max_points))
+
+        # 自动缩放计算
+        auto_zoom = map_config.is_auto_zoom_calculation_enabled()
+        self.auto_zoom_combo.setCurrentIndex(0 if auto_zoom else 1)
+
+    def reset_to_defaults(self):
+        """重置为默认值"""
+        self.enable_combo.setCurrentIndex(0)  # 启用
+        self.max_points_edit.setText("500")   # 默认500点
+        self.auto_zoom_combo.setCurrentIndex(0)  # 启用
+
+    def save_config(self):
+        """保存配置"""
+        try:
+            # 获取配置值
+            enabled = self.enable_combo.currentData()
+            max_points_text = self.max_points_edit.text().strip()
+            auto_zoom = self.auto_zoom_combo.currentData()
+
+            # 验证最大点数
+            if not max_points_text:
+                QMessageBox.warning(self, "警告", "请输入最大点数限制")
+                return
+
+            try:
+                max_points = int(max_points_text)
+                if max_points <= 0:
+                    QMessageBox.warning(self, "警告", "最大点数必须大于0")
+                    return
+            except ValueError:
+                QMessageBox.warning(self, "警告", "最大点数必须是有效的数字")
+                return
+
+            # 保存配置
+            success = True
+            success &= map_config.set_route_optimization_enabled(enabled)
+            success &= map_config.set_max_points_per_segment(max_points)
+            
+            # 保存自动缩放设置（需要添加到map_config中）
+            if 'route_optimization' not in map_config._config_data:
+                map_config._config_data['route_optimization'] = {}
+            map_config._config_data['route_optimization']['auto_zoom_calculation'] = auto_zoom
+            success &= map_config.save_config(map_config._config_data)
+
+            if success:
+                self.config_saved.emit()
+                QMessageBox.information(self, "成功", "路线设置已保存")
+                self.hide()
+            else:
+                QMessageBox.critical(self, "错误", "保存配置失败")
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存配置时发生错误: {str(e)}")
+
+    def hide(self):
+        """隐藏弹出面板并发出关闭信号"""
+        super().hide()
+        self.closed.emit()
