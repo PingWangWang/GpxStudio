@@ -25,16 +25,16 @@ class CustomDateTimePicker(QWidget):
         # 设置焦点策略以接收键盘事件
         self.setFocusPolicy(Qt.StrongFocus)
         
-        # 设置样式
+        # 设置样式 - 与GPX导出面板保持一致
         self.setStyleSheet("""
             QWidget {
-                background-color: white;
+                background-color: #4A90E2;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QCalendarWidget {
-                background-color: white;
-                border: 1px solid #e0e0e0;
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 4px;
             }
             QCalendarWidget QToolButton {
@@ -45,7 +45,7 @@ class CustomDateTimePicker(QWidget):
                 padding: 4px;
             }
             QCalendarWidget QToolButton:hover {
-                background-color: #f0f0f0;
+                background-color: rgba(74, 144, 226, 0.1);
                 border-radius: 2px;
             }
             QCalendarWidget QMenu {
@@ -67,28 +67,33 @@ class CustomDateTimePicker(QWidget):
                 selection-color: white;
             }
             QListWidget {
-                background-color: white;
-                border: 1px solid #e0e0e0;
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 4px;
                 color: #333333;
                 font-size: 13px;
             }
             QListWidget::item {
                 padding: 8px 12px;
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+                color: #333333;
             }
             QListWidget::item:hover {
-                background-color: #f8f9fa;
+                background-color: rgba(74, 144, 226, 0.1);
+                color: #333333;
             }
             QListWidget::item:selected {
                 background-color: #4A90E2;
                 color: white;
             }
             QLabel {
-                color: #333333;
+                color: white;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 4px 0px;
+            }
+            QFrame {
+                color: rgba(255, 255, 255, 0.3);
             }
         """)
         
@@ -100,11 +105,7 @@ class CustomDateTimePicker(QWidget):
         left_container = QWidget()
         left_layout = QVBoxLayout(left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(4)
-        
-        # 日历标题
-        calendar_label = QLabel("选择日期")
-        left_layout.addWidget(calendar_label)
+        left_layout.setSpacing(0)
         
         # 日历控件
         self.calendar = QCalendarWidget()
@@ -124,18 +125,14 @@ class CustomDateTimePicker(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("QFrame { color: #e0e0e0; }")
+        separator.setStyleSheet("QFrame { color: rgba(255, 255, 255, 0.3); }")
         layout.addWidget(separator)
         
         # 右侧：时间选择
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(4)
-        
-        # 时间标题
-        time_label = QLabel("选择时间")
-        right_layout.addWidget(time_label)
+        right_layout.setSpacing(0)
         
         # 时间列表
         self.time_list = QListWidget()

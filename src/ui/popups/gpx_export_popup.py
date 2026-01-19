@@ -233,12 +233,17 @@ class GpxExportPopup(QWidget):
             self.picker_popup.hide()
             return
         
-        # 创建弹出窗口
-        self.picker_popup = QFrame()
-        self.picker_popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
+        # 创建弹出面板 - 使用QWidget作为独立窗口，确保没有标题栏且不被裁剪
+        from PyQt5.QtWidgets import QWidget
+        # 创建为独立窗口，这样就不会被GPX导出面板的边界裁剪
+        self.picker_popup = QWidget()
+        # 使用FramelessWindowHint确保没有标题栏
+        self.picker_popup.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        # 确保窗口标题为空，避免显示默认标题
+        self.picker_popup.setWindowTitle("")
         self.picker_popup.setStyleSheet("""
-            QFrame {
-                background-color: white;
+            QWidget {
+                background-color: #4A90E2;
                 border: 1px solid rgba(0, 0, 0, 0.15);
                 border-radius: 6px;
             }
@@ -246,9 +251,6 @@ class GpxExportPopup(QWidget):
         
         # 设置焦点策略以接收键盘事件
         self.picker_popup.setFocusPolicy(Qt.StrongFocus)
-        
-        # 设置父窗口，确保层级关系正确
-        self.picker_popup.setParent(self, Qt.Tool)
         
         # 重写键盘事件处理
         def keyPressEvent(event):
@@ -260,7 +262,7 @@ class GpxExportPopup(QWidget):
                 print("[日期时间设置] 焦点返回给GPX导出面板")
                 event.accept()
             else:
-                QFrame.keyPressEvent(self.picker_popup, event)
+                QWidget.keyPressEvent(self.picker_popup, event)
         
         self.picker_popup.keyPressEvent = keyPressEvent
         
@@ -299,7 +301,10 @@ class GpxExportPopup(QWidget):
         if popup_y + 250 > screen.bottom():  # 估算弹出面板高度
             popup_y = button_global_pos.y() - 255  # 显示在按钮上方
         
-        self.picker_popup.move(popup_x, popup_y)
+        # 直接使用全局坐标，因为picker_popup现在是一个独立窗口
+        from PyQt5.QtCore import QPoint
+        global_pos = QPoint(popup_x, popup_y)
+        self.picker_popup.move(global_pos)
         
         # 调整大小并显示
         self.picker_popup.adjustSize()
