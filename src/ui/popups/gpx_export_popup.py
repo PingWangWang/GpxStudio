@@ -22,7 +22,7 @@ class GpxExportPopup(QWidget):
         self._init_ui()
         
         # 设置窗口标志 - 使用Tool而不是ToolTip，避免自动关闭
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)  # 不透明背景
         
         # 设置焦点策略以接收键盘事件
@@ -235,7 +235,7 @@ class GpxExportPopup(QWidget):
         
         # 创建弹出窗口
         self.picker_popup = QFrame()
-        self.picker_popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.picker_popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.picker_popup.setStyleSheet("""
             QFrame {
                 background-color: white;
