@@ -2870,7 +2870,7 @@ class GpxStudio(QMainWindow):
         # 调用路线管理器选择路线方案
         self.route_manager.select_route_alternative(index)
 
-    def _on_export_gpx_clicked(self, route_data: dict):
+    def _on_export_gpx_clicked(self, route_data: dict, button=None, item=None):
         """导出GPX按钮点击"""
         self.logger.info(f"[GPX导出] 用户点击导出GPX按钮")
         
@@ -2890,8 +2890,36 @@ class GpxStudio(QMainWindow):
             # 注册弹出面板到管理系统
             self._register_popup(self.gpx_export_popup)
             
-            # 计算弹出位置（在路线面板右侧）
-            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            # 计算弹出位置（与按钮所在条目顶部对齐）
+            if item and button:
+                # 获取条目在屏幕上的位置
+                item_global_pos = item.mapToGlobal(item.rect().topLeft())
+                
+                # 获取路线面板在屏幕上的位置，用于计算水平位置
+                if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                    panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
+                    panel_rect = self.route_plan_panel.rect()
+                    
+                    # 在面板右侧显示，与条目顶部对齐
+                    popup_x = panel_global_pos.x() + panel_rect.width() + 10
+                    popup_y = item_global_pos.y()
+                    
+                    # 确保不超出屏幕边界
+                    from PyQt5.QtWidgets import QApplication
+                    screen = QApplication.primaryScreen().geometry()
+                    
+                    if popup_x + self.gpx_export_popup.width() > screen.right():
+                        # 如果右侧空间不够，显示在左侧
+                        popup_x = panel_global_pos.x() - self.gpx_export_popup.width() - 10
+                    
+                    if popup_y + 200 > screen.bottom():  # 估算弹出面板高度
+                        popup_y = screen.bottom() - 250
+                    
+                    from PyQt5.QtCore import QPoint
+                    popup_pos = QPoint(popup_x, popup_y)
+                    self.gpx_export_popup.show_at_position(popup_pos)
+            elif hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                # 兼容旧逻辑：如果没有位置信息，使用默认位置
                 # 获取路线面板在屏幕上的位置
                 panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
                 panel_rect = self.route_plan_panel.rect()
@@ -3002,7 +3030,7 @@ class GpxStudio(QMainWindow):
             self.logger.error(f"[GPX导出] 导出过程中发生错误: {e}")
             self._show_warning("导出失败", f"导出过程中发生错误: {str(e)}")
 
-    def _on_history_export_gpx_clicked(self, history_data: dict):
+    def _on_history_export_gpx_clicked(self, history_data: dict, button=None, item=None):
         """历史记录导出GPX按钮点击"""
         self.logger.info(f"[GPX导出] 用户点击历史记录导出GPX按钮")
         
@@ -3019,7 +3047,7 @@ class GpxStudio(QMainWindow):
                     'duration': history_data.get('duration', 0),
                     'route_points': route_points
                 }
-                self._show_gpx_export_popup(route_data)
+                self._show_gpx_export_popup(route_data, button, item)
             else:
                 # 没有完整路线数据，需要重新规划路线
                 self.logger.info(f"[GPX导出] 历史记录没有完整路线数据，需要重新规划路线")
@@ -3039,7 +3067,7 @@ class GpxStudio(QMainWindow):
             self.logger.error(f"[GPX导出] 处理历史记录导出时出错: {str(e)}")
             self._show_warning("导出失败", f"处理导出请求时发生错误: {str(e)}")
 
-    def _show_gpx_export_popup(self, route_data: dict):
+    def _show_gpx_export_popup(self, route_data: dict, button=None, item=None):
         """显示GPX导出弹出面板"""
         try:
             # 导入弹出面板
@@ -3057,8 +3085,49 @@ class GpxStudio(QMainWindow):
             # 注册弹出面板到管理系统
             self._register_popup(self.gpx_export_popup)
             
-            # 计算弹出位置（在路线面板右侧）
-            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            # 计算弹出位置
+            popup_x = 0
+            popup_y = 0
+            
+            if item and button:
+                # 如果有位置信息，使用条目顶部对齐，与路线面板右侧保持1-2像素间隙
+                # 获取条目在屏幕上的位置
+                item_global_pos = item.mapToGlobal(item.rect().topLeft())
+                
+                # 获取路线规划面板在屏幕上的位置
+                if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                    panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
+                    panel_rect = self.route_plan_panel.rect()
+                    
+                    # 面板顶部与条目顶部对齐
+                    popup_y = item_global_pos.y()
+                    # 面板左侧与路线面板右侧保持1-2像素间隙
+                    popup_x = panel_global_pos.x() + panel_rect.width() + 2
+                    
+                    # 确保不超出屏幕边界
+                    from PyQt5.QtWidgets import QApplication
+                    screen = QApplication.primaryScreen().geometry()
+                    
+                    if popup_x + self.gpx_export_popup.width() > screen.right():
+                        # 如果右侧空间不够，显示在路线面板左侧
+                        popup_x = panel_global_pos.x() - self.gpx_export_popup.width() - 10
+                    
+                    if popup_y + 200 > screen.bottom():  # 估算弹出面板高度
+                        popup_y = screen.bottom() - 250
+                    
+                    from PyQt5.QtCore import QPoint
+                    popup_pos = QPoint(popup_x, popup_y)
+                    self.gpx_export_popup.show_at_position(popup_pos)
+                else:
+                    # 如果路线面板不可见，使用默认位置
+                    from PyQt5.QtWidgets import QApplication
+                    from PyQt5.QtCore import QPoint
+                    screen = QApplication.primaryScreen().geometry()
+                    center_x = screen.center().x() - self.gpx_export_popup.width() // 2
+                    center_y = screen.center().y() - 100
+                    self.gpx_export_popup.show_at_position(QPoint(center_x, center_y))
+            elif hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                # 否则使用默认位置（在路线面板右侧）
                 # 获取路线面板在屏幕上的位置
                 panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
                 panel_rect = self.route_plan_panel.rect()

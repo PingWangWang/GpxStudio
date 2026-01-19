@@ -14,7 +14,7 @@ import os
 class RouteHistoryItem(QWidget):
     """路线历史记录列表项"""
 
-    export_gpx_clicked = pyqtSignal(dict)  # 导出GPX按钮点击信号
+    export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
 
     def __init__(self, history_data: dict, parent=None):
         super().__init__(parent)
@@ -92,7 +92,7 @@ class RouteHistoryItem(QWidget):
                 opacity: 0.5;
             }
         """)
-        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.history_data))
+        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.history_data, self.export_button, self))
         # 初始状态为禁用
         self.export_button.setEnabled(False)
         layout.addWidget(self.export_button, 0, Qt.AlignVCenter)
@@ -168,7 +168,7 @@ class RouteHistoryItem(QWidget):
 class RouteAlternativeItem(QWidget):
     """路线待选列表项"""
 
-    export_gpx_clicked = pyqtSignal(dict)  # 导出GPX按钮点击信号
+    export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击信号：(路线数据, 按钮实例, 条目实例)
 
     def __init__(self, route_data: dict, index: int, is_selected: bool = False, parent=None):
         super().__init__(parent)
@@ -250,7 +250,7 @@ class RouteAlternativeItem(QWidget):
                 border: 1px solid rgba(255, 255, 255, 0.7);
             }
         """)
-        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.route_data))
+        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.route_data, self.export_button, self))
         # 添加到布局时设置垂直居中对齐
         first_row.addWidget(self.export_button, 0, Qt.AlignVCenter)
 
@@ -436,8 +436,8 @@ class RoutePlanPanel(QWidget):
     address_selected = pyqtSignal(dict, str, bool)  # 地址选中：(地址数据, 类型: start/end/waypoint, 是否缩放地图)
     clear_route_clicked = pyqtSignal()  # 清除路线按钮点击
     route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
-    export_gpx_clicked = pyqtSignal(dict)  # 导出GPX按钮点击：(路线数据)
-    history_export_gpx_clicked = pyqtSignal(dict)  # 历史记录导出GPX按钮点击：(历史记录数据)
+    export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击：(路线数据, 按钮实例, 条目实例)
+    history_export_gpx_clicked = pyqtSignal(dict, object, object)  # 历史记录导出GPX按钮点击：(历史记录数据, 按钮实例, 条目实例)
 
     def __init__(self, parent=None):
         """初始化路线规划面板"""
