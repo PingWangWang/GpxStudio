@@ -5,7 +5,7 @@
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QCalendarWidget, 
                              QListWidget, QListWidgetItem, QLabel, QFrame)
-from PyQt5.QtCore import Qt, QDate, QTime, QDateTime, pyqtSignal
+from PyQt5.QtCore import Qt, QDate, QTime, QDateTime, pyqtSignal, QLocale
 from PyQt5.QtGui import QFont
 
 
@@ -112,11 +112,13 @@ class CustomDateTimePicker(QWidget):
         self.calendar.setSelectedDate(self.current_date)
         self.calendar.setGridVisible(True)
         self.calendar.setMinimumSize(280, 200)
+        # 设置日历头部格式 - 中文显示
+        self.calendar.setLocale(QLocale('zh_CN'))
         
-        # 连接日历信号 - 只响应双击
+        # 连接日历信号
         self.calendar.activated.connect(self._on_date_double_clicked)  # 双击
-        # 禁用单击选择
-        self.calendar.clicked.connect(lambda: None)  # 单击无响应
+        # 启用单击选择，更新current_date但不发送信号
+        self.calendar.clicked.connect(self._on_date_clicked)  # 单击
         
         left_layout.addWidget(self.calendar)
         layout.addWidget(left_container)
@@ -191,6 +193,11 @@ class CustomDateTimePicker(QWidget):
                 self.time_list.setCurrentRow(i)
                 self.current_time = target_time
                 break
+    
+    def _on_date_clicked(self, date):
+        """日历单击事件 - 只更新日期，不发送信号"""
+        self.current_date = date
+        print(f"[日期选择] 单击选择日期: {date.toString('yyyy-MM-dd')}")
     
     def _on_date_double_clicked(self, date):
         """日历双击事件"""
