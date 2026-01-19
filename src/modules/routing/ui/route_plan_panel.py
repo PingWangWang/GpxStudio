@@ -444,7 +444,7 @@ class RoutePlanPanel(QWidget):
         super().__init__(parent)
 
         # 设置窗口标志 - 使用Tool而不是Popup，避免自动关闭
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)  # 不透明背景
 
         # 设置焦点策略以接收键盘事件
