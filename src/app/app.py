@@ -34,7 +34,7 @@ from ui.styles import UIStyles
 from ui.panels.panel_factory import PanelFactory
 from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
-from ui.dialogs.map_context_menu import MapContextMenu
+from ui.popups.map_context_menu_popup import MapContextMenuPopup
 from ui.layout.layout_manager import LayoutManager
 
 # 导入常量
@@ -184,10 +184,13 @@ class GpxStudio(QMainWindow):
         self.init_ui()
 
         # 初始化地图右键菜单
-        self.map_context_menu = MapContextMenu(self)
-        self.map_context_menu.set_as_start.connect(self._on_context_menu_set_start)
-        self.map_context_menu.add_as_waypoint.connect(self._on_context_menu_add_waypoint)
-        self.map_context_menu.set_as_end.connect(self._on_context_menu_set_end)
+        self.map_context_menu = MapContextMenuPopup(self)
+        self.map_context_menu.set_as_start.connect(self._on_context_menu_set_start_new)
+        self.map_context_menu.set_as_via.connect(self._on_context_menu_add_waypoint_new)
+        self.map_context_menu.set_as_end.connect(self._on_context_menu_set_end_new)
+        self.map_context_menu.query_here.connect(self._on_context_menu_query_here)
+        self.map_context_menu.set_center.connect(self._on_context_menu_set_center)
+        self.map_context_menu.clear_route.connect(self._on_context_menu_clear_route)
 
         # 初始化搜索相关的弹出面板
         self._init_search_popups()
@@ -1824,89 +1827,16 @@ class GpxStudio(QMainWindow):
     def _on_map_right_click(self, lat: float, lon: float):
         """处理地图右键点击事件"""
         self.logger.info(f"[地图右键] 收到右键点击信号: {lat}, {lon}")
-
-        # 使用地理编码服务获取位置信息
-        self.logger.debug("[地图右键] 开始反向地理编码...")
-
-        # 创建后台任务获取位置信息
-        def get_location_info(progress_callback, log_callback, cancel_check):
-            """后台任务：获取位置信息"""
-            try:
-                log_callback("INFO", "开始获取位置信息")
-
-                map_source = map_config.get_map_source()
-
-                # 获取对应的地理编码服务
-                geocoding_service = self.service_manager.get_geocoding_service(map_source)
-
-                if map_source == "gaode":
-                    # 使用高德地理编码服务
-                    log_callback("DEBUG", "使用高德地图反向地理编码")
-                    result = geocoding_service.reverse_geocode(lat, lon)
-                    if result:
-                        # 高德地图返回格式：{'city': '...', 'full_address': '...', 'level': '...', 'type': '...'}
-                        name = result.get('full_address', '未知位置')
-                        type_info = result.get('type', '')
-                        level = result.get('level', None)
-
-                        log_callback("INFO", f"获取位置信息成功: {name}, level: {level}, type: {type_info}")
-                        return {
-                            'success': True,
-                            'name': name,
-                            'lat': lat,
-                            'lon': lon,
-                            'type': type_info,
-                            'level': level
-                        }
-                else:
-                    # 使用OSM地理编码服务
-                    log_callback("DEBUG", "使用OSM反向地理编码")
-                    result = geocoding_service.reverse_geocode(lat, lon)
-                    if result:
-                        # OSM返回格式：{'name': '...', 'address': '...', 'type': '...'}
-                        name = result.get('name', '未知位置')
-                        type_info = result.get('type', '')
-
-                        log_callback("INFO", f"获取位置信息成功: {name}")
-                        return {
-                            'success': True,
-                            'name': name,
-                            'lat': lat,
-                            'lon': lon,
-                            'type': type_info,
-                            'level': None
-                        }
-
-                # 如果获取失败，返回基本信息
-                log_callback("WARNING", "获取位置信息失败，使用坐标格式")
-                return {
-                    'success': False,
-                    'name': f'位置 ({lat:.6f}, {lon:.6f})',
-                    'lat': lat,
-                    'lon': lon,
-                    'type': '',
-                    'level': None
-                }
-
-            except Exception as e:
-                log_callback("ERROR", f"获取位置信息失败: {e}")
-                return {
-                    'success': False,
-                    'name': f'位置 ({lat:.6f}, {lon:.6f})',
-                    'lat': lat,
-                    'lon': lon,
-                    'type': '',
-                    'level': None
-                }
-
-        # 提交后台任务
-        task_id = self.task_manager.submit_task(
-            task_type='context_menu',
-            task_func=get_location_info
-        )
-
-        # 保存任务ID，用于在任务完成时识别
-        self._context_menu_task_id = task_id
+        # 立即显示右键菜单（不进行位置查询）
+        location_info = {
+            'success': False,
+            'name': f'位置 ({lat:.6f}, {lon:.6f})',
+            'lat': lat,
+            'lon': lon,
+            'type': '',
+            'level': None
+        }
+        self._show_context_menu(location_info)
 
     def _show_context_menu(self, location_info: dict):
         """显示右键菜单"""
@@ -1920,13 +1850,7 @@ class GpxStudio(QMainWindow):
         cursor_pos = QCursor.pos()
 
         # 显示菜单
-        self.map_context_menu.show_menu(
-            cursor_pos,
-            location_info['name'],
-            location_info['lat'],
-            location_info['lon'],
-            location_info.get('type', '')
-        )
+        self.map_context_menu.show_menu(cursor_pos, location_info['lat'], location_info['lon'])
 
     def _on_context_menu_set_start(self, name: str, lat: float, lon: float):
         """右键菜单：设为起点"""
@@ -3214,6 +3138,59 @@ class GpxStudio(QMainWindow):
             'walking': '步行'
         }
         return mode_map.get(mode, '驾车')
+
+    # ==================== 新右键菜单处理方法 ====================
+
+    def _on_context_menu_set_start_new(self, lat: float, lon: float):
+        """右键菜单：设为起点（新版）"""
+        self.logger.info(f"[右键菜单] 设为起点: ({lat}, {lon})")
+
+        # 获取位置信息
+        location_info = getattr(self, '_context_menu_location_info', {})
+        name = location_info.get('name', f'位置 ({lat:.6f}, {lon:.6f})')
+
+        # 复用现有的设为起点逻辑
+        self._on_context_menu_set_start(name, lat, lon)
+
+    def _on_context_menu_add_waypoint_new(self, lat: float, lon: float):
+        """右键菜单：设为途经点（新版）"""
+        self.logger.info(f"[右键菜单] 设为途经点: ({lat}, {lon})")
+
+        # 获取位置信息
+        location_info = getattr(self, '_context_menu_location_info', {})
+        name = location_info.get('name', f'位置 ({lat:.6f}, {lon:.6f})')
+
+        # 复用现有的添加途经点逻辑
+        self._on_context_menu_add_waypoint(name, lat, lon)
+
+    def _on_context_menu_set_end_new(self, lat: float, lon: float):
+        """右键菜单：设为终点（新版）"""
+        self.logger.info(f"[右键菜单] 设为终点: ({lat}, {lon})")
+
+        # 获取位置信息
+        location_info = getattr(self, '_context_menu_location_info', {})
+        name = location_info.get('name', f'位置 ({lat:.6f}, {lon:.6f})')
+
+        # 复用现有的设为终点逻辑
+        self._on_context_menu_set_end(name, lat, lon)
+
+    def _on_context_menu_query_here(self, lat: float, lon: float):
+        """右键菜单：这是哪儿"""
+        self.logger.info(f"[右键菜单] 这是哪儿: ({lat}, {lon})")
+        # TODO: 实现显示位置详细信息的功能
+        pass
+
+    def _on_context_menu_set_center(self, lat: float, lon: float):
+        """右键菜单：设为地图中心点"""
+        self.logger.info(f"[右键菜单] 设为地图中心点: ({lat}, {lon})")
+        # TODO: 实现设置地图中心点的功能
+        pass
+
+    def _on_context_menu_clear_route(self):
+        """右键菜单：清除路线"""
+        self.logger.info("[右键菜单] 清除路线")
+        # TODO: 实现清除路线的功能
+        pass
 
 
 if __name__ == "__main__":

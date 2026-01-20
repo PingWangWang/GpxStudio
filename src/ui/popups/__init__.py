@@ -3,5 +3,6 @@
 """
 
 from .settings_popup import MapSettingsPopup, LogSettingsPopup, AboutPopup
+from .map_context_menu_popup import MapContextMenuPopup
 
-__all__ = ['MapSettingsPopup', 'LogSettingsPopup', 'AboutPopup']
+__all__ = ['MapSettingsPopup', 'LogSettingsPopup', 'AboutPopup', 'MapContextMenuPopup']
