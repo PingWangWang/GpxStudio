@@ -346,12 +346,17 @@ class MapManager:
 
     def show_route_on_map(self):
         """在地图上显示路线"""
+        import time
+        start_time = time.time()
+        
         if not self.data_manager.route_points:
+            self.logger.info(f"[路线渲染] 路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
 
         # 过滤掉无效的路线点
         valid_points = [p for p in self.data_manager.route_points if p is not None]
         if not valid_points:
+            self.logger.info(f"[路线渲染] 有效路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
 
         # 收集所有坐标点（起点、途径点、终点）
@@ -374,10 +379,14 @@ class MapManager:
         center = self.data_manager.start_coords or combined_coords[0]
 
         # 创建基础地图
+        map_create_start = time.time()
         m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source)
+        map_create_time = (time.time() - map_create_start) * 1000
 
         # 添加已选择的点（起点、终点、途径点）
+        points_add_start = time.time()
         self._add_selected_points_to_map(m)
+        points_add_time = (time.time() - points_add_start) * 1000
 
         # 添加路线到地图（使用配置的优化设置）
         # 计算最优缩放级别
@@ -385,28 +394,39 @@ class MapManager:
         
         valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
         optimal_zoom = None
+        zoom_calc_time = 0
+        
         if map_config.is_auto_zoom_calculation_enabled():
+            zoom_calc_start = time.time()
             optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
+            zoom_calc_time = (time.time() - zoom_calc_start) * 1000
         
         # 记录优化信息
         original_count = len([p for p in self.data_manager.route_points if p is not None])
         self.logger.info(f"[路线渲染] 原始路线点数: {original_count}")
         if optimal_zoom:
-            self.logger.info(f"[路线渲染] 建议缩放级别: {optimal_zoom}")
+            self.logger.info(f"[路线渲染] 建议缩放级别: {optimal_zoom}, 计算耗时: {zoom_calc_time:.2f}ms")
         
+        route_add_start = time.time()
         MapRenderer.add_route(
             m, 
             self.data_manager.route_points, 
             zoom_level=optimal_zoom
         )
+        route_add_time = (time.time() - route_add_start) * 1000
 
         # 调整地图边界以显示完整路线
+        fit_bounds_start = time.time()
         MapRenderer.fit_bounds(m, combined_coords)
+        fit_bounds_time = (time.time() - fit_bounds_start) * 1000
 
         # 保存地图并获取URL
+        save_map_start = time.time()
         url = MapRenderer.save_and_get_url(m)
+        save_map_time = (time.time() - save_map_start) * 1000
 
         # 在地图视图中加载地图
+        view_load_start = time.time()
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
@@ -414,6 +434,10 @@ class MapManager:
                 self.logger.error("地图视图为None，无法显示路线")
         except RuntimeError as e:
             self.logger.error(f"地图视图已被删除，无法显示路线: {e}")
+        view_load_time = (time.time() - view_load_start) * 1000
+
+        total_time = (time.time() - start_time) * 1000
+        self.logger.info(f"[路线渲染] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加点: {points_add_time:.2f}ms, 添加路线: {route_add_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms, 加载视图: {view_load_time:.2f}ms)")
 
     def show_location_on_map(self, lat: float, lon: float, popup_text: str):
         """在地图上显示定位结果

@@ -441,7 +441,14 @@ class MapRenderer:
             optimize: 是否启用路线优化（None表示根据配置决定）
             zoom_level: 当前缩放级别，用于优化计算
         """
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+
+        start_time = time.time()
+
         if not route_points:
+            logger.info(f"[路线渲染] 路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
         
         # 根据配置决定是否启用优化
@@ -450,8 +457,11 @@ class MapRenderer:
         
         # 如果启用优化且点数较多，进行路线优化
         valid_point_count = len([p for p in route_points if p is not None])
+        optimization_time = 0
         if optimize and valid_point_count > 100:
             from .route_optimizer import RouteOptimizer
+            
+            optimize_start = time.time()
             
             # 如果没有提供缩放级别，根据路线范围计算
             if zoom_level is None:
@@ -473,13 +483,14 @@ class MapRenderer:
                 max_points=max_points
             )
             
-            import logging
-            logger = logging.getLogger(__name__)
             optimized_count = len([p for p in route_points if p is not None])
             reduction = valid_point_count - optimized_count
-            logger.info(f"[路线优化] 原始: {valid_point_count}点 → 优化: {optimized_count}点 (减少{reduction}点, 缩放级别: {zoom_level})")
+            optimization_time = (time.time() - optimize_start) * 1000
+            logger.info(f"[路线优化] 原始: {valid_point_count}点 → 优化: {optimized_count}点 (减少{reduction}点, 缩放级别: {zoom_level}), 耗时: {optimization_time:.2f}ms")
         
         # 使用批量渲染优化
+        render_start = time.time()
+        
         route_segments = []
         current_segment = []
         
@@ -520,6 +531,11 @@ class MapRenderer:
                         smooth_factor=1.0
                     ).add_to(route_group)
                 route_group.add_to(map_obj)
+        
+        render_time = (time.time() - render_start) * 1000
+        total_time = (time.time() - start_time) * 1000
+        
+        logger.info(f"[路线渲染] 总耗时: {total_time:.2f}ms (优化: {optimization_time:.2f}ms, 渲染: {render_time:.2f}ms), 路线段数: {len(route_segments)}")
 
     @staticmethod
     def save_and_get_url(map_obj, use_http_server=True):

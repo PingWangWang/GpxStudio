@@ -257,6 +257,9 @@ class MapRenderTaskAdapter:
         返回:
             地图HTML URL 或 None
         """
+        import time
+        total_start_time = time.time()
+        
         try:
             log_callback("INFO", "开始渲染路线地图")
             progress_callback(0, "正在准备地图数据...")
@@ -305,8 +308,10 @@ class MapRenderTaskAdapter:
             center = data_manager.start_coords or combined_coords[0]
 
             # 创建基础地图
+            map_create_start = time.time()
             log_callback("DEBUG", f"创建地图，中心: {center}")
             m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source)
+            map_create_time = (time.time() - map_create_start) * 1000
 
             progress_callback(40, "正在添加地图标记...")
 
@@ -314,6 +319,7 @@ class MapRenderTaskAdapter:
                 return None
 
             # 添加起点、终点、途径点
+            markers_start = time.time()
             if data_manager.start_coords:
                 start_name = data_manager.start_name or "起点"
                 MapRenderer.add_marker(m, data_manager.start_coords, start_name, 'green', 'play')
@@ -325,6 +331,7 @@ class MapRenderTaskAdapter:
             for i, wp in enumerate(data_manager.waypoints_coords):
                 wp_name = data_manager.waypoints_names[i] if i < len(data_manager.waypoints_names) else f"途径点{i+1}"
                 MapRenderer.add_marker(m, wp, wp_name, 'blue', 'info-sign')
+            markers_time = (time.time() - markers_start) * 1000
 
             progress_callback(60, "正在绘制路线...")
 
@@ -337,21 +344,28 @@ class MapRenderTaskAdapter:
             # 使用配置的路线优化设置
             from modules.map.route_optimizer import RouteOptimizer
             
+            zoom_calc_time = 0
+            route_add_time = 0
+            
             valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
             optimal_zoom = None
             if map_config.is_auto_zoom_calculation_enabled():
+                zoom_calc_start = time.time()
                 optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
+                zoom_calc_time = (time.time() - zoom_calc_start) * 1000
             
             original_count = len([p for p in data_manager.route_points if p is not None])
             log_callback("INFO", f"路线渲染: 原始点数 {original_count}")
             if optimal_zoom:
-                log_callback("INFO", f"建议缩放级别: {optimal_zoom}")
+                log_callback("INFO", f"建议缩放级别: {optimal_zoom}, 计算耗时: {zoom_calc_time:.2f}ms")
             
+            route_add_start = time.time()
             MapRenderer.add_route(
                 m, 
                 data_manager.route_points, 
                 zoom_level=optimal_zoom
             )
+            route_add_time = (time.time() - route_add_start) * 1000
 
             progress_callback(80, "正在调整地图边界...")
 
@@ -359,7 +373,9 @@ class MapRenderTaskAdapter:
                 return None
 
             # 调整地图边界
+            fit_bounds_start = time.time()
             MapRenderer.fit_bounds(m, combined_coords)
+            fit_bounds_time = (time.time() - fit_bounds_start) * 1000
 
             progress_callback(90, "正在保存地图...")
 
@@ -367,14 +383,20 @@ class MapRenderTaskAdapter:
                 return None
 
             # 保存地图并获取URL
+            save_map_start = time.time()
             url = MapRenderer.save_and_get_url(m)
+            save_map_time = (time.time() - save_map_start) * 1000
+            
+            total_time = (time.time() - total_start_time) * 1000
             log_callback("INFO", f"地图渲染完成: {url}")
+            log_callback("INFO", f"[地图渲染任务] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加标记: {markers_time:.2f}ms, 路线添加: {route_add_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms)")
 
             progress_callback(100, "地图渲染完成")
             return url
 
         except Exception as e:
-            log_callback("ERROR", f"地图渲染任务异常: {str(e)}")
+            total_time = (time.time() - total_start_time) * 1000
+            log_callback("ERROR", f"地图渲染任务异常: {str(e)}, 总耗时: {total_time:.2f}ms")
             import traceback
             log_callback("DEBUG", traceback.format_exc())
             return None
