@@ -801,24 +801,76 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(350)  # 减少高度，删除底部空白
+        self.setFixedSize(300, 240)  # 与地图设置面板保持一致
         self._init_ui()
         self.load_current_config()
 
+    def show_popup(self, button_widget):
+        """
+        显示弹出面板
+
+        Args:
+            button_widget: 触发按钮控件（用于定位）
+        """
+        # 获取按钮的全局位置
+        button_rect = button_widget.rect()
+        button_global_pos = button_widget.mapToGlobal(button_rect.topLeft())
+
+        # 获取按钮列表容器的位置（假设按钮是right_buttons_container的子元素）
+        if hasattr(button_widget.parent(), 'rect'):
+            buttons_container = button_widget.parent()
+            container_rect = buttons_container.rect()
+            container_global_pos = buttons_container.mapToGlobal(container_rect.topLeft())
+
+            # 设置面板位置：与按钮顶部对齐，面板右侧与按钮列表左侧间隔1-2px
+            popup_x = container_global_pos.x() - self.width() - 2
+            popup_y = button_global_pos.y()
+        else:
+            #  fallback: 使用默认位置
+            popup_x = button_global_pos.x() - self.width() - 10
+            popup_y = button_global_pos.y()
+
+        self.move(popup_x, popup_y)
+        self.show()
+        self.raise_()
+        self.setFocus()  # 设置焦点以接收键盘事件
+
     def _init_ui(self):
         """初始化UI"""
+        # 设置面板样式 - 与地图设置面板保持一致
+        self.setStyleSheet("""
+            LogSettingsPopup {
+                background-color: #4A90E2;
+                border-radius: 6px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QLabel {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QPushButton {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QComboBox {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+
+        # 设置自动填充背景
+        self.setAutoFillBackground(True)
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(2)
 
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("日志设置")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 9pt;
+                font-size: 13px;
                 font-weight: bold;
-                color: #333333;
+                color: white;
+                font-family: 'Microsoft YaHei';
             }
         """)
         title_layout.addWidget(title_label)
@@ -826,18 +878,17 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         # 关闭按钮
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(28, 28)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
-                font-size: 18px;
-                color: #666666;
+                font-size: 14px;
+                color: white;
+                border-radius: 14px;
             }
             QPushButton:hover {
-                color: #333333;
-                background-color: #f0f0f0;
-                border-radius: 12px;
+                background-color: rgba(255, 255, 255, 0.1);
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -848,26 +899,28 @@ class LogSettingsPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: #e0e0e0;")
+        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
         main_layout.addWidget(line)
 
-        # 日志管理说明
-        log_info_label = QLabel()
-        log_info_label.setTextFormat(Qt.RichText)
-        log_info_label.setText("""
-        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px;">
-            <p style="margin: 0; color: #333;">运行日志记录了应用程序的运行情况，有助于排查问题。</p>
-            <p style="margin: 5px 0 0 0; color: #666;">当日志文件过大时，可能会影响应用程序性能，建议定期清理。</p>
-        </div>
-        """)
-        log_info_label.setWordWrap(True)
-        main_layout.addWidget(log_info_label)
+        # 配置表单
+        config_layout = QVBoxLayout()
+        config_layout.setSpacing(-1)
+        config_layout.setContentsMargins(0, 0, 0, 0)
 
         # 日志级别设置
-        log_level_layout = QHBoxLayout()
+        log_level_row = QHBoxLayout()
         log_level_label = QLabel("日志级别:")
-        log_level_label.setMinimumWidth(80)
-        log_level_layout.addWidget(log_level_label)
+        log_level_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        log_level_label.setFixedWidth(80)
+        log_level_label.setFixedHeight(30)
+        log_level_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        log_level_row.addWidget(log_level_label)
+        log_level_row.addSpacing(10)
+
+        # 创建下拉框容器
+        log_level_container = QWidget()
+        log_level_layout = QHBoxLayout(log_level_container)
+        log_level_layout.setContentsMargins(0, 0, 0, 0)
 
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItem("DEBUG", "DEBUG")
@@ -875,69 +928,101 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_level_combo.addItem("WARNING", "WARNING")
         self.log_level_combo.addItem("ERROR", "ERROR")
         self.log_level_combo.addItem("CRITICAL", "CRITICAL")
+        self.log_level_combo.setFixedHeight(30)
+        self.log_level_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.log_level_combo.setStyleSheet("""
             QComboBox {
-                padding: 6px 12px;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 0px 30px 0px 8px;
+                border: 0px;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+                height: 30px;
+            }
+            QComboBox:focus {
                 background-color: white;
             }
+            QComboBox QAbstractItemView {
+                border: 1px solid rgba(0, 0, 0, 0.2);
+                border-radius: 3px;
+                background-color: white;
+                selection-background-color: #4A90E2;
+                selection-color: white;
+                font-size: 12px;
+            }
         """)
+        # 连接信号实现自动保存
+        self.log_level_combo.currentIndexChanged.connect(self.on_log_level_changed)
         log_level_layout.addWidget(self.log_level_combo)
+        log_level_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        self.save_log_level_btn = QPushButton("保存设置")
-        self.save_log_level_btn.clicked.connect(self.on_save_log_level)
-        self.save_log_level_btn.setStyleSheet("""
-            QPushButton {
-                padding: 8px 16px;
-                background-color: #4A90E2;
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #3A80D2;
-            }
-        """)
-        log_level_layout.addWidget(self.save_log_level_btn)
+        log_level_row.addWidget(log_level_container)
+        log_level_row.setContentsMargins(0, 0, 0, 0)
+        log_level_row.setSpacing(0)
+        log_level_row.setStretch(0, 0)
+        log_level_row.setStretch(1, 0)
+        log_level_row.setStretch(2, 1)
+        config_layout.addLayout(log_level_row)
 
-        main_layout.addLayout(log_level_layout)
+        main_layout.addLayout(config_layout)
 
-        # 日志管理按钮
-        log_btn_layout = QHBoxLayout()
-        log_btn_layout.setSpacing(8)
+        # 添加分隔线
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 20px 0;")
+        main_layout.addWidget(separator)
+
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch(1)
 
         self.clean_log_btn = QPushButton("清理日志")
         self.clean_log_btn.clicked.connect(self.on_clean_logs)
+        self.clean_log_btn.setMinimumWidth(80)
+        self.clean_log_btn.setMinimumHeight(30)
         self.clean_log_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: rgba(255, 255, 255, 0.3);
             }
         """)
-        log_btn_layout.addWidget(self.clean_log_btn)
+        btn_layout.addWidget(self.clean_log_btn)
 
         self.open_log_btn = QPushButton("打开日志目录")
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
+        self.open_log_btn.setMinimumWidth(80)
+        self.open_log_btn.setMinimumHeight(30)
         self.open_log_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 4px;
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: rgba(255, 255, 255, 0.3);
             }
         """)
-        log_btn_layout.addWidget(self.open_log_btn)
+        btn_layout.addWidget(self.open_log_btn)
 
-        main_layout.addLayout(log_btn_layout)
+        btn_layout.addStretch(1)
+        main_layout.addLayout(btn_layout)
 
         # 日志大小信息
         log_size = get_log_size()
@@ -945,31 +1030,33 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_size_label.setAlignment(Qt.AlignCenter)
         self.log_size_label.setStyleSheet("""
             QLabel {
-                padding: 10px;
-                margin-top: 10px;
+                padding: 2px;
+                margin-top: 4px;
                 font-weight: bold;
-                background-color: #f5f5f5;
-                border-radius: 4px;
+                font-size: 12px;
+                color: white;
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 3px;
             }
         """)
         main_layout.addWidget(self.log_size_label)
 
-        # 删除底部的addStretch()，避免底部空白
-
     def load_current_config(self):
         """加载当前配置"""
         log_level = map_config.get('log_level', 'INFO')
+        # 临时断开信号，避免加载时触发保存
+        self.log_level_combo.blockSignals(True)
         for i in range(self.log_level_combo.count()):
             if self.log_level_combo.itemData(i) == log_level:
                 self.log_level_combo.setCurrentIndex(i)
                 break
+        self.log_level_combo.blockSignals(False)
 
-    def on_save_log_level(self):
-        """保存日志级别设置"""
+    def on_log_level_changed(self, index):
+        """日志级别改变时自动保存"""
         selected_level = self.log_level_combo.currentData()
         try:
             set_log_level(selected_level)
-            QMessageBox.information(self, "成功", f"日志级别已设置为: {selected_level}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存日志级别失败: {str(e)}")
 
