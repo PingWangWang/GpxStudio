@@ -101,37 +101,62 @@ class MapContextMenuPopup(QWidget):
             }}
         """)
 
-        # 创建水平布局放置图标和文字
-        item_layout = QHBoxLayout()
-        item_layout.setContentsMargins(0, 0, 0, 0)
-        item_layout.setSpacing(8)
+        # 固定宽度设置
+        icon_width = 24  # 增加图标宽度，确保所有emoji都能居中显示
+        spacing = 8
+        
+        # 计算左侧边距，使"设置地图中心点"按钮整体居中
+        # 菜单宽度固定为200px，左右边距各为16px，所以内容区域宽度为168px
+        content_width = 200 - 16 - 16
+        
+        # "设置地图中心点"按钮的总宽度
+        center_text_width = 120  # "设置地图中心点"文字宽度
+        center_total_width = icon_width + spacing + center_text_width
+        
+        # 计算左侧边距
+        center_left_margin = (content_width - center_total_width) // 2
 
+        # 创建图标容器
+        icon_container = QWidget()
+        icon_container.setFixedWidth(icon_width)
+        icon_layout = QHBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setAlignment(Qt.AlignCenter)
+        
         # 图标标签
         icon_label = QLabel(icon_text)
         icon_label.setStyleSheet(f"""
             QLabel {{
                 color: {icon_color};
                 font-size: 16px;
-                min-width: 20px;
-                max-width: 20px;
+                text-align: center;
             }}
         """)
-        icon_label.setAlignment(Qt.AlignCenter)
-        item_layout.addWidget(icon_label)
+        icon_layout.addWidget(icon_label)
 
         # 文字标签
         text_label = QLabel(text)
         text_label.setStyleSheet("""
-            QLabel {
+            QLabel {{
                 color: #262626;
                 font-size: 13px;
                 font-family: "MiSans", "Microsoft YaHei", "微软雅黑", sans-serif;
-            }
+            }}
         """)
-        item_layout.addWidget(text_label)
-        item_layout.addStretch()
 
-        item_button.setLayout(item_layout)
+        # 创建主布局
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(spacing)
+
+        # 为所有菜单项设置相同的布局结构
+        # 这样可以确保图标和文字与"设置地图中心点"按钮对齐
+        main_layout.addSpacing(center_left_margin)
+        main_layout.addWidget(icon_container)
+        main_layout.addWidget(text_label)
+        main_layout.addStretch()
+
+        item_button.setLayout(main_layout)
         item_button.clicked.connect(callback)
 
         layout.addWidget(item_button)
