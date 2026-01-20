@@ -1084,23 +1084,72 @@ class AboutPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(400)  # 减少高度，删除底部空白
+        self.setFixedSize(300, 240)  # 与地图设置面板保持一致
         self._init_ui()
+
+    def show_popup(self, button_widget):
+        """
+        显示弹出面板
+
+        Args:
+            button_widget: 触发按钮控件（用于定位）
+        """
+        # 获取按钮的全局位置
+        button_rect = button_widget.rect()
+        button_global_pos = button_widget.mapToGlobal(button_rect.topLeft())
+
+        # 获取按钮列表容器的位置（假设按钮是right_buttons_container的子元素）
+        if hasattr(button_widget.parent(), 'rect'):
+            buttons_container = button_widget.parent()
+            container_rect = buttons_container.rect()
+            container_global_pos = buttons_container.mapToGlobal(container_rect.topLeft())
+
+            # 设置面板位置：与按钮顶部对齐，面板右侧与按钮列表左侧间隔1-2px
+            popup_x = container_global_pos.x() - self.width() - 2
+            popup_y = button_global_pos.y()
+        else:
+            #  fallback: 使用默认位置
+            popup_x = button_global_pos.x() - self.width() - 10
+            popup_y = button_global_pos.y()
+
+        self.move(popup_x, popup_y)
+        self.show()
+        self.raise_()
+        self.setFocus()  # 设置焦点以接收键盘事件
 
     def _init_ui(self):
         """初始化UI"""
+        # 设置面板样式 - 与地图设置面板保持一致
+        self.setStyleSheet("""
+            AboutPopup {
+                background-color: #4A90E2;
+                border-radius: 6px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QLabel {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QPushButton {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+
+        # 设置自动填充背景
+        self.setAutoFillBackground(True)
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(2)
 
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("关于")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 9pt;
+                font-size: 13px;
                 font-weight: bold;
-                color: #333333;
+                color: white;
+                font-family: 'Microsoft YaHei';
             }
         """)
         title_layout.addWidget(title_label)
@@ -1108,18 +1157,17 @@ class AboutPopup(BaseSettingsPopup):
 
         # 关闭按钮
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(28, 28)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: none;
-                font-size: 18px;
-                color: #666666;
+                font-size: 14px;
+                color: white;
+                border-radius: 14px;
             }
             QPushButton:hover {
-                color: #333333;
-                background-color: #f0f0f0;
-                border-radius: 12px;
+                background-color: rgba(255, 255, 255, 0.1);
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -1130,63 +1178,59 @@ class AboutPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: #e0e0e0;")
+        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
         main_layout.addWidget(line)
 
-        # 关于内容
+        # 关于内容 - 简化显示以适应小面板
         about_label = QLabel()
         about_label.setTextFormat(Qt.RichText)
         about_label.setText(self._get_about_text())
         about_label.setWordWrap(True)
-        about_label.setStyleSheet("padding: 10px;")
+        about_label.setAlignment(Qt.AlignCenter)
+        about_label.setStyleSheet("""
+            QLabel {
+                padding: 4px;
+                color: white;
+            }
+        """)
         main_layout.addWidget(about_label)
-
-        # 删除底部的addStretch()，避免底部空白
 
     def _get_about_text(self):
         """获取关于内容的HTML"""
         log_size = get_log_size()
-        log_warning = ""
-        if log_size > 100:
-            log_warning = "<div style='color: red; margin-top: 5px;'>⚠️ 运行日志超过100MB，请及时清理</div>"
 
         # 从配置中获取信息
         app_name = about_config.get_app_name()
         app_version = about_config.get_app_version()
         app_platform = about_config.get_app_platform()
-        app_description = about_config.get_app_description()
         license_text = about_config.get_license_text()
         developer_team = about_config.get_developer_team()
         developer_email = about_config.get_developer_email()
         copyright_text = about_config.get_copyright_text()
-        map_api_copyright = about_config.get_map_api_copyright()
 
         html = f"""
-        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: #333; line-height: 1.6;">
-            <h3 style="color: #4A90E2; text-align: center; margin-bottom: 15px;">{app_name}</h3>
+        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: white; line-height: 1.4;">
+            <h3 style="color: white; text-align: center; margin: 8px 0; font-size: 14px;">{app_name}</h3>
 
-            <div style="text-align: center; margin-bottom: 15px;">
-                <div style="font-weight: bold; color: #666;">版本: {app_version} | 平台: {app_platform}</div>
-                <div style="margin-top: 5px; color: #555;">{app_description}</div>
+            <div style="text-align: center; margin: 6px 0; font-size: 11px;">
+                <div>版本: {app_version} | 平台: {app_platform}</div>
             </div>
 
-            <div style="background-color: #e8f5e9; padding: 10px; border-radius: 4px; margin: 10px 0; text-align: center;">
-                <div style="color: #2196F3; font-weight: bold;">{license_text}</div>
+            <div style="background-color: rgba(255, 255, 255, 0.2); padding: 6px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 11px;">
+                <div>{license_text}</div>
             </div>
 
-            <div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; text-align: center;">
+            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 6px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 10px;">
                 <div>开发者: {developer_team}</div>
                 <div>邮箱: {developer_email}</div>
             </div>
 
-            <div style="background-color: #f0f8ff; padding: 10px; border-radius: 4px; margin: 10px 0; text-align: center;">
+            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 4px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 10px;">
                 <div>运行日志大小: {log_size:.2f} MB</div>
-                {log_warning}
             </div>
 
-            <div style="text-align: center; color: #777; font-size: 11px; padding-top: 10px; border-top: 1px solid #e0e0e0; margin-top: 10px;">
+            <div style="text-align: center; color: rgba(255, 255, 255, 0.8); font-size: 9px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.2); margin-top: 6px;">
                 <div>{copyright_text}</div>
-                <div>{map_api_copyright}</div>
             </div>
         </div>
         """
