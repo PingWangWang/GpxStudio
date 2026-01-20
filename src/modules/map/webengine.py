@@ -118,10 +118,13 @@ class ConsoleWebEnginePage(QWebEnginePage):
 
     def javaScriptConsoleMessage(self, level, message, line_number, source_id):
         """处理JavaScript控制台消息"""
-        print(f"[Console] [{level}] 行{line_number}: {message}")
+        # 只打印缩放、定位、路线更新相关的重要消息，减少日志噪音
+        if '缩放' in message or '定位' in message or '右键' in message or '路线更新' in message:
+            print(f"[Console] [{level}] 行{line_number}: {message}")
 
         # 处理地图缩放变化消息
         if message.startswith('缩放变化:'):
+            print(f"[地图缩放] ========== 检测到缩放变化消息 ==========")
             try:
                 zoom_level = int(message[len('缩放变化:'):].strip())
                 print(f"[地图缩放] 捕获到缩放级别: {zoom_level}")

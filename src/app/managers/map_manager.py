@@ -53,7 +53,7 @@ class MapManager:
             if self.map_view and not self.map_view.isVisible():
                 self.logger.warning("地图视图不可见，尝试显示")
                 self.map_view.show()
-            
+
             if self.map_view:
                 self.map_view.setUrl(url)
                 self.logger.info("初始地图已加载")
@@ -348,7 +348,7 @@ class MapManager:
         """在地图上显示路线"""
         import time
         start_time = time.time()
-        
+
         if not self.data_manager.route_points:
             self.logger.info(f"[路线渲染] 路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
@@ -388,31 +388,9 @@ class MapManager:
         self._add_selected_points_to_map(m)
         points_add_time = (time.time() - points_add_start) * 1000
 
-        # 添加路线到地图（使用配置的优化设置）
-        # 计算最优缩放级别
-        from modules.map.route_optimizer import RouteOptimizer
-        
-        valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
-        optimal_zoom = None
-        zoom_calc_time = 0
-        
-        if map_config.is_auto_zoom_calculation_enabled():
-            zoom_calc_start = time.time()
-            optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
-            zoom_calc_time = (time.time() - zoom_calc_start) * 1000
-        
-        # 记录优化信息
-        original_count = len([p for p in self.data_manager.route_points if p is not None])
-        self.logger.info(f"[路线渲染] 原始路线点数: {original_count}")
-        if optimal_zoom:
-            self.logger.info(f"[路线渲染] 建议缩放级别: {optimal_zoom}, 计算耗时: {zoom_calc_time:.2f}ms")
-        
+        # 添加路线到地图
         route_add_start = time.time()
-        MapRenderer.add_route(
-            m, 
-            self.data_manager.route_points, 
-            zoom_level=optimal_zoom
-        )
+        MapRenderer.add_route(m, self.data_manager.route_points)
         route_add_time = (time.time() - route_add_start) * 1000
 
         # 调整地图边界以显示完整路线
@@ -581,3 +559,215 @@ class MapManager:
                 f"{i+1}. {get_address(location)}",
                 color=color, icon=icon
             )
+
+    def on_map_zoom_changed(self, new_zoom_level: int):
+        """
+        地图缩放级别变化时的处理方法
+        只更新缩放级别记录，不重新优化路线（让Leaflet自己处理渲染）
+
+        参数:
+            new_zoom_level: 新的缩放级别
+        """
+        # 更新当前缩放级别记录
+        self.data_manager.current_zoom_level = new_zoom_level
+        self.logger.debug(f"[MapManager] 缩放级别更新: {new_zoom_level}")
+
+        # 不再进行动态路线优化，原因：
+        # 1. Leaflet的Canvas渲染器可以高效渲染数千个点
+        # 2. 避免每次缩放都重新计算导致的卡顿（1-2秒）
+        # 3. 参考官方GPXStudio，缩放时无延迟，体验流畅
+
+    def _rerender_route_on_map(self):
+        """
+        重新渲染地图上的路线（内部方法）
+        使用JavaScript直接更新现有地图上的路线层，避免重新创建地图导致的卡顿和视图重置
+        """
+        import time
+        start_time = time.time()
+
+        if not self.data_manager.route_points:
+            self.logger.debug("[路线重渲染] 无路线数据（route_points为空），跳过")
+            return
+
+        if not self.map_view:
+            self.logger.debug("[路线重渲染] 地图视图不存在，跳过")
+            return
+
+        route_point_count = len([p for p in self.data_manager.route_points if p is not None])
+        self.logger.debug(f"[路线重渲染] 开始更新路线: 路线点数={route_point_count}, 缩放级别={self.data_manager.current_zoom_level}")
+
+        # 构建路线坐标数据（只包含有效点）
+        valid_route_points = [p for p in self.data_manager.route_points if p is not None]
+        route_coords = [[p[0], p[1]] for p in valid_route_points if len(p) >= 2]
+
+        if not route_coords:
+            self.logger.debug("[路线重渲染] 无有效路线坐标，跳过")
+            return
+
+        # 将坐标数据转换为JavaScript数组字符串
+        coords_js = str(route_coords).replace("'", '"')
+
+        # 构建JavaScript代码来更新路线
+        update_route_js = f"""
+        (function() {{
+            try {{
+                // 多种方法获取地图对象
+                var map = null;
+
+                // 方法1: 通过.leaflet-container元素的_leaflet_map属性
+                var mapElement = document.querySelector('.leaflet-container');
+                if (mapElement && mapElement._leaflet_map) {{
+                    map = mapElement._leaflet_map;
+                    console.log('[路线更新] 通过.leaflet-container._leaflet_map获取到地图');
+                }} else {{
+                    // 方法2: 查找window上以map_开头的全局变量
+                    for (var key in window) {{
+                        if (key.startsWith('map_') && window[key] && typeof window[key].getZoom === 'function') {{
+                            map = window[key];
+                            console.log('[路线更新] 通过window.' + key + '获取到地图');
+                            break;
+                        }}
+                    }}
+                }}
+
+                if (!map) {{
+                    console.log('[路线更新] 错误: 无法获取地图对象，稍后会自动重试');
+                    return false;
+                }}
+
+                // 检查Leaflet库
+                if (typeof L === 'undefined') {{
+                    console.log('[路线更新] 错误: Leaflet库(L)未定义');
+                    return false;
+                }}
+
+                // 保存当前地图的中心和缩放级别（关键：确保位置不变）
+                var currentCenter = map.getCenter();
+                var currentZoom = map.getZoom();
+                console.log('[路线更新] 保存当前视图 - 中心: [' + currentCenter.lat.toFixed(6) + ', ' + currentCenter.lng.toFixed(6) + '], 缩放: ' + currentZoom);
+
+                // 删除所有Polyline类型的层（路线），保留Marker（标记点）和TileLayer（地图瓦片）
+                var layersToRemove = [];
+                map.eachLayer(function(layer) {{
+                    if (layer instanceof L.Polyline) {{
+                        layersToRemove.push(layer);
+                    }}
+                }});
+
+                console.log('[路线更新] 找到 ' + layersToRemove.length + ' 个Polyline层，准备删除');
+                layersToRemove.forEach(function(layer) {{
+                    map.removeLayer(layer);
+                }});
+
+                // 添加新的路线层
+                var routeCoords = {coords_js};
+                if (!Array.isArray(routeCoords) || routeCoords.length === 0) {{
+                    console.log('[路线更新] 错误: 路线坐标无效');
+                    return false;
+                }}
+
+                var routeLine = L.polyline(routeCoords, {{
+                    color: 'blue',
+                    weight: 5,
+                    opacity: 0.7,
+                    smoothFactor: 1.0
+                }});
+                routeLine.addTo(map);
+
+                // 强制恢复视图位置（不使用动画，立即恢复）
+                map.setView(currentCenter, currentZoom, {{animate: false}});
+                console.log('[路线更新] 已恢复视图位置');
+
+                console.log('[路线更新] ✅ 成功更新路线: ' + routeCoords.length + ' 个点');
+                return true;
+            }} catch (e) {{
+                console.log('[路线更新] ❌ 异常: ' + e.name + ' - ' + e.message);
+                console.log('[路线更新] 堆栈: ' + e.stack);
+                return false;
+            }}
+        }})();
+        """
+
+        # 执行JavaScript代码（带重试机制）
+        self._js_update_success = None  # 用于存储结果
+        self._retry_count = 0
+        max_retries = 3
+
+        def try_update_route():
+            self._retry_count += 1
+
+            def handle_result(result):
+                elapsed = (time.time() - start_time) * 1000
+                self._js_update_success = result
+                if result:
+                    self.logger.info(f"[路线重渲染] ✅ JavaScript更新成功: {route_point_count}点, 耗时={elapsed:.2f}ms (尝试{self._retry_count}次)")
+                else:
+                    if self._retry_count < max_retries:
+                        self.logger.debug(f"[路线重渲染] 第{self._retry_count}次尝试失败，{100}ms后重试...")
+                        # 延迟后重试
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(100, try_update_route)
+                    else:
+                        self.logger.warning(f"[路线重渲染] ⚠️ JavaScript更新失败（已重试{max_retries}次），放弃更新")
+
+            try:
+                page = self.map_view.page()
+                page.runJavaScript(update_route_js, handle_result)
+            except Exception as e:
+                self.logger.error(f"[路线重渲染] ❌ JavaScript执行异常: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # 开始第一次尝试
+        try_update_route()
+
+    def _fallback_rerender_route(self, route_point_count):
+        """
+        降级的路线重渲染方案
+        当JavaScript更新失败时，快速重建地图但保持当前视图
+        """
+        import time
+        from modules.map.map_renderer import MapRenderer
+        from services.config.map_config import map_config
+
+        start_time = time.time()
+        self.logger.info(f"[路线重渲染-降级] 开始快速重建: {route_point_count}点")
+
+        # 获取当前地图中心（如果可能）
+        # 注意：由于是异步的，这里只能使用data_manager中的数据
+        valid_route_points = [p for p in self.data_manager.route_points if p is not None]
+        if valid_route_points:
+            center_lat = sum(p[0] for p in valid_route_points) / len(valid_route_points)
+            center_lon = sum(p[1] for p in valid_route_points) / len(valid_route_points)
+        else:
+            center_lat, center_lon = 39.9042, 116.4074
+
+        # 创建地图（使用当前缩放级别）
+        map_source = map_config.get_map_source()
+        m = MapRenderer.create_base_map(
+            [center_lat, center_lon],
+            zoom_start=self.data_manager.current_zoom_level,
+            map_source=map_source
+        )
+
+        # 添加标记点（起点、终点、途径点）
+        self._add_selected_points_to_map(m)
+
+        # 添加优化后的路线（不再优化）
+        MapRenderer.add_route(
+            m,
+            self.data_manager.route_points
+        )
+
+        # 不调用fitBounds，保持当前缩放级别和中心
+        # 这是关键：避免视图跳转
+
+        # 保存并加载地图
+        url = MapRenderer.save_and_get_url(m)
+
+        if self.map_view:
+            self.map_view.setUrl(url)
+            elapsed = (time.time() - start_time) * 1000
+            self.logger.info(f"[路线重渲染-降级] ✅ 完成: 耗时={elapsed:.2f}ms")
+        else:
+            self.logger.error("[路线重渲染-降级] 地图视图为None")

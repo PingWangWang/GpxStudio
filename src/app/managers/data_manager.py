@@ -34,8 +34,10 @@ class DataManager:
 
         # 路线数据
         self.current_route = None  # 当前路线对象
-        self.route_points: List[Tuple[float, float]] = []  # 路线坐标点列表
+        self.route_points: List[Tuple[float, float]] = []  # 路线坐标点列表（优化后）
+        self.original_route_points: List[Tuple[float, float]] = []  # 原始路线坐标点列表（未优化）
         self.estimated_duration_seconds: int = 0  # 预估路线耗时（秒）
+        self.current_zoom_level: int = 12  # 当前地图缩放级别
 
         # 多路线方案支持
         self.route_alternatives: List[dict] = []  # 所有路线方案列表
@@ -131,8 +133,17 @@ class DataManager:
             route_points: 路线坐标点列表
             duration_seconds: 预估路线耗时（秒，可选）
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 保存原始路线数据（用于动态渲染）
+        self.original_route_points = route_points.copy() if route_points else []
         self.route_points = route_points
         self.estimated_duration_seconds = duration_seconds
+
+        original_count = len([p for p in self.original_route_points if p is not None])
+        current_count = len([p for p in self.route_points if p is not None])
+        logger.info(f"[DataManager] 设置路线: 原始点数={original_count}, 当前点数={current_count}, 预估时间={duration_seconds}秒")
 
     def set_route_alternatives(self, alternatives: List[dict], selected_index: int = 0):
         """设置多条路线方案
@@ -147,14 +158,26 @@ class DataManager:
                 - description: 路线描述
             selected_index: 默认选中的方案索引
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         self.route_alternatives = alternatives
         self.selected_route_index = selected_index
+
+        logger.info(f"[DataManager] 设置路线方案: 共{len(alternatives)}个方案, 选中索引={selected_index}")
 
         # 更新当前路线数据（兼容旧代码）
         if alternatives and 0 <= selected_index < len(alternatives):
             selected_route = alternatives[selected_index]
-            self.route_points = selected_route.get('route_points', [])
+            route_points = selected_route.get('route_points', [])
+            # 保存原始路线数据（用于动态渲染）
+            self.original_route_points = route_points.copy() if route_points else []
+            self.route_points = route_points
             self.estimated_duration_seconds = selected_route.get('duration', 0)
+
+            original_count = len([p for p in self.original_route_points if p is not None])
+            logger.info(f"[DataManager] 方案{selected_index}: 路线点数={original_count}, "
+                       f"距离={selected_route.get('distance', 0)}米, 时间={selected_route.get('duration', 0)}秒")
 
     def select_route_alternative(self, index: int):
         """选择路线方案
@@ -162,11 +185,21 @@ class DataManager:
         参数:
             index: 路线方案索引
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         if 0 <= index < len(self.route_alternatives):
             self.selected_route_index = index
             selected_route = self.route_alternatives[index]
-            self.route_points = selected_route.get('route_points', [])
+            route_points = selected_route.get('route_points', [])
+            # 保存原始路线数据（用于动态渲染）
+            self.original_route_points = route_points.copy() if route_points else []
+            self.route_points = route_points
             self.estimated_duration_seconds = selected_route.get('duration', 0)
+
+            original_count = len([p for p in self.original_route_points if p is not None])
+            logger.info(f"[DataManager] 切换到路线方案{index}: 点数={original_count}, "
+                       f"距离={selected_route.get('distance', 0)}米, 时间={selected_route.get('duration', 0)}秒")
 
     def get_selected_route(self) -> Optional[dict]:
         """获取当前选中的路线方案

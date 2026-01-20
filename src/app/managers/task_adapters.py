@@ -259,7 +259,7 @@ class MapRenderTaskAdapter:
         """
         import time
         total_start_time = time.time()
-        
+
         try:
             log_callback("INFO", "开始渲染路线地图")
             progress_callback(0, "正在准备地图数据...")
@@ -340,31 +340,9 @@ class MapRenderTaskAdapter:
 
             # 添加路线
             log_callback("DEBUG", "添加路线到地图")
-            
-            # 使用配置的路线优化设置
-            from modules.map.route_optimizer import RouteOptimizer
-            
-            zoom_calc_time = 0
-            route_add_time = 0
-            
-            valid_coords = [(p[0], p[1]) for p in valid_points if len(p) >= 2]
-            optimal_zoom = None
-            if map_config.is_auto_zoom_calculation_enabled():
-                zoom_calc_start = time.time()
-                optimal_zoom = RouteOptimizer.calculate_optimal_zoom(valid_coords)
-                zoom_calc_time = (time.time() - zoom_calc_start) * 1000
-            
-            original_count = len([p for p in data_manager.route_points if p is not None])
-            log_callback("INFO", f"路线渲染: 原始点数 {original_count}")
-            if optimal_zoom:
-                log_callback("INFO", f"建议缩放级别: {optimal_zoom}, 计算耗时: {zoom_calc_time:.2f}ms")
-            
+
             route_add_start = time.time()
-            MapRenderer.add_route(
-                m, 
-                data_manager.route_points, 
-                zoom_level=optimal_zoom
-            )
+            MapRenderer.add_route(m, data_manager.route_points)
             route_add_time = (time.time() - route_add_start) * 1000
 
             progress_callback(80, "正在调整地图边界...")
@@ -386,7 +364,7 @@ class MapRenderTaskAdapter:
             save_map_start = time.time()
             url = MapRenderer.save_and_get_url(m)
             save_map_time = (time.time() - save_map_start) * 1000
-            
+
             total_time = (time.time() - total_start_time) * 1000
             log_callback("INFO", f"地图渲染完成: {url}")
             log_callback("INFO", f"[地图渲染任务] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加标记: {markers_time:.2f}ms, 路线添加: {route_add_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms)")
