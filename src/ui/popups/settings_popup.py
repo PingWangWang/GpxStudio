@@ -1114,24 +1114,78 @@ class RouteSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(380)
+        self.setFixedSize(300, 240)  # 与地图设置面板保持一致
         self._init_ui()
         self.load_current_config()
 
+    def show_popup(self, button_widget):
+        """
+        显示弹出面板
+
+        Args:
+            button_widget: 触发按钮控件（用于定位）
+        """
+        # 获取按钮的全局位置
+        button_rect = button_widget.rect()
+        button_global_pos = button_widget.mapToGlobal(button_rect.topLeft())
+
+        # 获取按钮列表容器的位置（假设按钮是right_buttons_container的子元素）
+        if hasattr(button_widget.parent(), 'rect'):
+            buttons_container = button_widget.parent()
+            container_rect = buttons_container.rect()
+            container_global_pos = buttons_container.mapToGlobal(container_rect.topLeft())
+
+            # 设置面板位置：与按钮顶部对齐，面板右侧与按钮列表左侧间隔1-2px
+            popup_x = container_global_pos.x() - self.width() - 2
+            popup_y = button_global_pos.y()
+        else:
+            #  fallback: 使用默认位置
+            popup_x = button_global_pos.x() - self.width() - 10
+            popup_y = button_global_pos.y()
+
+        self.move(popup_x, popup_y)
+        self.show()
+        self.raise_()
+        self.setFocus()  # 设置焦点以接收键盘事件
+
     def _init_ui(self):
         """初始化UI"""
+        # 设置面板样式 - 与地图设置面板保持一致
+        self.setStyleSheet("""
+            RouteSettingsPopup {
+                background-color: #4A90E2;
+                border-radius: 6px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QLabel {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QPushButton {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QLineEdit {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QComboBox {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+
+        # 设置自动填充背景
+        self.setAutoFillBackground(True)
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(2)
 
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("路线设置")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 9pt;
+                font-size: 13px;
                 font-weight: bold;
-                color: #333333;
+                color: white;
                 font-family: 'Microsoft YaHei';
             }
         """)
@@ -1145,13 +1199,12 @@ class RouteSettingsPopup(BaseSettingsPopup):
             QPushButton {
                 background-color: transparent;
                 border: none;
-                font-size: 9pt;
-                color: #666666;
+                font-size: 14px;
+                color: white;
                 border-radius: 14px;
             }
             QPushButton:hover {
-                color: #333333;
-                background-color: #f0f0f0;
+                background-color: rgba(255, 255, 255, 0.1);
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -1162,128 +1215,179 @@ class RouteSettingsPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: #dee2e6; margin: 5px 0;")
+        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
         main_layout.addWidget(line)
-
-        # 路线优化设置说明
-        info_label = QLabel()
-        info_label.setTextFormat(Qt.RichText)
-        info_label.setText("""
-        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px;">
-            <p style="margin: 0; color: #333;">路线渲染优化可以减少显示的路线点数，提高地图性能。</p>
-            <p style="margin: 5px 0 0 0; color: #666;">当路线包含大量GPS点时，建议启用优化功能。</p>
-        </div>
-        """)
-        info_label.setWordWrap(True)
-        main_layout.addWidget(info_label)
 
         # 配置表单
         config_layout = QVBoxLayout()
-        config_layout.setSpacing(18)
+        config_layout.setSpacing(-1)  # 设置为-1表示尽可能小的间距
+        config_layout.setContentsMargins(0, 0, 0, 0)  # 清除布局的外边距
 
         # 启用路线优化
         enable_row = QHBoxLayout()
         enable_label = QLabel("启用路线优化:")
-        enable_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
-        enable_label.setFixedWidth(120)
+        enable_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        enable_label.setFixedWidth(80)
+        enable_label.setFixedHeight(30)
         enable_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         enable_row.addWidget(enable_label)
         enable_row.addSpacing(10)
 
+        # 创建下拉框容器
+        enable_container = QWidget()
+        enable_layout = QHBoxLayout(enable_container)
+        enable_layout.setContentsMargins(0, 0, 0, 0)
+
         self.enable_combo = QComboBox()
         self.enable_combo.addItem("启用", True)
         self.enable_combo.addItem("禁用", False)
-        self.enable_combo.setMinimumHeight(40)
+        self.enable_combo.setFixedHeight(30)
+        self.enable_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.enable_combo.setStyleSheet("""
             QComboBox {
-                padding: 8px 15px;
-                border: 2px solid #e1e5e9;
-                border-radius: 6px;
-                background-color: white;
-                font-size: 9pt;
-                font-family: 'Microsoft YaHei';
+                padding: 0px 30px 0px 8px;
+                border: 0px;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+                height: 30px;
             }
             QComboBox:focus {
-                border-color: #007bff;
+                background-color: white;
             }
             QComboBox QAbstractItemView {
-                border: 2px solid #e1e5e9;
-                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.2);
+                border-radius: 3px;
                 background-color: white;
-                selection-background-color: #007bff;
+                selection-background-color: #4A90E2;
                 selection-color: white;
-                font-size: 9pt;
+                font-size: 12px;
             }
         """)
-        enable_row.addWidget(self.enable_combo)
+        enable_layout.addWidget(self.enable_combo)
+        enable_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        enable_row.addWidget(enable_container)
+        enable_row.setContentsMargins(0, 0, 0, 0)
+        enable_row.setSpacing(0)
+        enable_row.setStretch(0, 0)
+        enable_row.setStretch(1, 0)
+        enable_row.setStretch(2, 1)
         config_layout.addLayout(enable_row)
 
         # 最大点数设置
         max_points_row = QHBoxLayout()
         max_points_label = QLabel("最大点数限制:")
-        max_points_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
-        max_points_label.setFixedWidth(120)
+        max_points_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        max_points_label.setFixedWidth(80)
+        max_points_label.setFixedHeight(30)
         max_points_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         max_points_row.addWidget(max_points_label)
         max_points_row.addSpacing(10)
 
+        # 创建输入框容器
+        max_points_container = QWidget()
+        max_points_container.setFixedHeight(30)
+        max_points_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        max_points_layout = QHBoxLayout(max_points_container)
+        max_points_layout.setContentsMargins(0, 0, 0, 0)
+
         self.max_points_edit = QLineEdit()
         self.max_points_edit.setPlaceholderText("例如: 500")
-        self.max_points_edit.setMinimumHeight(40)
+        self.max_points_edit.setFixedHeight(30)
+        self.max_points_edit.setAlignment(Qt.AlignLeft)
         self.max_points_edit.setStyleSheet("""
             QLineEdit {
-                padding: 8px 15px;
-                border: 2px solid #e1e5e9;
-                border-radius: 6px;
-                background-color: white;
-                font-size: 9pt;
-                font-family: 'Microsoft YaHei';
+                padding: 4px 8px 4px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 11px;
+                color: #333333;
+                height: 30px;
             }
             QLineEdit:focus {
-                border-color: #007bff;
+                background-color: white;
             }
         """)
-        max_points_row.addWidget(self.max_points_edit)
+        self.max_points_edit.setTextMargins(0, 2, 0, 2)
+        self.max_points_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        max_points_layout.addWidget(self.max_points_edit)
+
+        max_points_row.addWidget(max_points_container)
+        max_points_row.setContentsMargins(0, 0, 0, 0)
+        max_points_row.setSpacing(0)
+        max_points_row.setStretch(0, 0)
+        max_points_row.setStretch(1, 0)
+        max_points_row.setStretch(2, 1)
         config_layout.addLayout(max_points_row)
 
         # 自动缩放计算
         auto_zoom_row = QHBoxLayout()
         auto_zoom_label = QLabel("自动缩放计算:")
-        auto_zoom_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #495057; font-family: 'Microsoft YaHei';")
-        auto_zoom_label.setFixedWidth(120)
+        auto_zoom_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        auto_zoom_label.setFixedWidth(80)
+        auto_zoom_label.setFixedHeight(30)
         auto_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         auto_zoom_row.addWidget(auto_zoom_label)
         auto_zoom_row.addSpacing(10)
 
+        # 创建下拉框容器
+        auto_zoom_container = QWidget()
+        auto_zoom_layout = QHBoxLayout(auto_zoom_container)
+        auto_zoom_layout.setContentsMargins(0, 0, 0, 0)
+
         self.auto_zoom_combo = QComboBox()
         self.auto_zoom_combo.addItem("启用", True)
         self.auto_zoom_combo.addItem("禁用", False)
-        self.auto_zoom_combo.setMinimumHeight(40)
+        self.auto_zoom_combo.setFixedHeight(30)
+        self.auto_zoom_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.auto_zoom_combo.setStyleSheet("""
             QComboBox {
-                padding: 8px 15px;
-                border: 2px solid #e1e5e9;
-                border-radius: 6px;
-                background-color: white;
-                font-size: 9pt;
-                font-family: 'Microsoft YaHei';
+                padding: 0px 30px 0px 8px;
+                border: 0px;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+                height: 30px;
             }
             QComboBox:focus {
-                border-color: #007bff;
+                background-color: white;
             }
             QComboBox QAbstractItemView {
-                border: 2px solid #e1e5e9;
-                border-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.2);
+                border-radius: 3px;
                 background-color: white;
-                selection-background-color: #007bff;
+                selection-background-color: #4A90E2;
                 selection-color: white;
-                font-size: 9pt;
+                font-size: 12px;
             }
         """)
-        auto_zoom_row.addWidget(self.auto_zoom_combo)
+        auto_zoom_layout.addWidget(self.auto_zoom_combo)
+        auto_zoom_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        auto_zoom_row.addWidget(auto_zoom_container)
+        auto_zoom_row.setContentsMargins(0, 0, 0, 0)
+        auto_zoom_row.setSpacing(0)
+        auto_zoom_row.setStretch(0, 0)
+        auto_zoom_row.setStretch(1, 0)
+        auto_zoom_row.setStretch(2, 1)
         config_layout.addLayout(auto_zoom_row)
 
         main_layout.addLayout(config_layout)
+
+        # 添加分隔线
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 20px 0;")
+        main_layout.addWidget(separator)
 
         # 按钮区域
         btn_layout = QHBoxLayout()
@@ -1292,42 +1396,40 @@ class RouteSettingsPopup(BaseSettingsPopup):
 
         self.reset_btn = QPushButton("重置默认")
         self.reset_btn.clicked.connect(self.reset_to_defaults)
-        self.reset_btn.setMinimumWidth(100)
-        self.reset_btn.setMinimumHeight(40)
+        self.reset_btn.setMinimumWidth(80)
+        self.reset_btn.setMinimumHeight(30)
         self.reset_btn.setStyleSheet("""
             QPushButton {
-                padding: 10px 20px;
-                background-color: #6c757d;
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-size: 9pt;
+                border-radius: 3px;
+                font-size: 12px;
                 font-weight: bold;
-                font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: #5a6268;
+                background-color: rgba(255, 255, 255, 0.3);
             }
         """)
         btn_layout.addWidget(self.reset_btn)
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
-        self.save_btn.setMinimumWidth(100)
-        self.save_btn.setMinimumHeight(40)
+        self.save_btn.setMinimumWidth(80)
+        self.save_btn.setMinimumHeight(30)
         self.save_btn.setStyleSheet("""
             QPushButton {
-                padding: 10px 20px;
-                background-color: #007bff;
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.3);
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-size: 9pt;
+                border-radius: 3px;
+                font-size: 12px;
                 font-weight: bold;
-                font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: #0056b3;
+                background-color: rgba(255, 255, 255, 0.4);
             }
         """)
         btn_layout.addWidget(self.save_btn)
