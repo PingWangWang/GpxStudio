@@ -1086,6 +1086,10 @@ class GpxStudio(QMainWindow):
         """路线按钮点击"""
         self.logger.info("[路线] 路线按钮点击")
 
+        # 启动路线按钮动画
+        if hasattr(self.route_button, 'start_animation'):
+            self.route_button.start_animation()
+
         # 显示路线规划面板
         self._show_route_plan_panel()
 
@@ -2430,6 +2434,10 @@ class GpxStudio(QMainWindow):
     def _on_route_panel_cancel(self):
         """路线规划面板取消按钮点击"""
         self.logger.info("[路线面板] 取消路线规划")
+
+        # 停止路线按钮动画
+        if hasattr(self, 'route_button') and hasattr(self.route_button, 'stop_animation'):
+            self.route_button.stop_animation()
 
         # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
         if hasattr(self, 'route_plan_panel'):

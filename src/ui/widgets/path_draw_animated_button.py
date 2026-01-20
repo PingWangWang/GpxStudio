@@ -47,13 +47,12 @@ class PathDrawAnimatedButton(QPushButton):
     
     def _init_animations(self):
         """初始化动画"""
-        # 持续路径绘制动画
+        # 路径绘制动画（一次性，与TypeScript保持一致）
         self.path_animation = QPropertyAnimation(self, b"animationProgress")
-        self.path_animation.setDuration(2000)
+        self.path_animation.setDuration(800)  # 与TypeScript的delay时间匹配
         self.path_animation.setStartValue(0.0)
         self.path_animation.setEndValue(1.0)
-        self.path_animation.setEasingCurve(QEasingCurve.InOutSine)
-        self.path_animation.setLoopCount(-1)
+        self.path_animation.setEasingCurve(QEasingCurve.OutCubic)
         
         # 悬停/点击动画
         self.hover_animation = QPropertyAnimation(self, b"animationProgress")
@@ -97,18 +96,18 @@ class PathDrawAnimatedButton(QPushButton):
         """鼠标进入事件"""
         super().enterEvent(event)
         if not self._is_animating:
-            # 悬停时触发路径绘制动画
-            self.hover_animation.stop()
-            self.hover_animation.setStartValue(self._animation_progress)
-            self.hover_animation.setEndValue(0.3)  # 部分擦除
-            self.hover_animation.setDuration(200)
-            self.hover_animation.start()
+            # 悬停时触发路径绘制动画（与TypeScript的animate状态一致）
+            self.path_animation.stop()
+            self.path_animation.setStartValue(0.0)
+            self.path_animation.setEndValue(1.0)
+            self.path_animation.start()
     
     def leaveEvent(self, event):
         """鼠标离开事件"""
         super().leaveEvent(event)
         if not self._is_animating:
-            # 鼠标离开时回到完全绘制状态
+            # 鼠标离开时回到normal状态（完全绘制）
+            self.path_animation.stop()
             self.hover_animation.stop()
             self.hover_animation.setStartValue(self._animation_progress)
             self.hover_animation.setEndValue(1.0)
@@ -118,24 +117,12 @@ class PathDrawAnimatedButton(QPushButton):
     def mousePressEvent(self, event):
         """鼠标按下事件"""
         super().mousePressEvent(event)
-        if not self._is_animating:
-            # 点击时快速绘制
-            self.hover_animation.stop()
-            self.hover_animation.setStartValue(self._animation_progress)
-            self.hover_animation.setEndValue(0.0)  # 完全擦除
-            self.hover_animation.setDuration(100)
-            self.hover_animation.start()
+        # 按下时不做特殊处理，保持当前动画状态
     
     def mouseReleaseEvent(self, event):
         """鼠标释放事件"""
         super().mouseReleaseEvent(event)
-        if not self._is_animating and self.underMouse():
-            # 如果鼠标仍在按钮上，回到悬停状态
-            self.hover_animation.stop()
-            self.hover_animation.setStartValue(self._animation_progress)
-            self.hover_animation.setEndValue(0.3)
-            self.hover_animation.setDuration(200)
-            self.hover_animation.start()
+        # 释放时不做特殊处理，保持当前动画状态
     
     def paintEvent(self, event):
         """绘制事件"""
