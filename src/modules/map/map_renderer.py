@@ -367,6 +367,9 @@ class MapRenderer:
             function setupMapListeners() {
                 if (!map) return;
 
+                // 保存地图对象到全局变量，供其他功能使用
+                window.map = map;
+                console.log('[地图交互] 已将地图对象保存到 window.map');
                 console.log('[地图交互] 开始设置地图监听器');
 
                 // 1. 禁用默认右键菜单
