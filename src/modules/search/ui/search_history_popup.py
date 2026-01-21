@@ -55,15 +55,9 @@ class SearchHistoryPopup(QListWidget):
         self._load_history_icon()
 
     def _load_history_icon(self):
-        """加载历史图标"""
-        from core.resource_path import resource_path
-        icon_path = resource_path('res/History.png')
-
-        if os.path.exists(icon_path):
-            self.history_icon = QIcon(icon_path)
-        else:
-            self.history_icon = None
-            print(f"[搜索历史] 未找到历史图标: {icon_path}")
+        """设置历史图标为emoji"""
+        # 使用emoji作为历史图标
+        self.history_icon = None
 
     def show_history(self, history_list: list, search_container_widget):
         """
@@ -122,10 +116,10 @@ class SearchHistoryPopup(QListWidget):
             item.setIcon(self.history_icon)
             item.setSizeHint(QSize(0, 40))  # 设置项高度
 
-        # 设置文本（只显示名称）
-        display_text = name
+        # 设置文本（emoji + 名称）
+        display_text = f"📋 {name}"
         if address and address != name:
-            display_text = f"{name} - {address}"
+            display_text = f"📋 {name} - {address}"
 
         item.setText(display_text)
 

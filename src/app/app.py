@@ -746,21 +746,72 @@ class GpxStudio(QMainWindow):
         """
 
         # 搜索按钮
-        self.search_button = create_icon_button('Search', '搜索', self)
+        self.search_button = QPushButton()
+        self.search_button.setText("🔍")
+        self.search_button.setToolTip("搜索")
         self.search_button.clicked.connect(self.on_search_button_clicked)
         self.search_button.setFixedSize(control_height, control_height)
+        self.search_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         search_layout.addWidget(self.search_button)
 
         # 路线按钮
-        self.route_button = create_icon_button('Route', '路线', self)
+        self.route_button = QPushButton()
+        self.route_button.setText("🗺️")
+        self.route_button.setToolTip("路线")
         self.route_button.clicked.connect(self.on_route_button_clicked)
         self.route_button.setFixedSize(control_height, control_height)
+        self.route_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         search_layout.addWidget(self.route_button)
 
         # 关闭按钮（初始隐藏，显示搜索结果时替换路线按钮）
-        self.cancel_button = create_icon_button('Cancel', '关闭', self)
+        self.cancel_button = QPushButton()
+        self.cancel_button.setText("❌")
+        self.cancel_button.setToolTip("关闭")
         self.cancel_button.clicked.connect(self.on_cancel_button_clicked)
         self.cancel_button.setFixedSize(control_height, control_height)
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         search_layout.addWidget(self.cancel_button)
         self.cancel_button.hide()  # 初始隐藏
 

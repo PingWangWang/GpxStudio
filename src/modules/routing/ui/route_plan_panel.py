@@ -130,39 +130,57 @@ class RouteHistoryItem(QWidget):
 
     def _update_export_button_icon(self):
         """更新导出按钮图标"""
-        from PyQt5.QtGui import QIcon
-        from PyQt5.QtCore import QSize
-        from core.resource_path import resource_path
-
+        # 使用emoji作为图标，与右键菜单面板保持一致
+        self.export_button.setText("📥")
         if self.export_button.isEnabled():
-            # 启用状态：使用白色图标
-            icon_path = resource_path('res/Downloading_white.png')
+            # 启用状态
+            self.export_button.setStyleSheet("""
+                QPushButton {
+                    font-size: 16px;
+                    background-color: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    border-radius: 4px;
+                }
+                QPushButton:hover:enabled {
+                    background-color: rgba(255, 255, 255, 0.2);
+                    border: 1px solid rgba(255, 255, 255, 0.5);
+                }
+                QPushButton:pressed:enabled {
+                    background-color: rgba(255, 255, 255, 0.3);
+                    border: 1px solid rgba(255, 255, 255, 0.7);
+                }
+            """)
         else:
-            # 禁用状态：使用灰色图标
-            icon_path = resource_path('res/Downloading_gray.png')
-
-        if os.path.exists(icon_path):
-            self.export_button.setIcon(QIcon(icon_path))
-            self.export_button.setIconSize(QSize(16, 16))
+            # 禁用状态
+            self.export_button.setStyleSheet("""
+                QPushButton {
+                    font-size: 16px;
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 4px;
+                    opacity: 0.5;
+                }
+            """)
 
     def _load_mode_icon(self):
         """加载交通方式图标"""
-        from core.resource_path import resource_path
-
+        # 使用emoji作为图标，与右键菜单面板保持一致
         mode = self.history_data.get('mode', 'driving')
-        icon_name_map = {
-            'driving': 'Driving_white.png',
-            'cycling': 'Cycling_white.png',
-            'walking': 'Waking_white.png'
+        icon_map = {
+            'driving': '🚗',
+            'cycling': '🚲',
+            'walking': '🚶'
         }
 
-        icon_name = icon_name_map.get(mode, 'Driving_white.png')
-        icon_path = resource_path(f'res/{icon_name}')
-
-        if os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path)
-            scaled_pixmap = pixmap.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.mode_icon_label.setPixmap(scaled_pixmap)
+        icon_text = icon_map.get(mode, '🚗')
+        self.mode_icon_label.setText(icon_text)
+        self.mode_icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 20px;
+                text-align: center;
+                color: white;
+            }
+        """)
 
 
 class RouteAlternativeItem(QWidget):
@@ -228,15 +246,12 @@ class RouteAlternativeItem(QWidget):
         self.export_button = QPushButton()
         self.export_button.setFixedSize(24, 24)  # 稍微放大
 
-        # 加载Downloading图标（白色版本）
-        downloading_icon_path = resource_path('res/Downloading_white.png')
-        if os.path.exists(downloading_icon_path):
-            self.export_button.setIcon(QIcon(downloading_icon_path))
-            self.export_button.setIconSize(QSize(18, 18))
-
+        # 使用emoji作为图标，与右键菜单面板保持一致
+        self.export_button.setText("📥")
         self.export_button.setToolTip('导出GPX文件')
         self.export_button.setStyleSheet("""
             QPushButton {
+                font-size: 18px;
                 background-color: rgba(255, 255, 255, 0.1);
                 border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 4px;
@@ -417,12 +432,24 @@ class AddressSuggestionItem(QWidget):
 
     def _load_icon(self):
         """加载确认图标"""
-        from core.resource_path import resource_path
-
-        icon_path = resource_path('res/Yes.png')
-        if os.path.exists(icon_path):
-            self.confirm_button.setIcon(QIcon(icon_path))
-            self.confirm_button.setIconSize(QSize(18, 18))  # 减小图标尺寸
+        # 使用emoji作为图标，与右键菜单面板保持一致
+        self.confirm_button.setText("✅")
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                font-size: 18px;
+                background-color: rgba(74, 144, 226, 0.15);
+                border: 1px solid rgba(74, 144, 226, 0.4);
+                border-radius: 16px;
+            }
+            QPushButton:hover {
+                background-color: rgba(74, 144, 226, 0.25);
+                border: 1px solid rgba(74, 144, 226, 0.6);
+            }
+            QPushButton:pressed {
+                background-color: rgba(74, 144, 226, 0.35);
+                border: 1px solid rgba(74, 144, 226, 0.8);
+            }
+        """)
 
 
 class RoutePlanPanel(QWidget):
@@ -908,105 +935,148 @@ class RoutePlanPanel(QWidget):
 
     def _load_icons(self):
         """加载图标"""
-        # 获取项目根目录
-        from core.resource_path import resource_path
+        # 使用emoji作为图标，与右键菜单面板保持一致
 
-        # 驾车图标（白色版本）
-        driving_icon_path = resource_path('res/Driving_white.png')
-        if os.path.exists(driving_icon_path):
-            self.driving_button.setIcon(QIcon(driving_icon_path))
-            self.driving_button.setIconSize(QSize(24, 24))
+        # 驾车图标
+        self.driving_button.setText("🚗")
+        self.driving_button.setStyleSheet("""
+            QPushButton {
+                font-size: 24px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
 
-        # 骑行图标（白色版本）
-        cycling_icon_path = resource_path('res/Cycling_white.png')
-        if os.path.exists(cycling_icon_path):
-            self.cycling_button.setIcon(QIcon(cycling_icon_path))
-            self.cycling_button.setIconSize(QSize(24, 24))
+        # 骑行图标
+        self.cycling_button.setText("🚲")
+        self.cycling_button.setStyleSheet("""
+            QPushButton {
+                font-size: 24px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
 
-        # 步行图标（白色版本）
-        walking_icon_path = resource_path('res/Waking_white.png')
-        if os.path.exists(walking_icon_path):
-            self.walking_button.setIcon(QIcon(walking_icon_path))
-            self.walking_button.setIconSize(QSize(24, 24))
+        # 步行图标
+        self.walking_button.setText("🚶")
+        self.walking_button.setStyleSheet("""
+            QPushButton {
+                font-size: 24px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
 
-        # 取消图标（白色版本）
-        cancel_icon_path = resource_path('res/Cancel_white.png')
-        if os.path.exists(cancel_icon_path):
-            self.cancel_button.setIcon(QIcon(cancel_icon_path))
-            self.cancel_button.setIconSize(QSize(20, 20))
+        # 取消图标
+        self.cancel_button.setText("❌")
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+        """)
 
-        # 切换图标（白色版本，旋转90度）
-        switch_icon_path = resource_path('res/Switch_white.png')
-        if os.path.exists(switch_icon_path):
-            pixmap = QPixmap(switch_icon_path)
-            # 旋转90度
-            transform = QTransform().rotate(90)
-            rotated_pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
-            self.switch_button.setIcon(QIcon(rotated_pixmap))
-            self.switch_button.setIconSize(QSize(20, 20))
+        # 切换图标
+        self.switch_button.setText("🔄")
+        self.switch_button.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+        """)
 
         # 添加途径点图标
-        add_icon_path = resource_path('res/Add.png')
-        if os.path.exists(add_icon_path):
-            self.add_waypoint_button.setIcon(QIcon(add_icon_path))
-            self.add_waypoint_button.setIconSize(QSize(20, 20))
+        self.add_waypoint_button.setText("➕")
+        self.add_waypoint_button.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+        """)
 
-        # 历史记录图标（白色版本）
-        history_icon_path = resource_path('res/History_white.png')
-        if os.path.exists(history_icon_path):
-            pixmap = QPixmap(history_icon_path)
-            # 缩放到16x16
-            scaled_pixmap = pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.history_icon_label.setPixmap(scaled_pixmap)
+        # 历史记录图标
+        self.history_icon_label.setText("📋")
+        self.history_icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: white;
+            }
+        """)
 
-        # 搜索图标（白色版本）
-        search_icon_path = resource_path('res/Search.png')
-        if os.path.exists(search_icon_path):
-            # 创建白色版本
-            img = QPixmap(search_icon_path).toImage()
-            for y in range(img.height()):
-                for x in range(img.width()):
-                    pixel = img.pixelColor(x, y)
-                    if pixel.alpha() > 0:
-                        img.setPixelColor(x, y, QColor(255, 255, 255, pixel.alpha()))
-            pixmap = QPixmap.fromImage(img)
-            # 缩放到16x16
-            scaled_pixmap = pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.search_icon_label.setPixmap(scaled_pixmap)
+        # 搜索图标
+        self.search_icon_label.setText("🔍")
+        self.search_icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: white;
+            }
+        """)
 
     def _load_loading_icon(self):
-        """加载Loading图标并设置旋转动画"""
+        """设置Loading图标为emoji"""
+        # 使用emoji作为Loading图标
+        self.loading_button.setText("🔄")
+        self.loading_button.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                color: white;
+                background: transparent;
+            }
+        """)
+
+        # 创建定时器用于动画效果
         from PyQt5.QtCore import QTimer
-        from core.resource_path import resource_path
+        self.loading_timer = QTimer(self)
+        self.loading_timer.timeout.connect(self._animate_loading_emoji)
 
-        # 加载Loading图标
-        loading_icon_path = resource_path('res/Loading.png')
-        if os.path.exists(loading_icon_path):
-            self.loading_pixmap = QPixmap(loading_icon_path)
-            # 缩放到24x24
-            self.loading_pixmap = self.loading_pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        # 初始化动画状态
+        self.loading_animation_state = 0
 
-            # 初始化旋转角度
-            self.loading_rotation_angle = 0
-
-            # 创建定时器用于旋转动画
-            self.loading_timer = QTimer(self)
-            self.loading_timer.timeout.connect(self._rotate_loading_icon)
-
-    def _rotate_loading_icon(self):
-        """旋转Loading图标"""
-        if not hasattr(self, 'loading_pixmap'):
-            return
-
-        # 更新旋转角度
-        self.loading_rotation_angle = (self.loading_rotation_angle + 10) % 360
-
-        # 创建旋转后的图标
-        transform = QTransform().rotate(self.loading_rotation_angle)
-        rotated_pixmap = self.loading_pixmap.transformed(transform, Qt.SmoothTransformation)
-
-        # 设置到label
-        self.loading_button.setPixmap(rotated_pixmap)
+    def _animate_loading_emoji(self):
+        """动画Loading emoji"""
+        # 简单的动画效果，切换不同的加载emoji
+        loading_emojis = ["🔄", "⏳", "⌛"]
+        self.loading_animation_state = (self.loading_animation_state + 1) % len(loading_emojis)
+        self.loading_button.setText(loading_emojis[self.loading_animation_state])
 
     def keyPressEvent(self, event: QKeyEvent):
         """处理键盘事件"""
@@ -1242,12 +1312,21 @@ class RoutePlanPanel(QWidget):
         delete_button.setFixedSize(32, 32)
         delete_button.setToolTip("删除途径点")
 
-        # 加载删除图标
-        from core.resource_path import resource_path
-        delete_icon_path = resource_path('res/Delete.png')
-        if os.path.exists(delete_icon_path):
-            delete_button.setIcon(QIcon(delete_icon_path))
-            delete_button.setIconSize(QSize(20, 20))
+        # 使用emoji作为图标，与右键菜单面板保持一致
+        delete_button.setText("🗑️")
+        delete_button.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+        """)
 
         # 创建途径点容器widget
         waypoint_widget = QWidget()

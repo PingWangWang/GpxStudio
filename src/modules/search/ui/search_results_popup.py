@@ -55,15 +55,9 @@ class SearchResultsPopup(QListWidget):
         self._load_search_icon()
 
     def _load_search_icon(self):
-        """加载搜索图标"""
-        from core.resource_path import resource_path
-        icon_path = resource_path('res/Search.png')
-
-        if os.path.exists(icon_path):
-            self.search_icon = QIcon(icon_path)
-        else:
-            self.search_icon = None
-            print(f"[搜索结果] 未找到搜索图标: {icon_path}")
+        """设置搜索图标为emoji"""
+        # 使用emoji作为搜索图标
+        self.search_icon = None
 
     def show_results(self, results_list: list, search_container_widget):
         """
@@ -124,8 +118,8 @@ class SearchResultsPopup(QListWidget):
         else:
             item.setSizeHint(QSize(0, 55))
 
-        # 设置文本（第一行：名称，第二行：地址）
-        display_parts = [name]
+        # 设置文本（第一行：emoji + 名称，第二行：地址）
+        display_parts = [f"🔍 {name}"]
         if address and address != name:
             display_parts.append(address)
 
