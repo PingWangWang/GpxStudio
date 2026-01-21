@@ -64,13 +64,13 @@ class RouteHistoryItem(QWidget):
         # 导出GPX按钮（放在最右侧）
         from PyQt5.QtGui import QIcon
         from core.resource_path import resource_path
-        
+
         self.export_button = QPushButton()
         self.export_button.setFixedSize(20, 20)  # 历史记录中的按钮稍小一些
-        
+
         # 初始状态为禁用，使用灰色图标
         self._update_export_button_icon()
-        
+
         self.export_button.setToolTip('导出GPX文件')
         self.export_button.setStyleSheet("""
             QPushButton {
@@ -115,10 +115,10 @@ class RouteHistoryItem(QWidget):
         # 只有当记录被选中且有路线数据时才启用导出按钮
         should_enable = self.is_selected and self.has_route_data
         self.export_button.setEnabled(should_enable)
-        
+
         # 更新图标
         self._update_export_button_icon()
-        
+
         # 更新工具提示
         if self.is_selected:
             if self.has_route_data:
@@ -133,14 +133,14 @@ class RouteHistoryItem(QWidget):
         from PyQt5.QtGui import QIcon
         from PyQt5.QtCore import QSize
         from core.resource_path import resource_path
-        
+
         if self.export_button.isEnabled():
             # 启用状态：使用白色图标
             icon_path = resource_path('res/Downloading_white.png')
         else:
             # 禁用状态：使用灰色图标
             icon_path = resource_path('res/Downloading_gray.png')
-        
+
         if os.path.exists(icon_path):
             self.export_button.setIcon(QIcon(icon_path))
             self.export_button.setIconSize(QSize(16, 16))
@@ -224,16 +224,16 @@ class RouteAlternativeItem(QWidget):
         # 导出GPX按钮 - 使用Downloading图标
         from PyQt5.QtGui import QIcon
         from core.resource_path import resource_path
-        
+
         self.export_button = QPushButton()
         self.export_button.setFixedSize(24, 24)  # 稍微放大
-        
+
         # 加载Downloading图标（白色版本）
         downloading_icon_path = resource_path('res/Downloading_white.png')
         if os.path.exists(downloading_icon_path):
             self.export_button.setIcon(QIcon(downloading_icon_path))
             self.export_button.setIconSize(QSize(18, 18))
-        
+
         self.export_button.setToolTip('导出GPX文件')
         self.export_button.setStyleSheet("""
             QPushButton {
@@ -461,6 +461,11 @@ class RoutePlanPanel(QWidget):
         self.current_search_input = None  # 当前正在搜索的输入框
         self.current_suggestions = []  # 当前的地址建议列表
         self.selected_suggestion_index = 0  # 当前选中的建议索引
+
+        # 坐标存储（用于保存右键菜单设置的坐标）
+        self.start_coords = None  # 起点坐标 (lat, lon)
+        self.end_coords = None  # 终点坐标 (lat, lon)
+        self.waypoint_coords = []  # 途径点坐标列表 [(lat, lon), ...]
 
         # 初始化UI
         self._init_ui()
@@ -1010,17 +1015,17 @@ class RoutePlanPanel(QWidget):
             parent_app = self.parent()
             while parent_app and not hasattr(parent_app, 'gpx_export_popup'):
                 parent_app = parent_app.parent()
-            
+
             if parent_app and hasattr(parent_app, 'gpx_export_popup'):
                 if parent_app.gpx_export_popup and parent_app.gpx_export_popup.isVisible():
                     # 检查GPX面板是否有子弹出窗口（时间日期设置面板）
                     gpx_popup = parent_app.gpx_export_popup
                     has_child_popup = False
-                    
+
                     # 检查新的日期时间选择器
                     if hasattr(gpx_popup, 'picker_popup') and gpx_popup.picker_popup and gpx_popup.picker_popup.isVisible():
                         has_child_popup = True
-                    
+
                     if has_child_popup:
                         # 如果有子弹出窗口，不处理ESC键，让子窗口处理
                         print("[路线面板] 有子弹出窗口正在显示，ESC键由子窗口处理")
@@ -1031,7 +1036,7 @@ class RoutePlanPanel(QWidget):
                         print("[路线面板] GPX导出面板正在显示，ESC键由GPX面板处理")
                         super().keyPressEvent(event)
                         return
-            
+
             # 如果没有任何子弹出窗口显示，则关闭路线规划面板
             print("[路线面板] ESC键关闭路线规划面板")
             self.cancel_clicked.emit()
@@ -1426,10 +1431,10 @@ class RoutePlanPanel(QWidget):
         if history_data:
             # 更新所有历史记录项的选中状态
             self._update_history_selection(item)
-            
+
             # 检查选中的历史记录是否有路线数据
             self._check_and_update_route_data_status(history_data)
-            
+
             # 发送历史记录选中信号
             self.history_selected.emit(history_data)
 
@@ -1437,10 +1442,10 @@ class RoutePlanPanel(QWidget):
         """更新历史记录选中状态"""
         if not hasattr(self, 'history_widgets'):
             return
-            
+
         # 获取选中项的索引
         selected_row = self.history_list.row(selected_item)
-        
+
         # 更新所有历史记录项的选中状态
         for i, widget in enumerate(self.history_widgets):
             is_selected = (i == selected_row)
@@ -1451,7 +1456,7 @@ class RoutePlanPanel(QWidget):
         # 检查历史记录是否有完整的路线数据
         route_points = history_data.get('route_points', [])
         has_route_data = bool(route_points and len(route_points) > 0)
-        
+
         # 更新对应widget的路线数据状态
         for widget in self.history_widgets:
             if widget.history_data == history_data:
@@ -1462,7 +1467,7 @@ class RoutePlanPanel(QWidget):
         """更新历史记录的路线数据状态"""
         if not hasattr(self, 'history_widgets'):
             return
-            
+
         # 根据历史记录数据找到对应的widget并更新状态
         for widget in self.history_widgets:
             if widget.history_data == history_data:
@@ -1494,18 +1499,18 @@ class RoutePlanPanel(QWidget):
         self._last_history_list = history_list
 
         self.history_list.clear()
-        
+
         # 存储历史记录项的引用，用于状态管理
         self.history_widgets = []
 
         for record in history_list:
             # 创建自定义历史记录项widget
             history_widget = RouteHistoryItem(record)
-            
+
             # 确保初始状态：未选中，无路线数据（导出按钮禁用）
             history_widget.set_selected(False)
             history_widget.set_route_data_available(False)
-            
+
             # 连接导出GPX信号
             history_widget.export_gpx_clicked.connect(self.history_export_gpx_clicked.emit)
 
@@ -1516,7 +1521,7 @@ class RoutePlanPanel(QWidget):
 
             self.history_list.addItem(item)
             self.history_list.setItemWidget(item, history_widget)
-            
+
             # 保存widget引用
             self.history_widgets.append(history_widget)
 
@@ -1723,7 +1728,7 @@ class RoutePlanPanel(QWidget):
             # 创建自定义路线方案项widget
             is_selected = (i == selected_index)
             route_widget = RouteAlternativeItem(route_data, i, is_selected)
-            
+
             # 连接导出GPX信号
             route_widget.export_gpx_clicked.connect(self.export_gpx_clicked.emit)
 
@@ -1791,20 +1796,20 @@ class RoutePlanPanel(QWidget):
         """设置选中的历史记录"""
         if not hasattr(self, 'history_widgets') or not self.history_widgets:
             return
-            
+
         # 找到匹配的历史记录并设置为选中状态
         for i, widget in enumerate(self.history_widgets):
             is_match = widget.history_data == selected_history_data
-            
+
             if is_match:
                 # 设置选中状态
                 widget.set_selected(True)
-                
+
                 # 自动检查并设置路线数据状态
                 route_points = selected_history_data.get('route_points', [])
                 has_route_data = bool(route_points and len(route_points) > 0)
                 widget.set_route_data_available(has_route_data)
-                
+
                 # 同时设置列表项为选中状态
                 self.history_list.setCurrentRow(i)
             else:
