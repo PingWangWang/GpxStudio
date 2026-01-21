@@ -5,7 +5,7 @@
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont, QIcon, QFontMetrics
 
 
 class MapContextMenuPopup(QWidget):
@@ -48,6 +48,26 @@ class MapContextMenuPopup(QWidget):
         main_layout.setContentsMargins(0, 6, 0, 6)
         main_layout.setSpacing(0)
 
+        # 布局/样式参数（与按钮样式中 padding: 8px 16px 保持一致）
+        self._content_padding = 16
+        self._icon_width = 24
+        self._item_spacing = 8
+
+        # 菜单项文本列表（用于计算所需最大宽度）
+        texts = ["设为起点", "设为途径点", "设为终点", "这是哪儿", "设置地图中心点", "清除路线"]
+
+        # 使用字体度量计算宽度
+        fm = QFontMetrics(QFont())
+        try:
+            # Qt 5.11+ 推荐使用 horizontalAdvance
+            max_text_width = max(fm.horizontalAdvance(t) for t in texts)
+        except Exception:
+            # 退回到 width（兼容老版本）
+            max_text_width = max(fm.width(t) for t in texts)
+
+        # 计算所需总宽度：左右内边距 + 图标宽度 + 间距 + 最大文字宽度
+        total_width = self._content_padding * 2 + self._icon_width + self._item_spacing + max_text_width
+
         # 创建菜单项
         self._create_menu_item(main_layout, "设为起点", "📍", self._on_set_as_start, "#1890ff")
         self._create_menu_item(main_layout, "设为途径点", "📌", self._on_set_as_via, "#52c41a")
@@ -64,8 +84,8 @@ class MapContextMenuPopup(QWidget):
 
         self._create_menu_item(main_layout, "清除路线", "🗑️", self._on_clear_route, "#ff4d4f")
 
-        # 设置固定宽度
-        self.setFixedWidth(200)
+        # 设置固定宽度为计算结果（向上取整一个像素保证不裁切）
+        self.setFixedWidth(int(total_width) + 1)
 
     def _create_menu_item(self, layout, text, icon_text, callback, icon_color):
         """
@@ -101,28 +121,13 @@ class MapContextMenuPopup(QWidget):
             }}
         """)
 
-        # 固定宽度设置
-        icon_width = 24  # 增加图标宽度，确保所有emoji都能居中显示
-        spacing = 8
-        
-        # 计算左侧边距，使"设置地图中心点"按钮整体居中
-        # 菜单宽度固定为200px，左右边距各为16px，所以内容区域宽度为168px
-        content_width = 200 - 16 - 16
-        
-        # "设置地图中心点"按钮的总宽度
-        center_text_width = 120  # "设置地图中心点"文字宽度
-        center_total_width = icon_width + spacing + center_text_width
-        
-        # 计算左侧边距
-        center_left_margin = (content_width - center_total_width) // 2
-
         # 创建图标容器
         icon_container = QWidget()
-        icon_container.setFixedWidth(icon_width)
+        icon_container.setFixedWidth(self._icon_width)
         icon_layout = QHBoxLayout(icon_container)
         icon_layout.setContentsMargins(0, 0, 0, 0)
         icon_layout.setAlignment(Qt.AlignCenter)
-        
+
         # 图标标签
         icon_label = QLabel(icon_text)
         icon_label.setStyleSheet(f"""
@@ -147,11 +152,10 @@ class MapContextMenuPopup(QWidget):
         # 创建主布局
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(spacing)
+        main_layout.setSpacing(self._item_spacing)
 
-        # 为所有菜单项设置相同的布局结构
-        # 这样可以确保图标和文字与"设置地图中心点"按钮对齐
-        main_layout.addSpacing(center_left_margin)
+        # 为所有菜单项设置相同的左右内边距，保证右侧空白与左侧图标前的空白对称
+        main_layout.addSpacing(self._content_padding)
         main_layout.addWidget(icon_container)
         main_layout.addWidget(text_label)
         main_layout.addStretch()
