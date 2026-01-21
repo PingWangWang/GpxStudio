@@ -1312,8 +1312,8 @@ class RoutePlanPanel(QWidget):
         delete_button.setFixedSize(32, 32)
         delete_button.setToolTip("删除途径点")
 
-        # 使用emoji作为图标，与右键菜单面板保持一致
-        delete_button.setText("🗑️")
+        # 使用emoji作为图标，与缩放地图按钮保持一致
+        delete_button.setText("➖")
         delete_button.setStyleSheet("""
             QPushButton {
                 font-size: 20px;

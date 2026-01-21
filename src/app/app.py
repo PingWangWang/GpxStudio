@@ -612,55 +612,173 @@ class GpxStudio(QMainWindow):
             }
         """
 
-        # 创建地图设置按钮（SVG动画齿轮按钮）
-        from ui.icons import create_icon_button
-        self.map_settings_button = create_icon_button('MapSetting', '地图设置')
+        # 创建地图设置按钮
+        self.map_settings_button = QPushButton()
+        self.map_settings_button.setText("⚙️")
+        self.map_settings_button.setToolTip("地图设置")
         print(f"[调试] 地图设置按钮: {self.map_settings_button}")
         self.map_settings_button.clicked.connect(self.on_map_settings_clicked)
         self.map_settings_button.setFixedSize(control_height, control_height)  # 使用与搜索框按钮相同的大小
+        self.map_settings_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.map_settings_button)
 
         # 创建日志设置按钮
         # 创建日志设置按钮
-        self.log_settings_button = create_icon_button('Log', '日志设置', self)
+        self.log_settings_button = QPushButton()
+        self.log_settings_button.setText("📋")
+        self.log_settings_button.setToolTip("日志设置")
         print(f"[调试] 日志设置按钮: {self.log_settings_button}")
         self.log_settings_button.clicked.connect(self.on_log_settings_clicked)
         self.log_settings_button.setFixedSize(control_height, control_height)
+        self.log_settings_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.log_settings_button)
 
         # 创建关于按钮
-        self.about_button = create_icon_button('About', '关于', self)
+        self.about_button = QPushButton()
+        self.about_button.setText("ℹ️")
+        self.about_button.setToolTip("关于")
         print(f"[调试] 关于按钮: {self.about_button}")
         self.about_button.clicked.connect(self.on_about_clicked)
         self.about_button.setFixedSize(control_height, control_height)
+        self.about_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.about_button)
 
         # 创建放大按钮
-        self.zoom_in_button = create_icon_button('ZoomBig', '放大', self)
+        self.zoom_in_button = QPushButton()
+        self.zoom_in_button.setText("➕")
+        self.zoom_in_button.setToolTip("放大")
         print(f"[调试] 放大按钮: {self.zoom_in_button}")
         self.zoom_in_button.clicked.connect(self.on_zoom_in_clicked)
         self.zoom_in_button.setFixedSize(control_height, control_height)
+        self.zoom_in_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.zoom_in_button)
 
         # 创建缩小按钮
-        self.zoom_out_button = create_icon_button('ZoomSmall', '缩小', self)
+        self.zoom_out_button = QPushButton()
+        self.zoom_out_button.setText("➖")
+        self.zoom_out_button.setToolTip("缩小")
         print(f"[调试] 缩小按钮: {self.zoom_out_button}")
         self.zoom_out_button.clicked.connect(self.on_zoom_out_clicked)
         self.zoom_out_button.setFixedSize(control_height, control_height)
+        self.zoom_out_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.zoom_out_button)
 
         # 创建定位按钮
-        self.locate_button = create_icon_button('Location', '定位到当前位置', self)
+        self.locate_button = QPushButton()
+        self.locate_button.setText("📍")
+        self.locate_button.setToolTip("定位到当前位置")
         print(f"[调试] 定位按钮: {self.locate_button}")
         self.locate_button.clicked.connect(self.on_locate_clicked)
         self.locate_button.setFixedSize(control_height, control_height)
+        self.locate_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         right_buttons_layout.addWidget(self.locate_button)
 
         # 创建加载进度按钮
         # 创建加载进度按钮
-        self.loading_button = create_icon_button('Loading', '加载状态指示器', self)
+        self.loading_button = QPushButton()
+        self.loading_button.setText("🔄")
+        self.loading_button.setToolTip("加载状态指示器")
         print(f"[调试] 加载按钮: {self.loading_button}")
         self.loading_button.setFixedSize(control_height, control_height)
+        self.loading_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         self.loading_button.show()  # 固定显示，不做显隐切换
         right_buttons_layout.addWidget(self.loading_button)
 
@@ -2077,13 +2195,11 @@ class GpxStudio(QMainWindow):
         self.logger.info("已清空所有路线相关数据")
 
     def show_loading(self):
-        """开始加载动画"""
+        """显示加载动画"""
         if not self.is_loading:
             self.is_loading = True
             self.loading_button.setToolTip("正在加载...")
-            # 使用新的动画按钮
-            if hasattr(self.loading_button, 'start_animation'):
-                self.loading_button.start_animation()
+            # 使用emoji作为加载图标，不需要额外的动画处理
             self.logger.debug("[加载] 开始加载动画")
 
     def hide_loading(self):
@@ -2091,25 +2207,21 @@ class GpxStudio(QMainWindow):
         if self.is_loading:
             self.is_loading = False
             self.loading_button.setToolTip("加载状态指示器")
-            # 使用新的动画按钮
-            if hasattr(self.loading_button, 'stop_animation'):
-                self.loading_button.stop_animation()
+            # 使用emoji作为加载图标，不需要额外的动画处理
             self.logger.debug("[加载] 停止加载动画")
 
     def _reset_loading_icon(self):
         """重置加载图标到初始状态"""
-        # 新的动画按钮会自动处理重置
-        if hasattr(self.loading_button, 'stop_animation'):
-            self.loading_button.stop_animation()
+        # 使用emoji作为加载图标，不需要额外的动画处理
+        pass
 
     def _animate_loading(self):
         """加载动画效果"""
         if not self.is_loading:
             return
 
-        # 新的动画按钮会自动处理动画，这里只需要确保动画在运行
-        if hasattr(self.loading_button, 'is_animating') and not self.loading_button.is_animating():
-            self.loading_button.start_animation()
+        # 使用emoji作为加载图标，不需要额外的动画处理
+        pass
 
     def closeEvent(self, event):
         """重写关闭事件"""
