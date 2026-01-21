@@ -3221,12 +3221,66 @@ class GpxStudio(QMainWindow):
         """右键菜单：设为终点（新版）"""
         self.logger.info(f"[右键菜单] 设为终点: ({lat}, {lon})")
 
-        # 获取位置信息
-        location_info = getattr(self, '_context_menu_location_info', {})
-        name = location_info.get('name', f'位置 ({lat:.6f}, {lon:.6f})')
+        # 显示路线规划面板
+        if not self.route_plan_panel.isVisible():
+            self.route_plan_panel.show()
+            # 更新面板位置
+            self._update_route_panel_position()
 
-        # 复用现有的设为终点逻辑
-        self._on_context_menu_set_end(name, lat, lon)
+        # 获取当前地图源
+        map_source = map_config.get_map_source()
+
+        # 获取地理编码服务
+        geocoding_service = self.service_manager.get_geocoding_service(map_source)
+
+        address_name = f'位置 ({lat:.6f}, {lon:.6f})'  # 默认地址名称
+        level = None
+        type_info = None
+
+        if geocoding_service:
+            try:
+                # 执行逆地理编码查询
+                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
+                result = geocoding_service.reverse_geocode(lat, lon)
+
+                if result:
+                    # 获取地址名称和详细信息
+                    address_name = result.get('full_address', f'位置 ({lat:.6f}, {lon:.6f})')
+                    level = result.get('level')
+                    type_info = result.get('type')
+                    self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
+                else:
+                    # 逆地理编码失败，使用坐标作为名称
+                    self.logger.warning(f"[右键菜单] 逆地理编码失败，使用坐标作为名称")
+
+            except Exception as e:
+                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
+        else:
+            # 没有地理编码服务，直接使用坐标
+            self.logger.warning("[右键菜单] 地理编码服务不可用")
+
+        # 填充到终点输入框
+        self.route_plan_panel.end_input.setText(address_name)
+        # 保存终点坐标信息到面板（用于后续规划）
+        self.route_plan_panel.end_coords = (lat, lon)
+
+        # 保存终点信息到数据管理器（用于在地图上显示标记）
+        self.data_manager.set_end_location((lat, lon), address_name)
+        self.data_manager.end_level = level
+
+        # 清除搜索结果（数据和UI）
+        self.search_manager.clear_search_results()
+
+        # 更新地图显示终点标记
+        all_coords = self.map_manager._get_all_selected_coords()
+        if len(all_coords) >= 2:
+            # 多点：自动适应所有点
+            self.map_manager.update_map_preview(auto_fit=True)
+        else:
+            # 单点：根据地址级别智能缩放
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
+            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
+            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
 
     def _on_context_menu_query_here(self, lat: float, lon: float):
         """右键菜单：这是哪儿"""
