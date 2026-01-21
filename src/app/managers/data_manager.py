@@ -59,6 +59,7 @@ class DataManager:
 
         # 地图状态
         self.last_map_zoom_level: Optional[int] = None  # 最后一次地图更新的缩放级别
+        self.last_map_center: Optional[Tuple[float, float]] = None  # 最后一次地图更新的中心点
 
         print("数据状态初始化完成")
 

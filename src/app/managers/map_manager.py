@@ -194,8 +194,10 @@ class MapManager:
         center_level = None  # 中心点精度级别
         center_type = None  # 中心点类型
 
-        # 确定地图中心，优先级：最后选中的点 > 起点 > 终点 > 第一个途径点
-        if self.data_manager.last_selected_coords:
+        # 确定地图中心，优先级：保存的地图中心 > 最后选中的点 > 起点 > 终点 > 第一个途径点
+        if self.data_manager.last_map_center:
+            center_lat, center_lon = self.data_manager.last_map_center
+        elif self.data_manager.last_selected_coords:
             center_lat, center_lon = self.data_manager.last_selected_coords
             center_level = self.data_manager.last_selected_level
             center_type = self.data_manager.last_selected_type
@@ -215,8 +217,10 @@ class MapManager:
         else:
             # 根据中心点的精度级别和类型计算缩放级别
             calculated_zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
-            # 保存缩放级别
-            self.data_manager.last_map_zoom_level = calculated_zoom_level
+
+        # 保存当前地图中心和缩放级别
+        self.data_manager.last_map_center = (center_lat, center_lon)
+        self.data_manager.last_map_zoom_level = calculated_zoom_level
 
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
@@ -570,6 +574,8 @@ class MapManager:
         """
         # 更新当前缩放级别记录
         self.data_manager.current_zoom_level = new_zoom_level
+        # 同时更新last_map_zoom_level，以便在清除路线时保持缩放级别
+        self.data_manager.last_map_zoom_level = new_zoom_level
         self.logger.debug(f"[MapManager] 缩放级别更新: {new_zoom_level}")
 
         # 不再进行动态路线优化，原因：

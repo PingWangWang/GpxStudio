@@ -2372,8 +2372,8 @@ class GpxStudio(QMainWindow):
         # 清除路线面板中的输入框内容
         self.route_plan_panel.clear_all_inputs()
 
-        # 清除地图上的路线显示
-        self.map_manager.update_map_preview(auto_fit=False)
+        # 清除地图上的路线显示，保持地图中心和缩放级别
+        self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
 
         self.logger.info("[路线面板] 路线已清除")
 
@@ -3484,8 +3484,17 @@ class GpxStudio(QMainWindow):
     def _on_context_menu_clear_route(self):
         """右键菜单：清除路线"""
         self.logger.info("[右键菜单] 清除路线")
-        # TODO: 实现清除路线的功能
-        pass
+
+        # 清除 data_manager 中的所有路线数据
+        self.data_manager.clear_all_route_data()
+
+        # 清除路线面板中的输入框内容
+        self.route_plan_panel.clear_all_inputs()
+
+        # 清除地图上的路线显示，保持地图中心和缩放级别
+        self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
+
+        self.logger.info("[右键菜单] 路线已清除")
 
 
 if __name__ == "__main__":
