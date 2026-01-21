@@ -201,20 +201,14 @@ class GaodeRoutingService(IRoutingService):
 
         log_cb("INFO", f"开始规划路线，交通方式: {transport_mode} ({mode})")
 
-        # 只支持两点之间的路线规划（起点和终点）
-        if len(points) != 2:
-            log_cb("WARNING", f"当前仅支持起点和终点的路线规划，点数: {len(points)}")
-            # 如果有多个点，只取第一个和最后一个
-            if len(points) > 2:
-                points = [points[0], points[-1]]
-            else:
-                return [], 0
+        # 验证点数量
+        if len(points) < 2:
+            log_cb("WARNING", f"路线规划点数量不足: {len(points)}，至少需要2个点")
+            return [], 0
 
         try:
             start = points[0]
-            end = points[1]
-
-            log_cb("DEBUG", f"规划路线: {start} -> {end}")
+            end = points[-1]
 
             # 构建路线规划请求参数
             params = {
@@ -223,6 +217,15 @@ class GaodeRoutingService(IRoutingService):
                 'destination': f"{end[1]},{end[0]}",         # 终点坐标，格式："lon,lat"
                 'output': 'json'                             # 返回格式为JSON
             }
+
+            # 添加途经点（如果有）
+            if len(points) > 2:
+                waypoints = points[1:-1]
+                waypoints_str = "|".join([f"{lon},{lat}" for lat, lon in waypoints])
+                params['waypoints'] = waypoints_str
+                log_cb("DEBUG", f"规划路线: {start} -> {waypoints} -> {end}")
+            else:
+                log_cb("DEBUG", f"规划路线: {start} -> {end}")
 
             # 根据交通方式设置不同的策略参数
             if mode == 'walking':
