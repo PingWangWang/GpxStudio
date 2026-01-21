@@ -514,7 +514,7 @@ class RoutePlanPanel(QWidget):
         # 设置面板样式 - 使用 RoutePlanPanel 作为选择器确保背景色应用
         self.setStyleSheet("""
             RoutePlanPanel {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 0, 0, 0.15);
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;

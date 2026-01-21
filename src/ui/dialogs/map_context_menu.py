@@ -53,7 +53,7 @@ class MapContextMenu(QWidget):
                 font-size: 9pt;
             }
             QPushButton {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 color: white;
                 border: none;
                 border-radius: 4px;

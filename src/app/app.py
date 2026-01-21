@@ -1458,7 +1458,7 @@ class GpxStudio(QMainWindow):
                 color: #333333;
             }
             QListWidget::item:selected {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 color: white;
                 border: none;
             }

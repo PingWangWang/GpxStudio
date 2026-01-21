@@ -184,7 +184,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 设置面板样式 - 与路线规划面板保持一致
         self.setStyleSheet("""
             MapSettingsPopup {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -296,7 +296,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 border: 1px solid rgba(0, 0, 0, 0.2);
                 border-radius: 3px;
                 background-color: white;
-                selection-background-color: #4A90E2;
+                selection-background-color: #3d93fd;
                 selection-color: white;
                 font-size: 12px;
             }
@@ -840,7 +840,7 @@ class LogSettingsPopup(BaseSettingsPopup):
         # 设置面板样式 - 与地图设置面板保持一致
         self.setStyleSheet("""
             LogSettingsPopup {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -949,7 +949,7 @@ class LogSettingsPopup(BaseSettingsPopup):
                 border: 1px solid rgba(0, 0, 0, 0.2);
                 border-radius: 3px;
                 background-color: white;
-                selection-background-color: #4A90E2;
+                selection-background-color: #3d93fd;
                 selection-color: white;
                 font-size: 12px;
             }
@@ -1122,7 +1122,7 @@ class AboutPopup(BaseSettingsPopup):
         # 设置面板样式 - 与地图设置面板保持一致
         self.setStyleSheet("""
             AboutPopup {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }

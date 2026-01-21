@@ -108,7 +108,7 @@ class TaskProgressWidget(QWidget):
                 font-size: 9pt;
             }
             QProgressBar::chunk {
-                background-color: #4A90E2;
+                background-color: #3d93fd;
                 border-radius: 2px;
             }
         """)
