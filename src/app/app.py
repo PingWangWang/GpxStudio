@@ -2458,7 +2458,7 @@ class GpxStudio(QMainWindow):
                 container_global_pos.x(),
                 container_global_pos.y(),
                 self.search_container.width(),
-                400  # 固定高度
+                500  # 固定高度
             )
 
             # 加载路线搜索历史
@@ -2472,7 +2472,7 @@ class GpxStudio(QMainWindow):
             self.route_plan_panel.setFocus()
 
             self.logger.debug(f"[路线面板] 面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
-            self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 400")
+            self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 500")
 
             self.logger.debug("[路线面板] 路线规划面板已显示并设置焦点")
 

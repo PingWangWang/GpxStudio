@@ -66,7 +66,7 @@ class RouteHistoryItem(QWidget):
         from core.resource_path import resource_path
 
         self.export_button = QPushButton()
-        self.export_button.setFixedSize(20, 20)  # 历史记录中的按钮稍小一些
+        self.export_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
 
         # 初始状态为禁用，使用灰色图标
         self._update_export_button_icon()
@@ -136,7 +136,7 @@ class RouteHistoryItem(QWidget):
             # 启用状态
             self.export_button.setStyleSheet("""
                 QPushButton {
-                    font-size: 16px;
+                    font-size: 18px;
                     background-color: rgba(255, 255, 255, 0.1);
                     border: 1px solid rgba(255, 255, 255, 0.3);
                     border-radius: 4px;
@@ -154,7 +154,7 @@ class RouteHistoryItem(QWidget):
             # 禁用状态
             self.export_button.setStyleSheet("""
                 QPushButton {
-                    font-size: 16px;
+                    font-size: 18px;
                     background-color: rgba(255, 255, 255, 0.05);
                     border: 1px solid rgba(255, 255, 255, 0.1);
                     border-radius: 4px;
@@ -197,9 +197,15 @@ class RouteAlternativeItem(QWidget):
 
     def _init_ui(self):
         """初始化UI"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(6)
+        # 使用水平布局作为主布局，以便将导出按钮放在右侧垂直居中
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(12, 10, 12, 10)
+        main_layout.setSpacing(8)
+
+        # 左侧内容容器
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(6)
 
         # 第一行：方案名称和时间
         first_row = QHBoxLayout()
@@ -239,39 +245,7 @@ class RouteAlternativeItem(QWidget):
         """)
         first_row.addWidget(time_label)
 
-        # 导出GPX按钮 - 使用Downloading图标
-        from PyQt5.QtGui import QIcon
-        from core.resource_path import resource_path
-
-        self.export_button = QPushButton()
-        self.export_button.setFixedSize(24, 24)  # 稍微放大
-
-        # 使用emoji作为图标，与右键菜单面板保持一致
-        self.export_button.setText("📥")
-        self.export_button.setToolTip('导出GPX文件')
-        self.export_button.setStyleSheet("""
-            QPushButton {
-                font-size: 18px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.5);
-            }
-            QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.7);
-            }
-        """)
-        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.route_data, self.export_button, self))
-        # 添加到布局时设置垂直居中对齐
-        first_row.addWidget(self.export_button, 0, Qt.AlignVCenter)
-
-        # 导出图标已通过create_icon_button自动加载
-
-        layout.addLayout(first_row)
+        content_layout.addLayout(first_row)
 
         # 第二行：距离、红绿灯、收费信息、路线点位数量
         second_row = QHBoxLayout()
@@ -333,7 +307,42 @@ class RouteAlternativeItem(QWidget):
 
         second_row.addStretch()
 
-        layout.addLayout(second_row)
+        content_layout.addLayout(second_row)
+
+        # 导出GPX按钮 - 使用Downloading图标
+        from PyQt5.QtGui import QIcon
+        from core.resource_path import resource_path
+
+        self.export_button = QPushButton()
+        self.export_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
+
+        # 使用emoji作为图标，与右键菜单面板保持一致
+        self.export_button.setText("📥")
+        self.export_button.setToolTip('导出GPX文件')
+        self.export_button.setStyleSheet("""
+            QPushButton {
+                font-size: 18px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.7);
+            }
+        """)
+        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.route_data, self.export_button, self))
+
+        # 将内容布局添加到主布局
+        main_layout.addLayout(content_layout, 1)
+        # 将导出按钮添加到主布局，设置垂直居中对齐
+        main_layout.addWidget(self.export_button, 0, Qt.AlignVCenter)
+
+        # 导出图标已通过create_icon_button自动加载
 
         # 设置选中状态的背景色
         if self.is_selected:
@@ -1091,7 +1100,6 @@ class RoutePlanPanel(QWidget):
                     # 检查GPX面板是否有子弹出窗口（时间日期设置面板）
                     gpx_popup = parent_app.gpx_export_popup
                     has_child_popup = False
-
                     # 检查新的日期时间选择器
                     if hasattr(gpx_popup, 'picker_popup') and gpx_popup.picker_popup and gpx_popup.picker_popup.isVisible():
                         has_child_popup = True
@@ -1372,6 +1380,17 @@ class RoutePlanPanel(QWidget):
 
                 # 从列表中移除
                 self.waypoint_widgets.pop(i)
+
+                # 从data_manager中删除对应途径点并重新渲染地图
+                if self.parent() and hasattr(self.parent(), 'data_manager'):
+                    # 确保索引有效
+                    if i < len(self.parent().data_manager.waypoints_coords):
+                        self.parent().data_manager.remove_waypoint(i)
+
+                        # 重新渲染地图，清除已删除途径点的地址标识
+                        if hasattr(self.parent(), 'map_manager'):
+                            # 显示路线地图，不包含已删除的途径点标识
+                            self.parent().map_manager.show_route_on_map()
 
                 # 重新编号
                 self._renumber_waypoints()
@@ -1895,3 +1914,4 @@ class RoutePlanPanel(QWidget):
                 # 其他项设置为未选中状态
                 widget.set_selected(False)
                 widget.set_route_data_available(False)
+
