@@ -332,7 +332,11 @@ def main():
         "--hidden-import", "core.resource_path",
         "--hidden-import", "version",
         "--hidden-import", "PyQt5.QtWebKit",
-        "--hidden-import", "winrt.windows.devices.geolocation"
+        "--hidden-import", "winrt.windows.devices.geolocation",
+        "--hidden-import", "http.server",
+        "--hidden-import", "socketserver",
+        "--hidden-import", "tempfile",
+        "--hidden-import", "threading",
     ])
 
     # 最后添加主文件
