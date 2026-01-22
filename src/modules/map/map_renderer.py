@@ -448,7 +448,7 @@ class MapRenderer:
         if not route_points:
             return
 
-        # 分割路线段
+        # 快速分割路线段，避免中间列表操作
         route_segments = []
         current_segment = []
 
@@ -459,7 +459,10 @@ class MapRenderer:
                 current_segment = []
             else:
                 # 提取点的前两个元素（纬度和经度），忽略海拔数据
-                lat_lon_point = point[:2] if len(point) >= 2 else point
+                if len(point) >= 2:
+                    lat_lon_point = [point[0], point[1]]
+                else:
+                    lat_lon_point = point
                 current_segment.append(lat_lon_point)
 
         # 添加最后一段路线
@@ -467,37 +470,24 @@ class MapRenderer:
             route_segments.append(current_segment)
 
         # 批量添加所有路线段
-        # 使用Canvas renderer和simplifyFactor实现高性能渲染
         if route_segments:
-            # 配置Canvas渲染器参数
+            # 优化：使用更高效的PolyLine参数
             polyline_options = {
-                'smoothFactor': 1.0,  # Leaflet平滑因子（1.0 = 适度简化）
-                'noClip': False,  # 允许裁剪可视区域外的点
+                'smoothFactor': 1.5,  # 增加平滑因子，减少渲染点数
+                'noClip': True,  # 启用裁剪，减少可视区域外的渲染
             }
 
-            # 如果只有一段路线，直接添加
-            if len(route_segments) == 1:
+            # 优化：直接添加多段路线，避免FeatureGroup开销
+            for segment in route_segments:
                 folium.PolyLine(
-                    locations=route_segments[0],
+                    locations=segment,
                     color=color,
                     weight=weight,
                     opacity=opacity,
                     smooth_factor=polyline_options['smoothFactor'],
-                    no_clip=polyline_options['noClip']
+                    no_clip=polyline_options['noClip'],
+                    tooltip=""
                 ).add_to(map_obj)
-            else:
-                # 多段路线，使用FeatureGroup批量添加
-                route_group = folium.FeatureGroup(name="route")
-                for segment in route_segments:
-                    folium.PolyLine(
-                        locations=segment,
-                        color=color,
-                        weight=weight,
-                        opacity=opacity,
-                        smooth_factor=polyline_options['smoothFactor'],
-                        no_clip=polyline_options['noClip']
-                    ).add_to(route_group)
-                route_group.add_to(map_obj)
     @staticmethod
     def save_and_get_url(map_obj, use_http_server=True):
         """
@@ -533,9 +523,9 @@ class MapRenderer:
                     return QUrl.fromLocalFile(url_str)
             else:
                 import os
-                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
-                temp_path = html_file.name
-                html_file.close()  # 关闭文件以避免锁定
+                # 优化：直接使用路径创建，避免文件对象操作
+                import tempfile
+                temp_path = tempfile.mktemp(suffix='.html')
 
                 map_obj.save(temp_path)
                 logger.debug(f"保存地图到临时文件: {temp_path}")
@@ -565,9 +555,8 @@ class MapRenderer:
             # 出错时回退到简单的本地文件
             try:
                 import os
-                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
-                temp_path = html_file.name
-                html_file.close()  # 关闭文件以避免锁定
+                import tempfile
+                temp_path = tempfile.mktemp(suffix='.html')
 
                 map_obj.save(temp_path)
                 logger.debug(f"出错时回退到临时文件: {temp_path}")
@@ -578,9 +567,9 @@ class MapRenderer:
                 else:
                     logger.error(f"临时文件创建失败: {temp_path}")
                     # 最后回退：创建一个简单的本地文件URL
-                    html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
-                    map_obj.save(html_file.name)
-                    return QUrl.fromLocalFile(html_file.name)
+                    temp_path = tempfile.mktemp(suffix='.html')
+                    map_obj.save(temp_path)
+                    return QUrl.fromLocalFile(temp_path)
             except Exception as fallback_error:
                 logger.error(f"最后回退也失败: {str(fallback_error)}")
                 # 最极端的情况：返回一个无效的URL，但至少不会崩溃

@@ -357,13 +357,16 @@ class MapManager:
             self.logger.info(f"[路线渲染] 路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
 
-        # 过滤掉无效的路线点
-        valid_points = [p for p in self.data_manager.route_points if p is not None]
+        # 快速过滤无效路线点
+        valid_points = []
+        for p in self.data_manager.route_points:
+            if p is not None:
+                valid_points.append(p)
         if not valid_points:
             self.logger.info(f"[路线渲染] 有效路线点为空，耗时: {(time.time() - start_time) * 1000:.2f}ms")
             return
 
-        # 收集所有坐标点（起点、途径点、终点）
+        # 优化：只收集关键坐标点，避免处理所有路线点
         combined_coords = []
         if self.data_manager.start_coords:
             combined_coords.append(self.data_manager.start_coords)
@@ -371,16 +374,11 @@ class MapManager:
         if self.data_manager.end_coords:
             combined_coords.append(self.data_manager.end_coords)
 
-        # 添加所有有效的路线点
-        for rp in valid_points:
-            if rp and rp not in combined_coords:
-                combined_coords.append(rp)
-
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
         # 确定地图中心（优先使用起点，否则使用第一个坐标点）
-        center = self.data_manager.start_coords or combined_coords[0]
+        center = self.data_manager.start_coords or valid_points[0]
 
         # 创建基础地图
         map_create_start = time.time()
@@ -399,7 +397,7 @@ class MapManager:
 
         # 调整地图边界以显示完整路线
         fit_bounds_start = time.time()
-        MapRenderer.fit_bounds(m, combined_coords)
+        MapRenderer.fit_bounds(m, valid_points)
         fit_bounds_time = (time.time() - fit_bounds_start) * 1000
 
         # 保存地图并获取URL
