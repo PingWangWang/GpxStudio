@@ -86,7 +86,7 @@ class BaseSettingsPopup(QWidget):
         # 设置样式
         self.setStyleSheet("""
             BaseSettingsPopup {
-                background-color: #f8f9fa;
+                background-color: #3b4453;
                 border-radius: 8px;
                 border: 2px solid rgba(0, 123, 255, 0.2);
                 font-family: 'Microsoft YaHei';
@@ -184,7 +184,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 设置面板样式 - 与路线规划面板保持一致
         self.setStyleSheet("""
             MapSettingsPopup {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -296,7 +296,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 border: 1px solid rgba(0, 0, 0, 0.2);
                 border-radius: 3px;
                 background-color: white;
-                selection-background-color: #3d93fd;
+                selection-background-color: #3b4453;
                 selection-color: white;
                 font-size: 12px;
             }
@@ -840,7 +840,7 @@ class LogSettingsPopup(BaseSettingsPopup):
         # 设置面板样式 - 与地图设置面板保持一致
         self.setStyleSheet("""
             LogSettingsPopup {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -949,7 +949,7 @@ class LogSettingsPopup(BaseSettingsPopup):
                 border: 1px solid rgba(0, 0, 0, 0.2);
                 border-radius: 3px;
                 background-color: white;
-                selection-background-color: #3d93fd;
+                selection-background-color: #3b4453;
                 selection-color: white;
                 font-size: 12px;
             }
@@ -1122,7 +1122,7 @@ class AboutPopup(BaseSettingsPopup):
         # 设置面板样式 - 与地图设置面板保持一致
         self.setStyleSheet("""
             AboutPopup {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -1181,7 +1181,7 @@ class AboutPopup(BaseSettingsPopup):
         line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
         main_layout.addWidget(line)
 
-        # 关于内容 - 简化显示以适应小面板
+        # 关于内容 - 优化布局和文字样式
         about_label = QLabel()
         about_label.setTextFormat(Qt.RichText)
         about_label.setText(self._get_about_text())
@@ -1189,7 +1189,7 @@ class AboutPopup(BaseSettingsPopup):
         about_label.setAlignment(Qt.AlignCenter)
         about_label.setStyleSheet("""
             QLabel {
-                padding: 4px;
+                padding: 8px;
                 color: white;
             }
         """)
@@ -1209,27 +1209,27 @@ class AboutPopup(BaseSettingsPopup):
         copyright_text = about_config.get_copyright_text()
 
         html = f"""
-        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: white; line-height: 1.4;">
-            <h3 style="color: white; text-align: center; margin: 8px 0; font-size: 14px;">{app_name}</h3>
+        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: white; line-height: 1.5;">
+            <h3 style="color: white; text-align: center; margin: 10px 0; font-size: 16px; font-weight: bold;">{app_name}</h3>
 
-            <div style="text-align: center; margin: 6px 0; font-size: 11px;">
+            <div style="text-align: center; margin: 8px 0; font-size: 12px;">
                 <div>版本: {app_version} | 平台: {app_platform}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.2); padding: 6px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 11px;">
+            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
                 <div>{license_text}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 6px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 10px;">
+            <div style="background-color: rgba(255, 255, 255, 0.1); padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
                 <div>开发者: {developer_team}</div>
                 <div>邮箱: {developer_email}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 4px; border-radius: 3px; margin: 6px 0; text-align: center; font-size: 10px;">
+            <div style="background-color: rgba(255, 255, 255, 0.1); padding: 6px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 10px;">
                 <div>运行日志大小: {log_size:.2f} MB</div>
             </div>
 
-            <div style="text-align: center; color: rgba(255, 255, 255, 0.8); font-size: 9px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.2); margin-top: 6px;">
+            <div style="text-align: center; color: rgba(255, 255, 255, 0.7); font-size: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); margin: 8px 16px 0;">
                 <div>{copyright_text}</div>
             </div>
         </div>

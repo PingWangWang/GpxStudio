@@ -36,7 +36,7 @@ class GpxExportPopup(QWidget):
         # 设置弹出面板样式 - 与路线面板颜色统一
         self.setStyleSheet("""
             GpxExportPopup {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border-radius: 8px;
                 border: 1px solid rgba(0, 0, 0, 0.15);
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -50,7 +50,7 @@ class GpxExportPopup(QWidget):
             }
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.9);
-                color: #4A90E2;
+                color: #3b4453;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
@@ -239,7 +239,7 @@ class GpxExportPopup(QWidget):
         self.picker_popup.setWindowTitle("")
         self.picker_popup.setStyleSheet("""
             QWidget {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border: 1px solid rgba(0, 0, 0, 0.15);
                 border-radius: 6px;
             }

@@ -37,7 +37,7 @@ class MapContextMenuPopup(QWidget):
         # 设置面板样式
         self.setStyleSheet("""
             MapContextMenuPopup {
-                background-color: white;
+                background-color: #3b4453;
                 border: 1px solid #d9d9d9;
                 border-radius: 4px;
             }
@@ -103,22 +103,22 @@ class MapContextMenuPopup(QWidget):
         item_button.setCursor(Qt.PointingHandCursor)
 
         # 设置按钮样式
-        item_button.setStyleSheet(f"""
-            QPushButton {{
+        item_button.setStyleSheet("""
+            QPushButton {
                 background-color: transparent;
                 border: none;
                 text-align: left;
                 padding: 8px 16px;
                 font-size: 13px;
-                color: #262626;
+                color: white;
                 font-family: "MiSans", "Microsoft YaHei", "微软雅黑", sans-serif;
-            }}
-            QPushButton:hover {{
-                background-color: #f5f5f5;
-            }}
-            QPushButton:pressed {{
-                background-color: #e6e6e6;
-            }}
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
         """)
 
         # 创建图标容器
@@ -142,11 +142,11 @@ class MapContextMenuPopup(QWidget):
         # 文字标签
         text_label = QLabel(text)
         text_label.setStyleSheet("""
-            QLabel {{
-                color: #262626;
+            QLabel {
+                color: white;
                 font-size: 13px;
                 font-family: "MiSans", "Microsoft YaHei", "微软雅黑", sans-serif;
-            }}
+            }
         """)
 
         # 创建主布局
@@ -172,7 +172,7 @@ class MapContextMenuPopup(QWidget):
         separator.setFrameShadow(QFrame.Plain)
         separator.setStyleSheet("""
             QFrame {
-                background-color: #f0f0f0;
+                background-color: rgba(255, 255, 255, 0.3);
                 border: none;
                 max-height: 1px;
                 margin: 4px 0;

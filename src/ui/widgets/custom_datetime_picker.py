@@ -4,7 +4,7 @@
 """
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QCalendarWidget,
-                             QListWidget, QListWidgetItem, QLabel, QFrame)
+                             QListWidget, QListWidgetItem, QLabel, QFrame, QPushButton, QSpinBox)
 from PyQt5.QtCore import Qt, QDate, QTime, QDateTime, pyqtSignal, QLocale
 from PyQt5.QtGui import QFont
 
@@ -25,10 +25,10 @@ class CustomDateTimePicker(QWidget):
         # 设置焦点策略以接收键盘事件
         self.setFocusPolicy(Qt.StrongFocus)
 
-        # 设置样式 - 与GPX导出面板保持一致
+        # 设置样式 - 与其他面板保持一致
         self.setStyleSheet("""
             QWidget {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -40,12 +40,12 @@ class CustomDateTimePicker(QWidget):
             QCalendarWidget QToolButton {
                 background-color: transparent;
                 border: none;
-                color: #333333;
+                color: white;
                 font-size: 12px;
                 padding: 4px;
             }
             QCalendarWidget QToolButton:hover {
-                background-color: rgba(74, 144, 226, 0.1);
+                background-color: rgba(255, 255, 255, 0.1);
                 border-radius: 2px;
             }
             QCalendarWidget QMenu {
@@ -54,16 +54,26 @@ class CustomDateTimePicker(QWidget):
                 color: #333333;
             }
             QCalendarWidget QSpinBox {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                color: #333333;
+                background-color: transparent;
+                border: none;
+                color: white;
                 padding: 2px;
+            }
+            QCalendarWidget QAbstractButton {
+                background-color: transparent;
+                border: none;
+                color: white;
+                font-size: 12px;
+            }
+            QCalendarWidget QAbstractButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 2px;
             }
             QCalendarWidget QAbstractItemView {
                 background-color: white;
                 border: none;
                 color: #333333;
-                selection-background-color: #3d93fd;
+                selection-background-color: #3b4453;
                 selection-color: white;
             }
             QListWidget {
@@ -79,11 +89,11 @@ class CustomDateTimePicker(QWidget):
                 color: #333333;
             }
             QListWidget::item:hover {
-                background-color: rgba(74, 144, 226, 0.1);
+                background-color: rgba(59, 68, 83, 0.1);
                 color: #333333;
             }
             QListWidget::item:selected {
-                background-color: #3d93fd;
+                background-color: #3b4453;
                 color: white;
             }
             QLabel {
@@ -114,6 +124,40 @@ class CustomDateTimePicker(QWidget):
         self.calendar.setMinimumSize(280, 200)
         # 设置日历头部格式 - 中文显示
         self.calendar.setLocale(QLocale('zh_CN'))
+
+        # 禁用日历导航栏的下拉选择功能并去除三角箭头
+        # 获取导航栏的按钮
+        nav_bar = self.calendar.findChild(QWidget, 'qt_calendar_navigationbar')
+        if nav_bar:
+            # 隐藏所有下拉按钮（包括月份选择的三角箭头）
+            for button in nav_bar.findChildren(QPushButton):
+                button.hide()
+            # 禁用年份和月份的下拉选择
+            for spinbox in nav_bar.findChildren(QSpinBox):
+                spinbox.setReadOnly(True)
+
+        # 添加样式来确保没有三角箭头显示
+        self.calendar.setStyleSheet("""
+            QCalendarWidget QToolButton {
+                background-color: transparent;
+                border: none;
+                color: white;
+                font-size: 12px;
+                padding: 4px;
+            }
+            QCalendarWidget QToolButton::menu-indicator {
+                image: none;
+            }
+            QCalendarWidget QAbstractButton {
+                background-color: transparent;
+                border: none;
+                color: white;
+                font-size: 12px;
+            }
+            QCalendarWidget QAbstractButton::menu-indicator {
+                image: none;
+            }
+        """)
 
         # 连接日历信号
         self.calendar.activated.connect(self._on_date_double_clicked)  # 双击
