@@ -69,7 +69,7 @@ class RouteHistoryItem(QWidget):
         self.export_button = QPushButton()
         self.export_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
 
-        # 初始状态为禁用，使用灰色图标
+        # 初始状态为启用，使用正常图标
         self._update_export_button_icon()
 
         self.export_button.setToolTip('导出GPX文件')
@@ -94,8 +94,8 @@ class RouteHistoryItem(QWidget):
             }
         """)
         self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.history_data, self.export_button, self))
-        # 初始状态为禁用
-        self.export_button.setEnabled(False)
+        # 初始状态为启用
+        self.export_button.setEnabled(True)
         layout.addWidget(self.export_button, 0, Qt.AlignVCenter)
 
         # 加载交通方式图标
@@ -113,55 +113,40 @@ class RouteHistoryItem(QWidget):
 
     def _update_export_button_state(self):
         """更新导出按钮状态"""
-        # 只有当记录被选中且有路线数据时才启用导出按钮
-        should_enable = self.is_selected and self.has_route_data
+        # 始终启用导出按钮，点击后再校验路线数据是否完整
+        should_enable = True
         self.export_button.setEnabled(should_enable)
 
         # 更新图标
         self._update_export_button_icon()
 
         # 更新工具提示
-        if self.is_selected:
-            if self.has_route_data:
-                self.export_button.setToolTip("导出GPX文件")
-            else:
-                self.export_button.setToolTip("该记录缺少路线数据，无法导出")
+        if self.has_route_data:
+            self.export_button.setToolTip("导出GPX文件")
         else:
-            self.export_button.setToolTip("请先选择此路线记录")
+            self.export_button.setToolTip("导出GPX文件")
 
     def _update_export_button_icon(self):
         """更新导出按钮图标"""
         # 使用emoji作为图标，与右键菜单面板保持一致
-        self.export_button.setText("📥")
-        if self.export_button.isEnabled():
-            # 启用状态
-            self.export_button.setStyleSheet("""
-                QPushButton {
-                    font-size: 18px;
-                    background-color: rgba(255, 255, 255, 0.1);
-                    border: 1px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 4px;
-                }
-                QPushButton:hover:enabled {
-                    background-color: rgba(255, 255, 255, 0.2);
-                    border: 1px solid rgba(255, 255, 255, 0.5);
-                }
-                QPushButton:pressed:enabled {
-                    background-color: rgba(255, 255, 255, 0.3);
-                    border: 1px solid rgba(255, 255, 255, 0.7);
-                }
-            """)
-        else:
-            # 禁用状态
-            self.export_button.setStyleSheet("""
-                QPushButton {
-                    font-size: 18px;
-                    background-color: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 4px;
-                    opacity: 0.5;
-                }
-            """)
+        self.export_button.setText("📤")
+        # 始终使用启用状态的样式，因为导出按钮始终可用
+        self.export_button.setStyleSheet("""
+            QPushButton {
+                font-size: 18px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.5);
+            }
+            QPushButton:pressed:enabled {
+                background-color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.7);
+            }
+        """)
 
     def _load_mode_icon(self):
         """加载交通方式图标"""
