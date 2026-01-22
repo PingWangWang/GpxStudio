@@ -33,10 +33,16 @@ class OsmRoutingService(IRoutingService):
         }
         # 保存最近一次路线规划的实际距离（公里）
         self.last_route_distance = 0.0
-        # 海拔API基础URL（使用Open-Elevation API）
-        self.elevation_api_url = "https://api.open-elevation.com/api/v1/lookup"
+        # 海拔API基础URL（使用OpenTopoData API）
+        self.elevation_api_url = "https://api.opentopodata.org/v1/srtm30m"
         # 保存最近一次路线规划的带海拔的点列表
         self.last_route_points_with_elevation = []
+        # 海拔数据缓存，格式为 {(lat, lon): elevation}
+        self._elevation_cache = {}
+        # 批量处理的最大点数量
+        self.MAX_POINTS_PER_REQUEST = 100
+        # 最大重试次数
+        self.MAX_RETRY_COUNT = 3
 
     def _log(self, level: str, message: str):
         """
@@ -53,6 +59,8 @@ class OsmRoutingService(IRoutingService):
         """
         获取多个点的海拔数据
 
+        使用OpenTopoData API获取给定坐标点的海拔信息，支持请求重试、批量处理和缓存
+
         Args:
             points: 坐标点列表 [(lat, lon), ...]
 
@@ -62,35 +70,92 @@ class OsmRoutingService(IRoutingService):
         if not points:
             return []
 
-        try:
-            # 构建请求数据
-            locations = [{"latitude": lat, "longitude": lon} for lat, lon in points]
-            payload = {"locations": locations}
-
-            self._log("DEBUG", f"请求海拔数据，点数: {len(points)}")
-
-            # 发送请求
-            response = requests.post(self.elevation_api_url, json=payload, timeout=30)
-            data = response.json()
-
-            if "results" in data:
-                results = data["results"]
-                points_with_elevation = []
-                for i, result in enumerate(results):
-                    lat, lon = points[i]
-                    elevation = result.get("elevation", 0.0)
-                    points_with_elevation.append((lat, lon, elevation))
-
-                self._log("INFO", f"成功获取 {len(points_with_elevation)} 个点的海拔数据")
-                return points_with_elevation
+        # 1. 从缓存中获取已有海拔数据
+        cached_points = []
+        uncached_points = []
+        for point in points:
+            if point in self._elevation_cache:
+                cached_points.append((point[0], point[1], self._elevation_cache[point]))
             else:
-                self._log("WARNING", "海拔API响应格式错误")
-                return [(lat, lon, 0.0) for lat, lon in points]
-        except Exception as e:
-            self._log("ERROR", f"获取海拔数据异常: {str(e)}")
-            return [(lat, lon, 0.0) for lat, lon in points]
+                uncached_points.append(point)
 
-    def plan_route(self, points: List[Tuple[float, float]], transport_mode: str = "驾车", 
+        self._log("DEBUG", f"从缓存中获取到 {len(cached_points)} 个点的海拔数据，需要请求 {len(uncached_points)} 个点")
+
+        # 2. 处理未缓存的点
+        if uncached_points:
+            # 2.1 批量处理坐标点
+            batches = []
+            for i in range(0, len(uncached_points), self.MAX_POINTS_PER_REQUEST):
+                batch = uncached_points[i:i + self.MAX_POINTS_PER_REQUEST]
+                batches.append(batch)
+
+            self._log("DEBUG", f"将 {len(uncached_points)} 个点分为 {len(batches)} 批处理")
+
+            # 2.2 处理每一批点
+            for batch_index, batch in enumerate(batches):
+                self._log("DEBUG", f"处理第 {batch_index + 1}/{len(batches)} 批，点数: {len(batch)}")
+
+                # 2.3 构建OpenTopoData API请求参数
+                locations = "|".join([f"{lat},{lon}" for lat, lon in batch])
+                url = f"{self.elevation_api_url}?locations={locations}"
+
+                # 2.4 请求重试机制
+                retry_count = 0
+                while retry_count < self.MAX_RETRY_COUNT:
+                    try:
+                        # 发送GET请求到OpenTopoData API获取海拔数据
+                        self._log("DEBUG", f"请求OpenTopoData API，重试次数: {retry_count}")
+                        response = requests.get(url, timeout=30)
+                        data = response.json()
+
+                        # 检查响应格式是否正确
+                        if "results" in data:
+                            results = data["results"]
+                            for i, result in enumerate(results):
+                                if i < len(batch):
+                                    lat, lon = batch[i]
+                                    elevation = result.get("elevation", 0.0)
+                                    # 保存到缓存
+                                    self._elevation_cache[(lat, lon)] = elevation
+                                    # 添加到结果列表
+                                    cached_points.append((lat, lon, elevation))
+
+                            self._log("INFO", f"成功获取第 {batch_index + 1} 批 {len(results)} 个点的海拔数据")
+                            break  # 成功获取数据，跳出重试循环
+                        else:
+                            self._log("WARNING", "OpenTopoData API响应格式错误")
+                            retry_count += 1
+                            if retry_count < self.MAX_RETRY_COUNT:
+                                self._log("DEBUG", f"重试获取海拔数据，等待1秒...")
+                                import time
+                                time.sleep(1)
+
+                    except Exception as e:
+                        self._log("ERROR", f"获取海拔数据异常: {str(e)}")
+                        retry_count += 1
+                        if retry_count < self.MAX_RETRY_COUNT:
+                            self._log("DEBUG", f"重试获取海拔数据，等待1秒...")
+                            import time
+                            time.sleep(1)
+
+                # 如果重试失败，为这批点设置默认海拔
+                if retry_count >= self.MAX_RETRY_COUNT:
+                    self._log("WARNING", f"第 {batch_index + 1} 批点海拔数据获取失败，使用默认值0.0")
+                    for lat, lon in batch:
+                        cached_points.append((lat, lon, 0.0))
+
+        # 3. 按原始顺序返回结果
+        result = []
+        for point in points:
+            for cached_point in cached_points:
+                if (cached_point[0], cached_point[1]) == point:
+                    result.append(cached_point)
+                    break
+
+        self._log("INFO", f"总共获取 {len(result)} 个点的海拔数据")
+        return result
+
+    def plan_route(self, points: List[Tuple[float, float]], transport_mode: str = "驾车",
                    start_name: str = None, end_name: str = None) -> Tuple[List[Dict], int]:
         """
         使用OSRM API规划路线
@@ -171,11 +236,8 @@ class OsmRoutingService(IRoutingService):
                     # 转换为(lat, lon)格式
                     segment_points = [(coord[1], coord[0]) for coord in coordinates]
 
-                    # 获取海拔数据
-                    segment_points_with_elevation = self._get_elevation(segment_points)
-
-                    # 添加路线点（带海拔）
-                    for point in segment_points_with_elevation:
+                    # 直接添加不带海拔的路线点
+                    for point in segment_points:
                         route_points.append(point)
 
                     # 提取预估时间（秒）
@@ -203,10 +265,10 @@ class OsmRoutingService(IRoutingService):
                 # 保存总距离和带海拔的点
                 self.last_route_distance = total_distance
                 self.last_route_points_with_elevation = route_points
-                
+
                 # 构建路线方案（OSM只返回一个方案）
                 description = self._generate_route_description(transport_mode, start_name, end_name)
-                
+
                 route_alternative = {
                     'route_points': route_points,
                     'duration': estimated_duration,
@@ -215,9 +277,9 @@ class OsmRoutingService(IRoutingService):
                     'traffic_lights': 0,  # OSM不提供红绿灯信息
                     'description': description
                 }
-                
+
                 route_alternatives = [route_alternative]
-                
+
                 self._log("INFO", f"OSM路线规划成功，路线点数量: {len([p for p in route_points if p is not None])}，总距离: {total_distance:.2f}公里，总预估时间: {estimated_duration}秒")
                 return route_alternatives, 0  # 默认选中第一个（也是唯一的）方案
             else:
@@ -273,7 +335,7 @@ class OsmRoutingService(IRoutingService):
         # 提取起点和终点的简短名称
         start_short = self._extract_short_name(start_name) if start_name else "起点"
         end_short = self._extract_short_name(end_name) if end_name else "终点"
-        
+
         # 生成描述：起点 → 终点
         return f"{start_short} → {end_short}"
 
@@ -289,18 +351,18 @@ class OsmRoutingService(IRoutingService):
         """
         if not full_name:
             return ""
-            
+
         # 移除分号及其后的内容
         short_name = full_name.split(';')[0]
         # 移除逗号及其后的内容
         short_name = short_name.split(',')[0]
         # 清理空白字符
         short_name = short_name.strip()
-        
+
         # 如果名称太长，截取前15个字符
         if len(short_name) > 15:
             short_name = short_name[:15] + "..."
-            
+
         return short_name
 
     def _get_vehicle_type(self, transport_mode: str) -> str:

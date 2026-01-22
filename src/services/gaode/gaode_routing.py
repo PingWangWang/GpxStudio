@@ -48,11 +48,20 @@ class GaodeRoutingService(IRoutingService):
         "驾车": "driving"     # 驾车交通方式
     }
 
-    # 海拔API基础URL（使用Open-Elevation API）
-    ELEVATION_API_URL = "https://api.open-elevation.com/api/v1/lookup"
+    # 海拔API基础URL（使用OpenTopoData API）
+    ELEVATION_API_URL = "https://api.opentopodata.org/v1/srtm30m"
 
     # 保存最近一次路线规划的带海拔的点列表
     last_route_points_with_elevation = []
+
+    # 海拔数据缓存，格式为 {(lat, lon): elevation}
+    _elevation_cache = {}
+
+    # 批量处理的最大点数量
+    MAX_POINTS_PER_REQUEST = 100
+
+    # 最大重试次数
+    MAX_RETRY_COUNT = 3
 
     def __init__(self, api_key: str = "", security_key: str = "", logger: Optional[Callable] = None):
         """
@@ -318,14 +327,9 @@ class GaodeRoutingService(IRoutingService):
                                 # 转换为 (lat, lon) 格式
                                 route_points.append((float(parts[1]), float(parts[0])))
 
-                # 获取路线点的海拔数据
-                route_points_with_elevation = []
-                if route_points:
-                    route_points_with_elevation = self._get_elevation(route_points)
-
                 # 暂时保存路线数据（不生成描述）
                 route_alternatives.append({
-                    'route_points': route_points_with_elevation,
+                    'route_points': route_points,  # 先使用不带海拔的路线点
                     'duration': duration,
                     'distance': distance,
                     'tolls': tolls,
@@ -333,7 +337,7 @@ class GaodeRoutingService(IRoutingService):
                     'description': ''  # 稍后生成
                 })
 
-                log_cb("INFO", f"方案 {path_index + 1}: {len(route_points_with_elevation)} 个坐标点，"
+                log_cb("INFO", f"方案 {path_index + 1}: {len(route_points)} 个坐标点，"
                               f"距离 {distance/1000:.1f}km，时间 {duration//60}分钟")
 
             # 为所有路线生成描述（需要所有路线数据来比较）
@@ -350,10 +354,6 @@ class GaodeRoutingService(IRoutingService):
 
             # 路线规划完成
             log_cb("INFO", f"路线规划完成，共 {len(route_alternatives)} 个方案")
-
-            # 保存第一个方案的带海拔路线点（兼容旧代码）
-            if route_alternatives:
-                self.last_route_points_with_elevation = route_alternatives[0]['route_points']
 
             return route_alternatives, 0  # 默认选中第一个方案
 

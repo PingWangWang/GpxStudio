@@ -2347,6 +2347,9 @@ class GpxStudio(QMainWindow):
 
                 # 清除待导出标记
                 self._pending_export_history = None
+        elif task_id.startswith('elevation_'):
+            self.route_manager.on_elevation_task_completed(task_id, result)
+            self.task_progress_panel.task_completed("海拔数据获取完成")
         elif task_id.startswith('map_render_'):
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_map_render_task_completed(task_id, result)

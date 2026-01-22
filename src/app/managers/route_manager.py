@@ -128,8 +128,8 @@ class RouteManager(QObject):
                 if 'start_name' in sig.parameters and 'end_name' in sig.parameters:
                     # OSM服务支持起点终点名称
                     route_alternatives, default_index = routing_service.plan_route(
-                        points, transport_mode, 
-                        start_name=self.data_manager.start_name, 
+                        points, transport_mode,
+                        start_name=self.data_manager.start_name,
                         end_name=self.data_manager.end_name)
                 else:
                     # 高德服务不支持起点终点名称参数
@@ -195,7 +195,7 @@ class RouteManager(QObject):
                 self.logger.warning("路线方案列表为空")
                 self._handle_route_failure()
                 return
-                
+
             if default_index >= len(route_alternatives):
                 self.logger.warning(f"默认方案索引 {default_index} 超出范围，重置为0")
                 default_index = 0
@@ -210,8 +210,11 @@ class RouteManager(QObject):
             # 获取交通方式
             transport_mode = self.ui_updater['get_transport_mode']()
 
-            # 处理成功
+            # 处理成功（立即渲染路线）
             self._handle_route_success(transport_mode, route_alternatives, default_index)
+
+            # 在后台异步获取海拔数据
+            self._fetch_elevation_data_async(route_alternatives)
         else:
             # 路线规划失败
             self._handle_route_failure()
@@ -345,6 +348,125 @@ class RouteManager(QObject):
         self.ui_updater['clear_results_list']()
         self.ui_updater['add_result']("路线规划失败")
         self.ui_updater['show_warning']("错误", "路线规划失败")
+
+    def _fetch_elevation_data_async(self, route_alternatives: list):
+        """在后台异步获取海拔数据
+
+        为每个路线方案的路线点获取海拔数据，并更新路线方案。
+
+        参数:
+            route_alternatives: 路线方案列表
+        """
+        if not route_alternatives:
+            return
+
+        self.logger.info(f"开始在后台异步获取海拔数据，共 {len(route_alternatives)} 个路线方案")
+
+        # 如果有任务管理器，使用后台线程执行
+        if self.task_manager:
+            self.logger.info("使用后台线程执行海拔数据获取任务")
+
+            # 获取当前地图源
+            map_source = map_config.get_map_source()
+
+            # 获取路线规划服务
+            routing_service = self.service_manager.get_routing_service(map_source)
+
+            if routing_service:
+                task_id = self.task_manager.submit_task(
+                        task_type="elevation",
+                        task_func=self._fetch_elevation_data_task,
+                        priority=TaskPriority.NORMAL,  # 海拔数据获取优先级为普通
+                        routing_service=routing_service,
+                        route_alternatives=route_alternatives
+                    )
+
+                self.logger.debug(f"海拔数据获取任务已提交: {task_id}")
+            else:
+                self.logger.warning("未找到路线规划服务，无法获取海拔数据")
+        else:
+            # 兼容模式：直接执行
+            self.logger.warning("任务管理器不可用，直接执行海拔数据获取")
+            # 正确的参数顺序：routing_service, route_alternatives, progress_callback, log_callback, cancel_check
+            self._fetch_elevation_data_task(None, route_alternatives, None, None, lambda: False)
+
+    def _fetch_elevation_data_task(self, routing_service, route_alternatives,
+                                  progress_callback, log_callback, cancel_check):
+        """海拔数据获取任务函数
+
+        参数:
+            routing_service: 路线规划服务
+            route_alternatives: 路线方案列表
+            progress_callback: 进度回调
+            log_callback: 日志回调
+            cancel_check: 取消检查函数
+
+        返回:
+            更新后的路线方案列表
+        """
+        if not routing_service or not route_alternatives:
+            return None
+
+        try:
+            if log_callback:
+                log_callback("INFO", f"开始获取海拔数据，共 {len(route_alternatives)} 个路线方案")
+
+            updated_alternatives = []
+
+            for i, route_alt in enumerate(route_alternatives):
+                if cancel_check():
+                    return None
+
+                route_points = route_alt.get('route_points', [])
+                if route_points:
+                    if progress_callback:
+                        progress_callback(int((i / len(route_alternatives)) * 100),
+                                         f"正在获取第 {i+1}/{len(route_alternatives)} 个路线方案的海拔数据...")
+
+                    if log_callback:
+                        log_callback("INFO", f"获取第 {i+1}/{len(route_alternatives)} 个路线方案的海拔数据，共 {len(route_points)} 个点")
+
+                    # 获取海拔数据
+                    route_points_with_elevation = routing_service._get_elevation(route_points)
+
+                    # 更新路线方案
+                    updated_alt = route_alt.copy()
+                    updated_alt['route_points'] = route_points_with_elevation
+                    updated_alternatives.append(updated_alt)
+
+                    if log_callback:
+                        log_callback("INFO", f"第 {i+1} 个路线方案的海拔数据获取完成")
+                else:
+                    updated_alternatives.append(route_alt)
+
+            if progress_callback:
+                progress_callback(100, "海拔数据获取完成")
+
+            if log_callback:
+                log_callback("INFO", "所有路线方案的海拔数据获取完成")
+
+            return updated_alternatives
+        except Exception as e:
+            if log_callback:
+                log_callback("ERROR", f"获取海拔数据异常: {str(e)}")
+            return None
+
+    def on_elevation_task_completed(self, task_id: str, result):
+        """处理海拔数据获取任务完成（槽函数）
+
+        参数:
+            task_id: 任务ID
+            result: 更新后的路线方案列表
+        """
+        self.logger.info(f"海拔数据获取任务完成: {task_id}")
+
+        if result:
+            # 更新数据管理器中的路线方案
+            self.data_manager.set_route_alternatives(result, self.data_manager.selected_route_index)
+
+            self.logger.info(f"已更新 {len(result)} 个路线方案的海拔数据")
+        else:
+            self.logger.warning("海拔数据获取失败，未更新路线方案")
 
     def select_route_alternative(self, index: int):
         """选择路线方案
