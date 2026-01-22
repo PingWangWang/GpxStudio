@@ -122,7 +122,7 @@ class GaodeRoutingService(IRoutingService):
         """
         获取多个坐标点的海拔数据
 
-        使用Open-Elevation API获取给定坐标点的海拔信息
+        使用Open-Elevation API获取给定坐标点的海拔信息，当点数超过1000时，只提取均匀分布的1000个点的海拔，然后对其他点进行插值计算
 
         Args:
             points (List[Tuple[float, float]]): 坐标点列表，格式为 [(lat, lon), ...]
@@ -134,37 +134,183 @@ class GaodeRoutingService(IRoutingService):
         if not points:
             return []
 
-        try:
-            # 构建Open-Elevation API请求数据
-            locations = [{"latitude": lat, "longitude": lon} for lat, lon in points]
-            payload = {"locations": locations}
+        # Open-Elevation API配置
+        ELEVATION_API_URL = "https://api.open-elevation.com/api/v1/lookup"
+        MAX_POINTS_PER_REQUEST = 500  # 减小每批处理的点数量，避免服务器拒绝连接
+        MAX_RETRY_COUNT = 3
+        REQUEST_INTERVAL = 2  # 增加请求间隔时间（秒）
+        MAX_ELEVATION_POINTS = 1000  # 最大获取海拔的点数量
 
+        try:
             def log_cb(level, message):
                 if self.logger:
                     self.logger(level, message)
 
-            log_cb("DEBUG", f"请求海拔数据，点数: {len(points)}")
+            log_cb("DEBUG", f"请求海拔数据，总点数: {len(points)}")
 
-            # 发送POST请求到Open-Elevation API获取海拔数据
-            response = requests.post(self.ELEVATION_API_URL, json=payload, timeout=30)
-            data = response.json()
-
-            # 检查响应格式是否正确
-            if "results" in data:
-                results = data["results"]
+            # 检查点数是否超过限制
+            if len(points) <= MAX_ELEVATION_POINTS:
+                # 点数在1000以内，获取所有点的海拔数据
+                log_cb("INFO", "点数在1000以内，获取所有点的海拔数据")
                 points_with_elevation = []
+                total_batches = (len(points) + MAX_POINTS_PER_REQUEST - 1) // MAX_POINTS_PER_REQUEST
 
-                # 处理每个点的海拔数据
-                for i, result in enumerate(results):
-                    lat, lon = points[i]
-                    elevation = result.get("elevation", 0.0)
-                    points_with_elevation.append((lat, lon, elevation))
+                for batch_index in range(total_batches):
+                    start_idx = batch_index * MAX_POINTS_PER_REQUEST
+                    end_idx = min((batch_index + 1) * MAX_POINTS_PER_REQUEST, len(points))
+                    batch_points = points[start_idx:end_idx]
 
-                log_cb("INFO", f"成功获取 {len(points_with_elevation)} 个点的海拔数据")
+                    log_cb("DEBUG", f"处理第 {batch_index + 1}/{total_batches} 批，点数: {len(batch_points)}")
+
+                    # 构建Open-Elevation API请求数据
+                    locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch_points]
+                    payload = {"locations": locations}
+
+                    # 请求重试机制
+                    retry_count = 0
+                    batch_success = False
+
+                    while retry_count < MAX_RETRY_COUNT:
+                        try:
+                            # 发送POST请求到Open-Elevation API获取海拔数据
+                            log_cb("DEBUG", f"发送请求到Open-Elevation API，批次: {batch_index + 1}, 重试: {retry_count}")
+                            response = requests.post(ELEVATION_API_URL, json=payload, timeout=30)
+                            data = response.json()
+
+                            # 检查响应格式是否正确
+                            if "results" in data:
+                                results = data["results"]
+                                batch_result = []
+
+                                # 处理每个点的海拔数据
+                                for i, result in enumerate(results):
+                                    if i < len(batch_points):
+                                        lat, lon = batch_points[i]
+                                        elevation = result.get("elevation", 0.0)
+                                        batch_result.append((lat, lon, elevation))
+
+                                points_with_elevation.extend(batch_result)
+                                log_cb("INFO", f"成功获取第 {batch_index + 1} 批 {len(batch_result)} 个点的海拔数据")
+                                batch_success = True
+                                break  # 成功获取数据，跳出重试循环
+                            else:
+                                log_cb("WARNING", f"第 {batch_index + 1} 批Open-Elevation API响应格式错误")
+                                retry_count += 1
+                                if retry_count < MAX_RETRY_COUNT:
+                                    wait_time = (retry_count + 1) * 2  # 指数退避
+                                    log_cb("DEBUG", f"重试获取海拔数据，等待 {wait_time} 秒...")
+                                    import time
+                                    time.sleep(wait_time)
+
+                        except Exception as e:
+                            log_cb("ERROR", f"获取海拔数据异常: {str(e)}")
+                            retry_count += 1
+                            if retry_count < MAX_RETRY_COUNT:
+                                wait_time = (retry_count + 1) * 2  # 指数退避
+                                log_cb("DEBUG", f"重试获取海拔数据，等待 {wait_time} 秒...")
+                                import time
+                                time.sleep(wait_time)
+
+                    # 如果重试失败，为这批点设置默认海拔
+                    if not batch_success:
+                        log_cb("WARNING", f"第 {batch_index + 1} 批点海拔数据获取失败，使用默认值0.0")
+                        for lat, lon in batch_points:
+                            points_with_elevation.append((lat, lon, 0.0))
+
+                    # 每批请求之间添加间隔时间，避免服务器拒绝连接
+                    if batch_index < total_batches - 1:  # 不是最后一批
+                        log_cb("DEBUG", f"批次处理完成，等待 {REQUEST_INTERVAL} 秒后处理下一批...")
+                        import time
+                        time.sleep(REQUEST_INTERVAL)
+
+                log_cb("INFO", f"总共成功获取 {len(points_with_elevation)} 个点的海拔数据")
                 return points_with_elevation
             else:
-                log_cb("WARNING", "海拔API响应格式错误")
-                return [(lat, lon, 0.0) for lat, lon in points]
+                # 点数超过1000，提取均匀分布的1000个点
+                log_cb("INFO", f"点数超过1000，提取均匀分布的 {MAX_ELEVATION_POINTS} 个点获取海拔数据")
+
+                # 提取均匀分布的点
+                sampled_points = self._sample_points_uniformly(points, MAX_ELEVATION_POINTS)
+                log_cb("DEBUG", f"提取了 {len(sampled_points)} 个均匀分布的点")
+
+                # 获取采样点的海拔数据
+                sampled_points_with_elevation = []
+                total_batches = (len(sampled_points) + MAX_POINTS_PER_REQUEST - 1) // MAX_POINTS_PER_REQUEST
+
+                for batch_index in range(total_batches):
+                    start_idx = batch_index * MAX_POINTS_PER_REQUEST
+                    end_idx = min((batch_index + 1) * MAX_POINTS_PER_REQUEST, len(sampled_points))
+                    batch_points = sampled_points[start_idx:end_idx]
+
+                    log_cb("DEBUG", f"处理采样点批次 {batch_index + 1}/{total_batches}，点数: {len(batch_points)}")
+
+                    # 构建Open-Elevation API请求数据
+                    locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch_points]
+                    payload = {"locations": locations}
+
+                    # 请求重试机制
+                    retry_count = 0
+                    batch_success = False
+
+                    while retry_count < MAX_RETRY_COUNT:
+                        try:
+                            # 发送POST请求到Open-Elevation API获取海拔数据
+                            log_cb("DEBUG", f"发送请求到Open-Elevation API，批次: {batch_index + 1}, 重试: {retry_count}")
+                            response = requests.post(ELEVATION_API_URL, json=payload, timeout=30)
+                            data = response.json()
+
+                            # 检查响应格式是否正确
+                            if "results" in data:
+                                results = data["results"]
+                                batch_result = []
+
+                                # 处理每个点的海拔数据
+                                for i, result in enumerate(results):
+                                    if i < len(batch_points):
+                                        lat, lon = batch_points[i]
+                                        elevation = result.get("elevation", 0.0)
+                                        batch_result.append((lat, lon, elevation))
+
+                                sampled_points_with_elevation.extend(batch_result)
+                                log_cb("INFO", f"成功获取第 {batch_index + 1} 批采样点海拔数据，点数: {len(batch_result)}")
+                                batch_success = True
+                                break  # 成功获取数据，跳出重试循环
+                            else:
+                                log_cb("WARNING", f"第 {batch_index + 1} 批Open-Elevation API响应格式错误")
+                                retry_count += 1
+                                if retry_count < MAX_RETRY_COUNT:
+                                    wait_time = (retry_count + 1) * 2  # 指数退避
+                                    log_cb("DEBUG", f"重试获取海拔数据，等待 {wait_time} 秒...")
+                                    import time
+                                    time.sleep(wait_time)
+
+                        except Exception as e:
+                            log_cb("ERROR", f"获取海拔数据异常: {str(e)}")
+                            retry_count += 1
+                            if retry_count < MAX_RETRY_COUNT:
+                                wait_time = (retry_count + 1) * 2  # 指数退避
+                                log_cb("DEBUG", f"重试获取海拔数据，等待 {wait_time} 秒...")
+                                import time
+                                time.sleep(wait_time)
+
+                    # 如果重试失败，为这批点设置默认海拔
+                    if not batch_success:
+                        log_cb("WARNING", f"第 {batch_index + 1} 批采样点海拔数据获取失败，使用默认值0.0")
+                        for lat, lon in batch_points:
+                            sampled_points_with_elevation.append((lat, lon, 0.0))
+
+                    # 每批请求之间添加间隔时间，避免服务器拒绝连接
+                    if batch_index < total_batches - 1:  # 不是最后一批
+                        log_cb("DEBUG", f"批次处理完成，等待 {REQUEST_INTERVAL} 秒后处理下一批...")
+                        import time
+                        time.sleep(REQUEST_INTERVAL)
+
+                # 使用采样点的海拔数据对所有点进行插值计算
+                log_cb("INFO", "使用采样点的海拔数据对所有点进行插值计算")
+                points_with_elevation = self._interpolate_elevation(points, sampled_points_with_elevation)
+                log_cb("INFO", f"完成所有点的海拔插值计算，总点数: {len(points_with_elevation)}")
+
+                return points_with_elevation
         except Exception as e:
             def log_cb(level, message):
                 if self.logger:
@@ -173,6 +319,105 @@ class GaodeRoutingService(IRoutingService):
             log_cb("ERROR", f"获取海拔数据异常: {str(e)}")
             # 异常时返回默认海拔为0的点列表
             return [(lat, lon, 0.0) for lat, lon in points]
+
+    def _sample_points_uniformly(self, points: List[Tuple[float, float]], max_points: int) -> List[Tuple[float, float]]:
+        """
+        均匀采样点列表
+
+        Args:
+            points: 原始点列表
+            max_points: 最大采样点数量
+
+        Returns:
+            均匀采样后的点列表
+        """
+        if len(points) <= max_points:
+            return points
+
+        # 计算采样间隔
+        interval = len(points) / max_points
+        sampled_points = []
+
+        # 均匀采样点
+        for i in range(max_points):
+            index = int(round(i * interval))
+            if index < len(points):
+                sampled_points.append(points[index])
+
+        # 确保包含最后一个点
+        if len(sampled_points) > 0 and sampled_points[-1] != points[-1]:
+            sampled_points[-1] = points[-1]
+
+        return sampled_points
+
+    def _interpolate_elevation(self, all_points: List[Tuple[float, float]], sampled_points_with_elevation: List[Tuple[float, float, float]]) -> List[Tuple[float, float, float]]:
+        """
+        使用采样点的海拔数据对所有点进行插值计算
+
+        Args:
+            all_points: 所有原始点列表
+            sampled_points_with_elevation: 带海拔的采样点列表
+
+        Returns:
+            所有点的带海拔列表
+        """
+        if not all_points or not sampled_points_with_elevation:
+            return [(lat, lon, 0.0) for lat, lon in all_points]
+
+        # 创建采样点的索引映射
+        sampled_indices = []
+        sampled_elevations = []
+
+        # 为每个采样点找到其在原始列表中的索引
+        for sampled_point in sampled_points_with_elevation:
+            lat, lon, elevation = sampled_point
+            # 查找该点在原始列表中的索引
+            for i, point in enumerate(all_points):
+                if point == (lat, lon):
+                    sampled_indices.append(i)
+                    sampled_elevations.append(elevation)
+                    break
+
+        # 对所有点进行插值计算
+        result = []
+        for i, point in enumerate(all_points):
+            lat, lon = point
+
+            # 查找该点位于哪两个采样点之间
+            left_idx = -1
+            right_idx = -1
+
+            for j, sampled_idx in enumerate(sampled_indices):
+                if sampled_idx <= i:
+                    left_idx = j
+                if sampled_idx >= i and right_idx == -1:
+                    right_idx = j
+                    break
+
+            # 计算海拔
+            if left_idx == -1:
+                # 在第一个采样点之前
+                elevation = sampled_elevations[0]
+            elif right_idx == -1:
+                # 在最后一个采样点之后
+                elevation = sampled_elevations[-1]
+            else:
+                # 在两个采样点之间，线性插值
+                left_sampled_idx = sampled_indices[left_idx]
+                right_sampled_idx = sampled_indices[right_idx]
+                left_elevation = sampled_elevations[left_idx]
+                right_elevation = sampled_elevations[right_idx]
+
+                if left_sampled_idx == right_sampled_idx:
+                    elevation = left_elevation
+                else:
+                    # 线性插值
+                    ratio = (i - left_sampled_idx) / (right_sampled_idx - left_sampled_idx)
+                    elevation = left_elevation + (right_elevation - left_elevation) * ratio
+
+            result.append((lat, lon, elevation))
+
+        return result
 
     def plan_route(self, points: List[tuple], transport_mode: str = "驾车") -> tuple:
         """

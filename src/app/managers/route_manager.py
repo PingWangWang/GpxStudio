@@ -306,20 +306,7 @@ class RouteManager(QObject):
         # 更新UI显示路线规划成功
         self.ui_updater['set_progress_complete']()
 
-        # 保存到历史记录（包含完整信息）
-        if 'save_route_history' in self.ui_updater:
-            selected_route = route_alternatives[default_index] if route_alternatives else None
-            if selected_route:
-                self.ui_updater['save_route_history'](
-                    distance=selected_route.get('distance'),
-                    duration=selected_route.get('duration')
-                )
-
-        # 显示路线待选列表（在路线规划面板中）
-        if 'show_route_alternatives' in self.ui_updater:
-            self.ui_updater['show_route_alternatives'](route_alternatives, default_index)
-
-        # 在地图上显示默认选中的路线 - 使用后台线程渲染
+        # 1. 优先在地图上显示默认选中的路线 - 使用后台线程渲染
         if self.task_manager:
             self.logger.info("使用后台线程渲染路线地图")
             from .task_adapters import MapRenderTaskAdapter
@@ -338,6 +325,96 @@ class RouteManager(QObject):
         else:
             # 兼容模式：直接渲染
             self.ui_updater['show_route_on_map']()
+
+        # 2. 弹出路线待选列表（在路线规划面板中）
+        if 'show_route_alternatives' in self.ui_updater:
+            self.ui_updater['show_route_alternatives'](route_alternatives, default_index)
+
+        # 3. 在后台异步获取海拔数据
+        if self.task_manager:
+            self.logger.info("在后台执行海拔数据获取操作")
+            # 在后台异步获取海拔数据
+            self._fetch_elevation_data_async(route_alternatives)
+        else:
+            # 兼容模式：直接执行
+            # 获取海拔数据
+            self._fetch_elevation_data_async(route_alternatives)
+
+        # 4. 保存路线历史记录（在后台线程执行，只执行非UI操作）
+        # 放在最后执行，确保不会阻塞地图渲染和页面加载
+        if self.task_manager and 'save_route_history' in self.ui_updater:
+            selected_route = route_alternatives[default_index] if route_alternatives else None
+            if selected_route:
+                def save_history_task(progress_callback=None, log_callback=None, cancel_check=None):
+                    try:
+                        # 只执行数据保存操作，不包含UI操作
+                        # 创建一个只包含数据操作的回调
+                        def save_history_data():
+                            # 这里只执行数据保存，不涉及UI更新
+                            # 路线历史存储的add_record方法只涉及文件IO操作
+                            if hasattr(self, 'route_history_storage'):
+                                # 直接调用存储的add_record方法
+                                info = {
+                                    'start': self.data_manager.start_name,
+                                    'end': self.data_manager.end_name,
+                                    'mode': transport_mode,
+                                    'waypoints': [wp[0] for wp in self.data_manager.waypoints],
+                                    'start_coords': self.data_manager.start_coords,
+                                    'end_coords': self.data_manager.end_coords,
+                                    'waypoint_coords': [wp[1] for wp in self.data_manager.waypoints_coords],
+                                    'distance': selected_route.get('distance'),
+                                    'duration': selected_route.get('duration'),
+                                    'route_points': self.data_manager.route_points
+                                }
+
+                                # 保存到历史记录
+                                self.route_history_storage.add_record(
+                                    info['start'],
+                                    info['end'],
+                                    info['mode'],
+                                    info['waypoints'],
+                                    start_coords=info['start_coords'],
+                                    end_coords=info['end_coords'],
+                                    waypoint_coords=info['waypoint_coords'],
+                                    distance=info['distance'],
+                                    duration=info['duration'],
+                                    route_points=info['route_points']
+                                )
+                                self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
+                                               f"距离: {info['distance']}米, 时长: {info['duration']}秒")
+
+                        # 执行数据保存
+                        save_history_data()
+
+                        # 注意：UI更新操作（如重新加载历史记录列表）需要在主线程执行
+                        # 但为了避免阻塞页面加载，我们暂时不执行UI更新
+                        # 用户下次打开路线面板时会自动加载最新的历史记录
+                    except Exception as e:
+                        self.logger.error(f"保存路线历史记录失败: {e}")
+
+                # 提交后台任务
+                task_id = self.task_manager.submit_task(
+                    task_type="route_history",
+                    task_func=save_history_task,
+                    priority=TaskPriority.LOW,  # 历史记录保存优先级为低
+                )
+                self.logger.debug(f"保存路线历史记录任务已提交: {task_id}")
+        elif 'save_route_history' in self.ui_updater:
+            # 兼容模式：使用QTimer延迟执行
+            selected_route = route_alternatives[default_index] if route_alternatives else None
+            if selected_route:
+                def save_history():
+                    try:
+                        self.ui_updater['save_route_history'](
+                            distance=selected_route.get('distance'),
+                            duration=selected_route.get('duration')
+                        )
+                    except Exception as e:
+                        self.logger.error(f"保存路线历史记录失败: {e}")
+
+                # 使用QTimer延迟执行，确保不会阻塞其他操作
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(1000, save_history)  # 延迟1秒执行，给页面加载更多时间
 
     def _handle_route_failure(self):
         """处理路线规划失败（内部方法）
@@ -360,7 +437,12 @@ class RouteManager(QObject):
         if not route_alternatives:
             return
 
-        self.logger.info(f"开始在后台异步获取海拔数据，共 {len(route_alternatives)} 个路线方案")
+        # 获取用户当前选择的路线方案索引（默认选择第一条路线）
+        selected_index = 0  # 默认选择第一条路线
+        if self.data_manager:
+            selected_index = self.data_manager.selected_route_index
+
+        self.logger.info(f"开始在后台异步获取海拔数据，共 {len(route_alternatives)} 个路线方案，只处理选中的路线方案索引: {selected_index}")
 
         # 如果有任务管理器，使用后台线程执行
         if self.task_manager:
@@ -378,7 +460,8 @@ class RouteManager(QObject):
                         task_func=self._fetch_elevation_data_task,
                         priority=TaskPriority.NORMAL,  # 海拔数据获取优先级为普通
                         routing_service=routing_service,
-                        route_alternatives=route_alternatives
+                        route_alternatives=route_alternatives,
+                        selected_index=selected_index
                     )
 
                 self.logger.debug(f"海拔数据获取任务已提交: {task_id}")
@@ -387,16 +470,17 @@ class RouteManager(QObject):
         else:
             # 兼容模式：直接执行
             self.logger.warning("任务管理器不可用，直接执行海拔数据获取")
-            # 正确的参数顺序：routing_service, route_alternatives, progress_callback, log_callback, cancel_check
-            self._fetch_elevation_data_task(None, route_alternatives, None, None, lambda: False)
+            # 正确的参数顺序：routing_service, route_alternatives, selected_index, progress_callback, log_callback, cancel_check
+            self._fetch_elevation_data_task(None, route_alternatives, selected_index, None, None, lambda: False)
 
-    def _fetch_elevation_data_task(self, routing_service, route_alternatives,
+    def _fetch_elevation_data_task(self, routing_service, route_alternatives, selected_index,
                                   progress_callback, log_callback, cancel_check):
         """海拔数据获取任务函数
 
         参数:
             routing_service: 路线规划服务
             route_alternatives: 路线方案列表
+            selected_index: 选中的路线方案索引
             progress_callback: 进度回调
             log_callback: 日志回调
             cancel_check: 取消检查函数
@@ -409,41 +493,46 @@ class RouteManager(QObject):
 
         try:
             if log_callback:
-                log_callback("INFO", f"开始获取海拔数据，共 {len(route_alternatives)} 个路线方案")
+                log_callback("INFO", f"开始获取海拔数据，共 {len(route_alternatives)} 个路线方案，只处理选中的路线方案索引: {selected_index}")
 
             updated_alternatives = []
 
+            # 只处理选中的路线方案
             for i, route_alt in enumerate(route_alternatives):
-                if cancel_check():
-                    return None
+                if i == selected_index:
+                    # 处理选中的路线方案
+                    if cancel_check():
+                        return None
 
-                route_points = route_alt.get('route_points', [])
-                if route_points:
-                    if progress_callback:
-                        progress_callback(int((i / len(route_alternatives)) * 100),
-                                         f"正在获取第 {i+1}/{len(route_alternatives)} 个路线方案的海拔数据...")
+                    route_points = route_alt.get('route_points', [])
+                    if route_points:
+                        if progress_callback:
+                            progress_callback(0, f"正在获取选中路线方案的海拔数据...")
 
-                    if log_callback:
-                        log_callback("INFO", f"获取第 {i+1}/{len(route_alternatives)} 个路线方案的海拔数据，共 {len(route_points)} 个点")
+                        if log_callback:
+                            log_callback("INFO", f"获取选中路线方案的海拔数据，共 {len(route_points)} 个点")
 
-                    # 获取海拔数据
-                    route_points_with_elevation = routing_service._get_elevation(route_points)
+                        # 获取海拔数据
+                        route_points_with_elevation = routing_service._get_elevation(route_points)
 
-                    # 更新路线方案
-                    updated_alt = route_alt.copy()
-                    updated_alt['route_points'] = route_points_with_elevation
-                    updated_alternatives.append(updated_alt)
+                        # 更新路线方案
+                        updated_alt = route_alt.copy()
+                        updated_alt['route_points'] = route_points_with_elevation
+                        updated_alternatives.append(updated_alt)
 
-                    if log_callback:
-                        log_callback("INFO", f"第 {i+1} 个路线方案的海拔数据获取完成")
+                        if log_callback:
+                            log_callback("INFO", f"选中路线方案的海拔数据获取完成")
+                    else:
+                        updated_alternatives.append(route_alt)
                 else:
+                    # 非选中的路线方案，直接添加到结果列表
                     updated_alternatives.append(route_alt)
 
             if progress_callback:
                 progress_callback(100, "海拔数据获取完成")
 
             if log_callback:
-                log_callback("INFO", "所有路线方案的海拔数据获取完成")
+                log_callback("INFO", "海拔数据获取完成")
 
             return updated_alternatives
         except Exception as e:
@@ -479,10 +568,29 @@ class RouteManager(QObject):
         # 更新数据管理器中的选中方案
         self.data_manager.select_route_alternative(index)
 
-        # 更新路线时间信息
+        # 检查选中的路线是否需要获取海拔数据
         selected_route = self.data_manager.get_selected_route()
         if selected_route:
+            # 更新路线时间信息
             self._update_route_times(selected_route['duration'])
+
+            # 检查路线点是否已经有海拔数据
+            route_points = selected_route.get('route_points', [])
+            has_elevation_data = False
+            if route_points:
+                # 检查第一个点是否有海拔数据
+                first_point = route_points[0]
+                if first_point and isinstance(first_point, tuple) and len(first_point) == 3:
+                    has_elevation_data = True
+
+            # 如果没有海拔数据，异步获取
+            if not has_elevation_data:
+                self.logger.info(f"选中的路线方案 {index} 没有海拔数据，开始异步获取")
+                # 获取所有路线方案
+                all_routes = self.data_manager.route_alternatives
+                if all_routes:
+                    # 重新执行海拔数据获取任务，只处理选中的路线
+                    self._fetch_elevation_data_async(all_routes)
 
         # 在地图上显示选中的路线
         if self.task_manager:
