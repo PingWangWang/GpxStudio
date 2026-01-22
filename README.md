@@ -32,6 +32,10 @@ python -m venv .venv
 
 # 3. 安装依赖
 pip install -r requirements.txt
+# 清华镜像
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 阿里镜像
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 4. 运行程序
 python main.py
