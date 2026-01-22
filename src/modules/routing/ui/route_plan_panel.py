@@ -46,6 +46,7 @@ class RouteHistoryItem(QWidget):
             }
         """)
         route_label.setWordWrap(True)
+        route_label.setMaximumWidth(200)  # 设置最大宽度，确保文本自动换行
         layout.addWidget(route_label, 1)
 
         # 搜索次数（放在中间）
