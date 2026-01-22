@@ -51,16 +51,16 @@ class RouteHistoryItem(QWidget):
 
         # 搜索次数（放在中间）
         search_count = self.history_data.get('search_count', 1)
-        if search_count > 1:
-            count_label = QLabel(f"搜索 {search_count} 次")
-            count_label.setStyleSheet("""
-                QLabel {
-                    color: rgba(255, 255, 255, 0.6);
-                    font-size: 11px;
-                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
-                }
-            """)
-            layout.addWidget(count_label)
+        # 无论搜索次数是多少，始终显示搜索次数
+        count_label = QLabel(f"搜索 {search_count} 次")
+        count_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 11px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        layout.addWidget(count_label)
 
         # 导出GPX按钮（放在最右侧）
         from PyQt5.QtGui import QIcon
