@@ -116,37 +116,104 @@ def main():
     # 清理和重新创建虚拟环境
     print(f"[GPXStudio] 清理和重新创建虚拟环境...")
     print(f"[GPXStudio] 虚拟环境路径: {VENV_DIR}")
-        # 删除现有的虚拟环境
+
+    # 询问是否清理虚拟环境，默认不清理
+    cleanup_venv = False
     if os.path.exists(VENV_DIR):
+        user_input = input("[GPXStudio] 是否清理现有的虚拟环境(直接回车为不清理)？(y/N): ")
+        if user_input.strip().lower() == 'y':
+            cleanup_venv = True
+
+    # 删除现有的虚拟环境
+    if cleanup_venv:
         print(f"[GPXStudio] 删除现有的虚拟环境: {VENV_DIR}")
         shutil.rmtree(VENV_DIR)
+    else:
+        print(f"[GPXStudio] 保留现有的虚拟环境: {VENV_DIR}")
 
     # 创建新的虚拟环境
-    print("[GPXStudio] 创建新的虚拟环境...")
-    venv_create_cmd = [sys.executable, "-m", "venv", VENV_DIR]
-    result = subprocess.run(venv_create_cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"[GPXStudio] 错误：创建虚拟环境失败")
-        print(f"[GPXStudio] 错误信息: {result.stderr}")
-        return 1
+    if not os.path.exists(VENV_DIR) or cleanup_venv:
+        print("[GPXStudio] 创建新的虚拟环境...")
+        venv_create_cmd = [sys.executable, "-m", "venv", VENV_DIR]
+        result = subprocess.run(venv_create_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[GPXStudio] 错误：创建虚拟环境失败")
+            print(f"[GPXStudio] 错误信息: {result.stderr}")
+            return 1
+    else:
+        print("[GPXStudio] 虚拟环境已存在，跳过创建步骤")
 
     # 安装依赖包
     print("[GPXStudio] 安装项目依赖包...")
     pip_path = os.path.join(VENV_DIR, "Scripts", "pip.exe")
-    install_cmd = [pip_path, "install", "-r", REQUIREMENTS_FILE]
+
+    # 网络检测函数
+    def check_network():
+        """检测网络连接"""
+        try:
+            import socket
+            # 尝试连接到PyPI服务器
+            socket.create_connection(("pypi.org", 443), timeout=5)
+            return True
+        except Exception:
+            return False
+
+    # 检查网络连接
+    network_available = check_network()
+    if network_available:
+        print("[GPXStudio] 网络连接正常，尝试使用默认源安装依赖")
+        install_cmd = [pip_path, "install", "-r", REQUIREMENTS_FILE]
+    else:
+        print("[GPXStudio] 网络连接失败，使用清华镜像源安装依赖")
+        # 使用清华镜像源
+        install_cmd = [pip_path, "install", "-r", REQUIREMENTS_FILE, "-i", "https://pypi.tuna.tsinghua.edu.cn/simple/"]
+
     result = subprocess.run(install_cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"[GPXStudio] 错误：安装依赖包失败")
         print(f"[GPXStudio] 错误信息: {result.stderr}")
-        return 1
+
+        # 即使网络检测显示正常，也要尝试使用镜像源
+        print("[GPXStudio] 尝试使用清华镜像源安装依赖")
+        install_cmd = [pip_path, "install", "-r", REQUIREMENTS_FILE, "-i", "https://pypi.tuna.tsinghua.edu.cn/simple/"]
+        result = subprocess.run(install_cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"[GPXStudio] 错误：使用清华镜像源安装依赖包也失败")
+            print(f"[GPXStudio] 错误信息: {result.stderr}")
+
+            # 尝试使用阿里镜像源
+            print("[GPXStudio] 尝试使用阿里镜像源安装依赖")
+            install_cmd = [pip_path, "install", "-r", REQUIREMENTS_FILE, "-i", "https://mirrors.aliyun.com/pypi/simple/"]
+            result = subprocess.run(install_cmd, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                print(f"[GPXStudio] 错误：使用阿里镜像源安装依赖包也失败")
+                print(f"[GPXStudio] 错误信息: {result.stderr}")
+                return 1
 
     # 安装Pillow库用于图标转换
     print("[GPXStudio] 安装Pillow库用于图标转换...")
-    pillow_cmd = [pip_path, "install", "Pillow"]
+
+    # 检查网络连接状态
+    if check_network():
+        print("[GPXStudio] 网络连接正常，使用默认源安装Pillow")
+        pillow_cmd = [pip_path, "install", "Pillow"]
+    else:
+        print("[GPXStudio] 网络连接失败，使用清华镜像源安装Pillow")
+        pillow_cmd = [pip_path, "install", "Pillow", "-i", "https://pypi.tuna.tsinghua.edu.cn/simple/"]
+
     result = subprocess.run(pillow_cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"[GPXStudio] 警告：安装Pillow库失败，将无法自动转换图标格式")
         print(f"[GPXStudio] 错误信息: {result.stderr}")
+        # 尝试使用阿里镜像源
+        print("[GPXStudio] 尝试使用阿里镜像源安装Pillow")
+        pillow_cmd = [pip_path, "install", "Pillow", "-i", "https://mirrors.aliyun.com/pypi/simple/"]
+        result = subprocess.run(pillow_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[GPXStudio] 警告：使用阿里镜像源安装Pillow也失败")
+            print(f"[GPXStudio] 错误信息: {result.stderr}")
 
     # 导入site模块
     import site
@@ -231,7 +298,8 @@ def main():
         "--add-data", "src/core;core",
         "--add-data", "src/app;app",
         "--add-data", "version.py;version.py",
-        "--add-data", "res;res",
+        "--add-data", "res/GPXStudio.png;res",
+        "--add-data", "res/GPXStudio.ico;res",
         "--add-data", f"{XYZ_SERVICES_DATA};xyzservices/data",
         # 排除不需要的模块减小体积
         "--exclude-module", "tkinter",
@@ -248,6 +316,7 @@ def main():
         "--hidden-import", "PyQt5.QtWidgets",
         "--hidden-import", "PyQt5.QtWebEngineWidgets",
         "--hidden-import", "PyQt5.QtWebEngineCore",
+        "--hidden-import", "PyQt5.QtSvg",
         "--hidden-import", "logging.handlers",  # 修复启动错误
         "--hidden-import", "logging.config",
         "--hidden-import", "json",
@@ -279,7 +348,8 @@ def main():
         "src/core",
         "src/app",
         "version.py",
-        "res",
+        "res/GPXStudio.png",
+        "res/GPXStudio.ico",
         XYZ_SERVICES_DATA,
         "main.py"
     ]
