@@ -44,10 +44,10 @@ class SplashScreen(QSplashScreen):
         layout.setSpacing(20)
 
         # 标题标签
-        self.title_label = QLabel("GPX Studio")
+        self.title_label = QLabel("GPX STUDIO")
         self.title_label.setAlignment(Qt.AlignCenter)
         title_font = QFont()
-        title_font.setPointSize(24)
+        title_font.setPointSize(60)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         self.title_label.setStyleSheet("color: #ffffff;")
