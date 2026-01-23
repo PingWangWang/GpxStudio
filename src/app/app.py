@@ -3174,7 +3174,8 @@ class GpxStudio(QMainWindow):
                     'duration': history_data.get('duration', 0),
                     'route_points': route_points,
                     'start_name': history_data.get('start', '起点'),
-                    'end_name': history_data.get('end', '终点')
+                    'end_name': history_data.get('end', '终点'),
+                    'timestamp': history_data.get('timestamp')  # 添加历史记录的时间戳
                 }
                 self._show_gpx_export_popup(route_data, button, item)
             else:

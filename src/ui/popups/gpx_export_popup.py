@@ -130,7 +130,21 @@ class GpxExportPopup(QWidget):
         # 时间文本编辑框
         from PyQt5.QtWidgets import QLineEdit
         self.datetime_text_edit = QLineEdit()
-        self.datetime_text_edit.setText(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm"))
+        
+        # 尝试从route_data中获取timestamp作为默认时间
+        default_datetime = QDateTime.currentDateTime()
+        timestamp = self.route_data.get('timestamp')
+        if timestamp:
+            try:
+                # 解析ISO格式的时间戳
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp)
+                # 转换为QDateTime
+                default_datetime = QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+            except Exception as e:
+                print(f"[GPX导出] 解析时间戳失败: {e}")
+        
+        self.datetime_text_edit.setText(default_datetime.toString("yyyy-MM-dd hh:mm"))
         self.datetime_text_edit.setReadOnly(True)  # 设置为只读
         self.datetime_text_edit.setStyleSheet("""
             QLineEdit {
