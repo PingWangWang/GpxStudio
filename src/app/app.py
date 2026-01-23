@@ -2937,7 +2937,7 @@ class GpxStudio(QMainWindow):
 
             # 创建弹出面板
             self.gpx_export_popup = GpxExportPopup(route_data, self)
-            self.gpx_export_popup.export_confirmed.connect(lambda start_time: self._export_gpx_file(route_data, start_time))
+            self.gpx_export_popup.export_confirmed.connect(lambda start_time, export_elevation: self._export_gpx_file(route_data, start_time, export_elevation))
             self.gpx_export_popup.closed.connect(self._on_gpx_popup_closed)
 
             # 注册弹出面板到管理系统
@@ -3012,14 +3012,14 @@ class GpxStudio(QMainWindow):
         """GPX导出弹出面板关闭"""
         self.logger.debug("[GPX导出] 弹出面板已关闭")
 
-    def _export_gpx_file(self, route_data: dict, start_time):
+    def _export_gpx_file(self, route_data: dict, start_time, export_elevation=False):
         """执行GPX文件导出"""
         try:
             from PyQt5.QtWidgets import QFileDialog
             from modules.gpx.gpx_export import GpxExportService
             import os
 
-            self.logger.info(f"[GPX导出] 开始导出GPX文件")
+            self.logger.info(f"[GPX导出] 开始导出GPX文件，导出海拔数据: {export_elevation}")
 
             # 获取路线点数据
             route_points = route_data.get('route_points', [])
@@ -3030,9 +3030,9 @@ class GpxStudio(QMainWindow):
             # 生成默认文件名
             description = route_data.get('description', '路线')
 
-            # 从DataManager获取起点和终点信息
-            start_name = self.data_manager.start_name if self.data_manager.start_name else '起点'
-            end_name = self.data_manager.end_name if self.data_manager.end_name else '终点'
+            # 优先从route_data中获取起点和终点信息，其次从DataManager获取
+            start_name = route_data.get('start_name', '') or route_data.get('origin_name', '') or self.data_manager.start_name or '起点'
+            end_name = route_data.get('end_name', '') or route_data.get('destination_name', '') or self.data_manager.end_name or '终点'
 
             # 清理文件名中的特殊字符
             import re
@@ -3069,7 +3069,8 @@ class GpxStudio(QMainWindow):
                 start_datetime=start_time,
                 file_path=file_path,
                 start_name=start_name,
-                end_name=end_name
+                end_name=end_name,
+                export_elevation=export_elevation
             )
 
             if success:
@@ -3098,7 +3099,9 @@ class GpxStudio(QMainWindow):
                     'description': f"{history_data.get('start', '起点')} → {history_data.get('end', '终点')}",
                     'distance': history_data.get('distance', 0),
                     'duration': history_data.get('duration', 0),
-                    'route_points': route_points
+                    'route_points': route_points,
+                    'start_name': history_data.get('start', '起点'),
+                    'end_name': history_data.get('end', '终点')
                 }
                 self._show_gpx_export_popup(route_data, button, item)
             else:
@@ -3132,7 +3135,7 @@ class GpxStudio(QMainWindow):
 
             # 创建弹出面板
             self.gpx_export_popup = GpxExportPopup(route_data, self)
-            self.gpx_export_popup.export_confirmed.connect(lambda start_time: self._export_gpx_file(route_data, start_time))
+            self.gpx_export_popup.export_confirmed.connect(lambda start_time, export_elevation: self._export_gpx_file(route_data, start_time, export_elevation))
             self.gpx_export_popup.closed.connect(self._on_gpx_popup_closed)
 
             # 注册弹出面板到管理系统

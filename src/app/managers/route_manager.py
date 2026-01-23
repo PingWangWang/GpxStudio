@@ -670,7 +670,8 @@ class RouteManager(QObject):
                 start_datetime,  # 起始时间
                 file_path,  # 保存路径
                 start_name=start_city,  # 起点名称
-                end_name=end_city  # 终点名称
+                end_name=end_city,  # 终点名称
+                export_elevation=False  # 默认为False，因为route_manager直接调用时没有用户界面设置
             )
 
             # 更新UI显示导出完成

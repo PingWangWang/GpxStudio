@@ -21,7 +21,7 @@ class IGpxExportService:
         """
         ...
 
-    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str, start_name: Optional[str] = None, end_name: Optional[str] = None) -> bool:
+    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str, start_name: Optional[str] = None, end_name: Optional[str] = None, export_elevation: bool = False) -> bool:
         """
         导出路线为GPX文件
 
@@ -31,6 +31,7 @@ class IGpxExportService:
             file_path: 保存路径
             start_name: 起点名称
             end_name: 终点名称
+            export_elevation: 是否导出海拔数据
 
         Returns:
             bool: 是否成功

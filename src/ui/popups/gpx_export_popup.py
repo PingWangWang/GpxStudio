@@ -4,21 +4,23 @@ GPX导出弹出面板
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QPushButton, QFrame, QApplication, QLineEdit)
+                             QPushButton, QFrame, QApplication, QLineEdit, QCheckBox)
 from PyQt5.QtCore import Qt, QDateTime, pyqtSignal, QEvent, QTimer, QSize
 from PyQt5.QtGui import QFont
 import os
+import json
 
 
 class GpxExportPopup(QWidget):
     """GPX导出弹出面板"""
 
-    export_confirmed = pyqtSignal(QDateTime)  # 确认导出信号，传递起始时间
+    export_confirmed = pyqtSignal(QDateTime, bool)  # 确认导出信号，传递起始时间和是否导出海拔数据
     closed = pyqtSignal()  # 关闭信号
 
     def __init__(self, route_data: dict, parent=None):
         super().__init__(parent)
         self.route_data = route_data
+        self.export_elevation = self._load_config()  # 加载配置
         self._init_ui()
 
         # 设置窗口标志 - 使用Tool而不是ToolTip，避免自动关闭
@@ -176,6 +178,95 @@ class GpxExportPopup(QWidget):
 
         layout.addWidget(time_container)
 
+        # 海拔数据导出选项
+        elevation_container = QWidget()
+        elevation_layout = QHBoxLayout(elevation_container)
+        elevation_layout.setContentsMargins(0, 0, 0, 0)
+        elevation_layout.setSpacing(8)
+
+        # 文字标签
+        elevation_label = QLabel("导出海拔数据")
+        elevation_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 13px;
+                margin-right: 8px;
+            }
+        """)
+        elevation_layout.addWidget(elevation_label)
+
+        # 复选框
+        self.elevation_checkbox = QCheckBox()
+        self.elevation_checkbox.setChecked(self.export_elevation)
+        self.elevation_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: white;
+                font-size: 13px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                text-align: center;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid rgba(255, 255, 255, 0.5);
+                background-color: transparent;
+                border-radius: 3px;
+                color: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #4CAF50;
+                background-color: #4CAF50;
+                border-radius: 3px;
+                color: white;
+            }
+        """)
+        # 重写paintEvent以绘制对勾
+        from PyQt5.QtWidgets import QStyleOptionButton, QStyle
+        from PyQt5.QtGui import QPainter
+        original_paint_event = self.elevation_checkbox.paintEvent
+        def custom_paint_event(event):
+            original_paint_event(event)
+            if self.elevation_checkbox.isChecked():
+                painter = QPainter(self.elevation_checkbox)
+                painter.setPen(self.elevation_checkbox.palette().color(self.elevation_checkbox.foregroundRole()))
+                painter.setFont(self.elevation_checkbox.font())
+                option = QStyleOptionButton()
+                self.elevation_checkbox.initStyleOption(option)
+                indicator_rect = self.elevation_checkbox.style().subElementRect(QStyle.SE_CheckBoxIndicator, option, self.elevation_checkbox)
+                painter.drawText(indicator_rect, Qt.AlignCenter, "✓")
+        self.elevation_checkbox.paintEvent = custom_paint_event
+        self.elevation_checkbox.stateChanged.connect(self._on_elevation_check_changed)
+        elevation_layout.addWidget(self.elevation_checkbox)
+
+        # 提示标签 - 使用固定宽度的容器来避免位置跳变
+        tip_container = QWidget()
+        tip_layout = QHBoxLayout(tip_container)
+        tip_layout.setContentsMargins(0, 0, 0, 0)
+        tip_layout.setSpacing(0)
+
+        self.elevation_tip = QLabel("获取海拔数据较慢，需耐心等待")
+        self.elevation_tip.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 10px;
+                margin-left: 2px;
+            }
+        """)
+        self.elevation_tip.setVisible(self.export_elevation)
+        tip_layout.addWidget(self.elevation_tip)
+
+        # 设置容器固定宽度，确保提示语隐藏时位置不跳变
+        tip_container.setFixedWidth(180)
+        elevation_layout.addWidget(tip_container)
+
+        # 占位符，确保右侧对齐
+        elevation_layout.addStretch()
+
+        layout.addWidget(elevation_container)
+
         # 按钮区域
         button_container = QWidget()
         button_layout = QHBoxLayout(button_container)
@@ -325,6 +416,48 @@ class GpxExportPopup(QWidget):
 
         print(f"[GPX导出] 选择的时间: {datetime.toString('yyyy-MM-dd hh:mm')}")
 
+    def _load_config(self):
+        """加载配置"""
+        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio", "config.json")
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get('export_elevation', False)
+        except Exception as e:
+            print(f"加载配置失败: {e}")
+        return False
+
+    def _save_config(self, value):
+        """保存配置"""
+        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio")
+        config_file = os.path.join(config_path, "config.json")
+        try:
+            # 确保目录存在
+            os.makedirs(config_path, exist_ok=True)
+
+            # 加载现有配置
+            config = {}
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+            # 更新配置
+            config['export_elevation'] = value
+
+            # 保存配置
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+
+    def _on_elevation_check_changed(self, state):
+        """海拔数据导出选项变更处理"""
+        self.export_elevation = state == Qt.Checked
+        self.elevation_tip.setVisible(self.export_elevation)
+        self._save_config(self.export_elevation)
+        print(f"[GPX导出] 海拔数据导出选项变更为: {self.export_elevation}")
+
     def get_start_time(self):
         """获取设置的起始时间"""
         datetime_text = self.datetime_text_edit.text()
@@ -339,7 +472,7 @@ class GpxExportPopup(QWidget):
     def _on_export_clicked(self):
         """确认导出按钮点击"""
         start_time = self.get_start_time()
-        self.export_confirmed.emit(start_time)
+        self.export_confirmed.emit(start_time, self.export_elevation)
         self.hide()
         self.closed.emit()
 

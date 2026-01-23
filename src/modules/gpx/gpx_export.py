@@ -66,7 +66,7 @@ class GpxExportService(IGpxExportService):
                 # 如果连pytz都不可用，返回标准库的UTC
                 return timezone.utc
 
-    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False):
         """
         导出路线为GPX文件
 
@@ -76,6 +76,7 @@ class GpxExportService(IGpxExportService):
             file_path: 保存路径
             start_name: 起点名称
             end_name: 终点名称
+            export_elevation: 是否导出海拔数据
 
         Returns:
             bool: 是否成功
@@ -175,8 +176,8 @@ class GpxExportService(IGpxExportService):
                     # 处理完一个段
                     if len(route_segment) > 1:
                         for coord in route_segment:
-                            # 检查点是否包含海拔数据
-                            if len(coord) >= 3:
+                            # 根据export_elevation参数决定是否包含海拔数据
+                            if export_elevation and len(coord) >= 3:
                                 gpx_point = GPXTrackPoint(
                                     latitude=coord[0],
                                     longitude=coord[1],
@@ -201,8 +202,8 @@ class GpxExportService(IGpxExportService):
             # 处理最后一个段
             if len(route_segment) > 1:
                 for coord in route_segment:
-                    # 检查点是否包含海拔数据
-                    if len(coord) >= 3:
+                    # 根据export_elevation参数决定是否包含海拔数据
+                    if export_elevation and len(coord) >= 3:
                         gpx_point = GPXTrackPoint(
                             latitude=coord[0],
                             longitude=coord[1],
