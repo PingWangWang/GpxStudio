@@ -3018,6 +3018,7 @@ class GpxStudio(QMainWindow):
             from PyQt5.QtWidgets import QFileDialog
             from modules.gpx.gpx_export import GpxExportService
             import os
+            from PyQt5.QtCore import QThread, pyqtSignal
 
             self.logger.info(f"[GPX导出] 开始导出GPX文件，导出海拔数据: {export_elevation}")
 
@@ -3056,29 +3057,100 @@ class GpxStudio(QMainWindow):
             if not file_path.lower().endswith('.gpx'):
                 file_path += '.gpx'
 
-            # 创建GPX导出服务
-            def log_callback(level: str, message: str):
-                log_func = getattr(self.logger, level.lower(), self.logger.info)
-                log_func(f"[GPX导出] {message}")
+            # 导入进度面板
+            from ui.popups.progress_popup import ProgressPopup
 
-            gpx_service = GpxExportService(logger=log_callback)
+            # 创建进度面板
+            progress_popup = ProgressPopup(self)
+            progress_popup.show_at_center()
 
-            # 执行导出
-            success = gpx_service.export_to_gpx(
-                route_points=route_points,
-                start_datetime=start_time,
-                file_path=file_path,
-                start_name=start_name,
-                end_name=end_name,
-                export_elevation=export_elevation
-            )
+            # 创建导出线程
+            class ExportThread(QThread):
+                """导出线程"""
+                progress_updated = pyqtSignal(int, str)
+                export_completed = pyqtSignal(bool, str)
 
-            if success:
-                self.logger.info(f"[GPX导出] GPX文件导出成功: {file_path}")
-                self._show_info("导出成功", f"GPX文件已保存到:\n{file_path}")
-            else:
-                self.logger.error(f"[GPX导出] GPX文件导出失败")
-                self._show_warning("导出失败", "GPX文件导出失败，请检查文件路径和权限")
+                def __init__(self, parent, route_points, start_time, file_path, start_name, end_name, export_elevation):
+                    super().__init__(parent)
+                    self.route_points = route_points
+                    self.start_time = start_time
+                    self.file_path = file_path
+                    self.start_name = start_name
+                    self.end_name = end_name
+                    self.export_elevation = export_elevation
+
+                def run(self):
+                    """线程运行"""
+                    try:
+                        # 创建GPX导出服务
+                        def log_callback(level: str, message: str):
+                            log_func = getattr(self.parent().logger, level.lower(), self.parent().logger.info)
+                            log_func(f"[GPX导出] {message}")
+
+                        gpx_service = GpxExportService(logger=log_callback)
+
+                        # 如果需要导出海拔数据，先获取海拔数据
+                        if self.export_elevation:
+                            self.progress_updated.emit(20, "正在获取海拔数据...")
+
+                            # 获取海拔数据
+                            from services.config.map_config import map_config
+                            map_source = map_config.get_map_source()
+                            if map_source:
+                                routing_service = self.parent().service_manager.get_routing_service(map_source)
+                                if hasattr(routing_service, '_get_elevation'):
+                                    # 获取海拔数据
+                                    route_points_with_elevation = routing_service._get_elevation(self.route_points)
+                                    self.route_points = route_points_with_elevation
+                                    self.progress_updated.emit(50, "海拔数据获取完成，正在导出GPX文件...")
+                                else:
+                                    self.progress_updated.emit(50, "当前地图服务不支持海拔数据获取，正在导出GPX文件...")
+                            else:
+                                self.progress_updated.emit(50, "未设置地图服务，正在导出GPX文件...")
+                        else:
+                            self.progress_updated.emit(50, "正在导出GPX文件...")
+
+                        # 执行导出
+                        success = gpx_service.export_to_gpx(
+                            route_points=self.route_points,
+                            start_datetime=self.start_time,
+                            file_path=self.file_path,
+                            start_name=self.start_name,
+                            end_name=self.end_name,
+                            export_elevation=self.export_elevation
+                        )
+
+                        self.progress_updated.emit(100, "导出完成")
+                        self.export_completed.emit(success, self.file_path)
+                    except Exception as e:
+                        error_msg = f"导出过程中发生错误: {str(e)}"
+                        self.parent().logger.error(error_msg)
+                        self.progress_updated.emit(0, error_msg)
+                        self.export_completed.emit(False, str(e))
+
+            # 创建并启动导出线程
+            export_thread = ExportThread(self, route_points, start_time, file_path, start_name, end_name, export_elevation)
+
+            # 连接信号
+            def on_progress_updated(value, message):
+                if progress_popup and progress_popup.isVisible():
+                    progress_popup.set_progress(value, message)
+
+            def on_export_completed(success, result):
+                if progress_popup and progress_popup.isVisible():
+                    if success:
+                        progress_popup.set_complete("GPX文件导出成功")
+                        self.logger.info(f"[GPX导出] GPX文件导出成功: {result}")
+                    else:
+                        progress_popup.set_progress(0, f"导出失败: {result}")
+                        progress_popup.cancel_button.setText("确定")
+                        self.logger.error(f"[GPX导出] GPX文件导出失败: {result}")
+
+            export_thread.progress_updated.connect(on_progress_updated)
+            export_thread.export_completed.connect(on_export_completed)
+
+            # 启动线程
+            export_thread.start()
 
         except Exception as e:
             self.logger.error(f"[GPX导出] 导出过程中发生错误: {e}")

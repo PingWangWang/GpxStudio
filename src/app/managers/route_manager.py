@@ -212,9 +212,6 @@ class RouteManager(QObject):
 
             # 处理成功（立即渲染路线）
             self._handle_route_success(transport_mode, route_alternatives, default_index)
-
-            # 在后台异步获取海拔数据
-            self._fetch_elevation_data_async(route_alternatives)
         else:
             # 路线规划失败
             self._handle_route_failure()
@@ -330,15 +327,7 @@ class RouteManager(QObject):
         if 'show_route_alternatives' in self.ui_updater:
             self.ui_updater['show_route_alternatives'](route_alternatives, default_index)
 
-        # 3. 在后台异步获取海拔数据
-        if self.task_manager:
-            self.logger.info("在后台执行海拔数据获取操作")
-            # 在后台异步获取海拔数据
-            self._fetch_elevation_data_async(route_alternatives)
-        else:
-            # 兼容模式：直接执行
-            # 获取海拔数据
-            self._fetch_elevation_data_async(route_alternatives)
+        # 3. 移除自动获取海拔数据的操作，改为在GPX导出时按需获取
 
         # 4. 保存路线历史记录（在后台线程执行，只执行非UI操作）
         # 放在最后执行，确保不会阻塞地图渲染和页面加载
@@ -583,14 +572,7 @@ class RouteManager(QObject):
                 if first_point and isinstance(first_point, tuple) and len(first_point) == 3:
                     has_elevation_data = True
 
-            # 如果没有海拔数据，异步获取
-            if not has_elevation_data:
-                self.logger.info(f"选中的路线方案 {index} 没有海拔数据，开始异步获取")
-                # 获取所有路线方案
-                all_routes = self.data_manager.route_alternatives
-                if all_routes:
-                    # 重新执行海拔数据获取任务，只处理选中的路线
-                    self._fetch_elevation_data_async(all_routes)
+            # 移除自动获取海拔数据的操作，改为在GPX导出时按需获取
 
         # 在地图上显示选中的路线
         if self.task_manager:
