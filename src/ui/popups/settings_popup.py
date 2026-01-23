@@ -7,6 +7,111 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QLineEdit, QPushButton, QLabel, QMessageBox,
                              QTabWidget, QTextEdit, QComboBox, QFrame, QSizePolicy)
+
+class CustomMessageBox(QWidget):
+    """自定义消息提示框"""
+
+    def __init__(self, parent=None, title="", message="", button_text="确定"):
+        super().__init__(parent)
+
+        # 设置窗口标志
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+
+        # 设置样式
+        self.setStyleSheet("""
+            CustomMessageBox {
+                background-color: #3b4453;
+                border-radius: 8px;
+                font-family: 'Microsoft YaHei';
+            }
+            QLabel {
+                color: white;
+                font-family: 'Microsoft YaHei';
+            }
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.9);
+                color: #4A90E2;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 4px;
+                padding: 8px 20px;
+                font-family: 'Microsoft YaHei';
+            }
+            QPushButton:hover {
+                background-color: white;
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.8);
+            }
+        """)
+
+        # 初始化UI
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+
+        # 标题
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: white;
+            }
+        """)
+        main_layout.addWidget(title_label)
+
+        # 消息内容
+        message_label = QLabel(message)
+        message_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.9);
+                line-height: 1.4;
+            }
+        """)
+        message_label.setWordWrap(True)
+        main_layout.addWidget(message_label)
+
+        # 按钮
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        ok_button = QPushButton(button_text)
+        ok_button.clicked.connect(self.close)
+        button_layout.addWidget(ok_button)
+
+        button_layout.addStretch()
+        main_layout.addLayout(button_layout)
+
+        # 调整大小
+        self.adjustSize()
+
+    def show_message(self):
+        """显示消息框"""
+        # 计算位置（居中显示）
+        if self.parent():
+            parent_rect = self.parent().rect()
+            parent_pos = self.parent().mapToGlobal(parent_rect.topLeft())
+            x = parent_pos.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_pos.y() + (parent_rect.height() - self.height()) // 2
+        else:
+            # 屏幕居中
+            screen = QApplication.primaryScreen()
+            screen_geometry = screen.geometry()
+            x = (screen_geometry.width() - self.width()) // 2
+            y = (screen_geometry.height() - self.height()) // 2
+
+        self.move(x, y)
+        self.show()
+        self.raise_()
+
+# 导入QApplication（如果还没有导入）
+try:
+    from PyQt5.QtWidgets import QApplication
+except ImportError:
+    pass
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from PyQt5.QtGui import QIcon, QKeyEvent, QPainter, QPen, QBrush, QPolygon
 from PyQt5.QtCore import QPoint
@@ -147,6 +252,9 @@ class MapSettingsPopup(BaseSettingsPopup):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(300, 240)  # 设置宽度为300px
+        # 保存用户输入的API Key和安全密钥
+        self.saved_api_key = ""
+        self.saved_security_key = ""
         self._init_ui()
         self.load_current_config()
 
@@ -657,6 +765,20 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEnabled(True)
             self.security_key_eye_btn.setEnabled(True)
             self.test_btn.setEnabled(True)
+            # 恢复占位符文本
+            self.api_key_edit.setPlaceholderText("请输入高德地图API Key")
+            self.security_key_edit.setPlaceholderText("可选：安全密钥")
+            # 从配置中加载高德地图的API Key和安全密钥
+            # 重新加载配置，确保获取最新的高德地图配置
+            map_config._load_config()
+            # 直接从配置数据中获取高德地图的API Key和安全密钥，不依赖get_api_key方法
+            gaode_api_key = map_config._config_data.get('gaode', {}).get('api_key', '')
+            gaode_security_key = map_config._config_data.get('gaode', {}).get('security_key', '')
+            self.api_key_edit.setText(gaode_api_key)
+            self.security_key_edit.setText(gaode_security_key)
+            # 保存到实例变量中
+            self.saved_api_key = gaode_api_key
+            self.saved_security_key = gaode_security_key
             if map_config.is_gaode_configured():
                 self.status_label.setText("已配置")
                 self.status_label.setStyleSheet("""
@@ -682,11 +804,20 @@ class MapSettingsPopup(BaseSettingsPopup):
                 }
                 """)
         else:  # OpenStreetMap
+            # 保存当前的API Key和安全密钥
+            self.saved_api_key = self.api_key_edit.text().strip()
+            self.saved_security_key = self.security_key_edit.text().strip()
             self.api_key_edit.setEnabled(False)
             self.api_key_eye_btn.setEnabled(False)
             self.security_key_edit.setEnabled(False)
             self.security_key_eye_btn.setEnabled(False)
             self.test_btn.setEnabled(False)
+            # 清空编辑框内容
+            self.api_key_edit.clear()
+            self.security_key_edit.clear()
+            # 更新占位符文本
+            self.api_key_edit.setPlaceholderText("无需配置API Key")
+            self.security_key_edit.setPlaceholderText("无需配置安全密钥")
             self.status_label.setText("无需配置")
             self.status_label.setStyleSheet("""
                 QLabel {
@@ -709,15 +840,23 @@ class MapSettingsPopup(BaseSettingsPopup):
         else:
             self.map_source_combo.setCurrentIndex(1)
 
-        self.api_key_edit.setText(map_config.get_api_key())
-        self.security_key_edit.setText(map_config.get_security_key())
+        # 加载并保存API Key和安全密钥
+        api_key = map_config.get_api_key()
+        security_key = map_config.get_security_key()
+        self.api_key_edit.setText(api_key)
+        self.security_key_edit.setText(security_key)
+        # 保存到实例变量中
+        self.saved_api_key = api_key
+        self.saved_security_key = security_key
         self.on_map_source_changed(self.map_source_combo.currentIndex())
 
     def test_connection(self):
         """测试连接"""
         api_key = self.api_key_edit.text().strip()
         if not api_key:
-            QMessageBox.warning(self, "警告", "请先输入API Key")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "警告", "请先输入API Key")
+            msg_box.show_message()
             return
 
         from services.gaode.gaode_geocoding import GaodeGeocodingService
@@ -725,9 +864,13 @@ class MapSettingsPopup(BaseSettingsPopup):
         result = service.search_location("北京市")
 
         if result:
-            QMessageBox.information(self, "成功", f"连接测试成功！\n找到 {len(result)} 个结果")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "成功", f"连接测试成功！\n找到 {len(result)} 个结果")
+            msg_box.show_message()
         else:
-            QMessageBox.warning(self, "失败", "连接测试失败，请检查API Key是否正确")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "失败", "连接测试失败，请检查API Key是否正确")
+            msg_box.show_message()
 
     def save_config(self):
         """保存配置"""
@@ -739,11 +882,20 @@ class MapSettingsPopup(BaseSettingsPopup):
         else:
             map_source = "osm"
 
-        api_key = self.api_key_edit.text().strip()
-        security_key = self.security_key_edit.text().strip()
+        # 获取API Key和安全密钥
+        if map_source == "osm":
+            # 对于OSM地图，不需要API Key，使用空字符串
+            api_key = ""
+            security_key = ""
+        else:
+            # 对于其他地图源，使用当前编辑框的值
+            api_key = self.api_key_edit.text().strip()
+            security_key = self.security_key_edit.text().strip()
 
         if map_source == "gaode" and not api_key:
-            QMessageBox.warning(self, "警告", "选择高德地图时，API Key不能为空")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "警告", "选择高德地图时，API Key不能为空")
+            msg_box.show_message()
             return
 
         config = {
@@ -756,21 +908,28 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.on_map_source_changed(current_index)
             # 发送配置保存信号，通知主窗口重新加载地图
             self.config_saved.emit()
-            QMessageBox.information(self, "成功", "配置已保存，地图将重新加载")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "成功", "配置已保存，地图将重新加载")
+            msg_box.show_message()
         else:
-            QMessageBox.critical(self, "错误", "保存配置失败")
+            # 使用自定义消息提示框
+            msg_box = CustomMessageBox(self, "错误", "保存配置失败")
+            msg_box.show_message()
 
     def clear_config(self):
         """清除配置"""
-        reply = QMessageBox.question(self, "确认", "确定要清除配置吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            if map_config.clear_config():
-                self.api_key_edit.clear()
-                self.security_key_edit.clear()
-                self.map_source_combo.setCurrentIndex(0)
-                self.on_map_source_changed(0)
-                QMessageBox.information(self, "成功", "配置已清除")
+        # 使用自定义消息提示框
+        msg_box = CustomMessageBox(self, "确认", "确定要清除配置吗？", "确定")
+        msg_box.show_message()
+        # 清除配置
+        if map_config.clear_config():
+            self.api_key_edit.clear()
+            self.security_key_edit.clear()
+            self.map_source_combo.setCurrentIndex(0)
+            self.on_map_source_changed(0)
+            # 显示成功消息
+            success_msg = CustomMessageBox(self, "成功", "配置已清除")
+            success_msg.show_message()
 
     def toggle_api_key_visibility(self):
         """切换API Key的可见性"""

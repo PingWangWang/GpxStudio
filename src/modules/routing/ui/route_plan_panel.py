@@ -835,6 +835,9 @@ class RoutePlanPanel(QWidget):
 
         # 加载Loading图标
         self._load_loading_icon()
+        
+        # 初始状态隐藏加载按钮
+        self.hide_loading()
 
         main_layout.addWidget(buttons_container)
 

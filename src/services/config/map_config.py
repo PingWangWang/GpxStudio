@@ -31,6 +31,43 @@ class MapConfig(IConfigService):
         """确保配置文件包含所有必要的配置项"""
         config_updated = False
 
+        # 确保配置文件包含地图源配置和各个地图的配置
+        if 'map_source' not in self._config_data:
+            self._config_data['map_source'] = ""
+            config_updated = True
+
+        # 确保包含高德地图配置
+        if 'gaode' not in self._config_data:
+            self._config_data['gaode'] = {
+                "api_key": "",
+                "security_key": ""
+            }
+            config_updated = True
+        else:
+            # 确保高德地图配置包含必要的键
+            if 'api_key' not in self._config_data['gaode']:
+                self._config_data['gaode']['api_key'] = ""
+                config_updated = True
+            if 'security_key' not in self._config_data['gaode']:
+                self._config_data['gaode']['security_key'] = ""
+                config_updated = True
+
+        # 确保包含OSM地图配置
+        if 'osm' not in self._config_data:
+            self._config_data['osm'] = {
+                "api_key": "",
+                "security_key": ""
+            }
+            config_updated = True
+        else:
+            # 确保OSM地图配置包含必要的键
+            if 'api_key' not in self._config_data['osm']:
+                self._config_data['osm']['api_key'] = ""
+                config_updated = True
+            if 'security_key' not in self._config_data['osm']:
+                self._config_data['osm']['security_key'] = ""
+                config_updated = True
+
         # 如果配置有更新，保存到文件
         if config_updated:
             try:
@@ -58,8 +95,13 @@ class MapConfig(IConfigService):
 
                     # 更新实例属性
                     self.map_source = self._config_data.get('map_source', '')
-                    self.api_key = self._config_data.get('api_key', '')
-                    self.security_key = self._config_data.get('security_key', '')
+                    # 根据当前地图源加载对应的API Key和安全密钥
+                    if self.map_source == 'gaode':
+                        self.api_key = self._config_data.get('gaode', {}).get('api_key', '')
+                        self.security_key = self._config_data.get('gaode', {}).get('security_key', '')
+                    else:
+                        self.api_key = self._config_data.get('osm', {}).get('api_key', '')
+                        self.security_key = self._config_data.get('osm', {}).get('security_key', '')
                     self.is_configured = True
 
                     print(f"[地图配置] 当前配置 - 地图源: {self.map_source}, API配置: {'已配置' if self.api_key else '未配置'}")
@@ -94,17 +136,46 @@ class MapConfig(IConfigService):
             merged_config = self._config_data.copy()
             merged_config.update(config_data)
 
+            # 处理API Key和安全密钥的保存
+            map_source = merged_config.get('map_source', '')
+            api_key = merged_config.get('api_key', '')
+            security_key = merged_config.get('security_key', '')
+
+            # 根据地图源将API Key和安全密钥保存到对应的配置中
+            if map_source == 'gaode':
+                if 'gaode' not in merged_config:
+                    merged_config['gaode'] = {}
+                merged_config['gaode']['api_key'] = api_key
+                merged_config['gaode']['security_key'] = security_key
+            elif map_source == 'osm':
+                if 'osm' not in merged_config:
+                    merged_config['osm'] = {}
+                merged_config['osm']['api_key'] = api_key
+                merged_config['osm']['security_key'] = security_key
+
+            # 从顶层移除api_key和security_key，避免混淆
+            if 'api_key' in merged_config:
+                del merged_config['api_key']
+            if 'security_key' in merged_config:
+                del merged_config['security_key']
+
             config_file = self._get_config_path()
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(merged_config, f, ensure_ascii=False, indent=2)
 
-            self.map_source = merged_config.get('map_source', '')
-            self.api_key = merged_config.get('api_key', '')
-            self.security_key = merged_config.get('security_key', '')
+            # 更新实例属性
+            self.map_source = map_source
+            if map_source == 'gaode':
+                self.api_key = merged_config.get('gaode', {}).get('api_key', '')
+                self.security_key = merged_config.get('gaode', {}).get('security_key', '')
+            else:
+                self.api_key = merged_config.get('osm', {}).get('api_key', '')
+                self.security_key = merged_config.get('osm', {}).get('security_key', '')
             self.is_configured = True
             self._config_data = merged_config
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[地图配置] ❌ 保存配置失败: {e}")
             return False
 
     def clear_config(self):
@@ -141,15 +212,27 @@ class MapConfig(IConfigService):
 
     def get_api_key(self) -> str:
         """获取API Key"""
-        return self.api_key
+        # 根据当前地图源返回对应的API Key
+        if self.map_source == 'gaode':
+            return self._config_data.get('gaode', {}).get('api_key', '')
+        elif self.map_source == 'osm':
+            return self._config_data.get('osm', {}).get('api_key', '')
+        return ''
 
     def get_security_key(self) -> str:
         """获取安全密钥"""
-        return self.security_key
+        # 根据当前地图源返回对应的安全密钥
+        if self.map_source == 'gaode':
+            return self._config_data.get('gaode', {}).get('security_key', '')
+        elif self.map_source == 'osm':
+            return self._config_data.get('osm', {}).get('security_key', '')
+        return ''
 
     def is_gaode_configured(self) -> bool:
         """检查高德地图配置是否可用"""
-        return bool(self.api_key)
+        # 直接从配置数据中获取高德地图的API Key
+        gaode_api_key = self._config_data.get('gaode', {}).get('api_key', '')
+        return bool(gaode_api_key)
 
     def is_available(self) -> bool:
         """检查配置是否可用"""
