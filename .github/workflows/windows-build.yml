@@ -46,7 +46,7 @@ jobs:
     - name: Build with PyInstaller
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
-        $build_name = "GPXStudio_${version}_GitHubActions"
+        $build_name = "GPXStudio_${version}_GitHubAcPy"
         pyinstaller --name $build_name --onefile --windowed --clean --noconfirm --noupx --optimize=2 --icon=res/GPXStudio.ico --add-data "src;src" --add-data "version.py;version.py" --add-data "res/GPXStudio.png;res" --add-data "res/GPXStudio.ico;res" --exclude-module "tkinter" --exclude-module "matplotlib" --exclude-module "scipy" --exclude-module "pandas" --exclude-module "IPython" --exclude-module "jupyter" --exclude-module "notebook" --hidden-import "PyQt5.sip" --hidden-import "PyQt5.QtCore" --hidden-import "PyQt5.QtGui" --hidden-import "PyQt5.QtWidgets" --hidden-import "PyQt5.QtWebEngineWidgets" --hidden-import "PyQt5.QtWebEngineCore" --hidden-import "PyQt5.QtSvg" --hidden-import "logging.handlers" --hidden-import "logging.config" --hidden-import "json" --hidden-import "requests" --hidden-import "geopy.distance" --hidden-import "geopy.geocoders" --hidden-import "gpxpy" --hidden-import "folium" --hidden-import "folium.plugins" --hidden-import "xyzservices" --hidden-import "jinja2" --hidden-import "branca" --hidden-import "core.resource_path" --hidden-import "version" --hidden-import "PyQt5.QtWebKit" --hidden-import "winrt.windows.devices.geolocation" --hidden-import "http.server" --hidden-import "socketserver" --hidden-import "tempfile" --hidden-import "threading" main.py
       shell: pwsh
 
