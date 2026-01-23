@@ -14,6 +14,7 @@ from services.config.map_config import map_config
 from core.logging_setup import clean_logs, open_log_directory, get_log_size, set_log_level
 from services.config import about_config
 import os
+from app.data_paths import get_geo_info_file, get_route_history_file
 
 
 class CustomArrowButton(QPushButton):
@@ -801,9 +802,15 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 240)  # 与地图设置面板保持一致
+        self.setFixedSize(300, 280)  # 增加高度以容纳更多内容
         self._init_ui()
         self.load_current_config()
+
+    def get_file_size(self, file_path):
+        """获取文件大小（MB）"""
+        if os.path.exists(file_path):
+            return os.path.getsize(file_path) / (1024 * 1024)
+        return 0.0
 
     def show_popup(self, button_widget):
         """
@@ -1024,22 +1031,44 @@ class LogSettingsPopup(BaseSettingsPopup):
         btn_layout.addStretch(1)
         main_layout.addLayout(btn_layout)
 
-        # 日志大小信息
+        # 文件大小信息区域
+        file_size_layout = QVBoxLayout()
+        file_size_layout.setContentsMargins(0, 4, 0, 0)
+        file_size_layout.setSpacing(4)
+
+        # 获取各文件大小
         log_size = get_log_size()
-        self.log_size_label = QLabel(f"当前日志大小: {log_size:.2f} MB")
-        self.log_size_label.setAlignment(Qt.AlignCenter)
-        self.log_size_label.setStyleSheet("""
-            QLabel {
-                padding: 2px;
-                margin-top: 4px;
-                font-weight: bold;
-                font-size: 12px;
-                color: white;
-                background-color: rgba(255, 255, 255, 0.2);
-                border-radius: 3px;
-            }
-        """)
-        main_layout.addWidget(self.log_size_label)
+        geo_info_size = self.get_file_size(get_geo_info_file())
+        route_history_size = self.get_file_size(get_route_history_file())
+
+        # 创建文件大小标签
+        file_size_labels = [
+            ("当前日志大小:", f"{log_size:.2f} MB"),
+            ("地理信息列表大小:", f"{geo_info_size:.2f} MB"),
+            ("路线历史记录大小:", f"{route_history_size:.2f} MB")
+        ]
+
+        for label_text, size_text in file_size_labels:
+            size_label = QLabel(f"{label_text} {size_text}")
+            size_label.setAlignment(Qt.AlignCenter)
+            size_label.setMinimumHeight(30)  # 与按钮高度保持一致
+            size_label.setStyleSheet("""
+                QLabel {
+                    padding: 2px;
+                    margin: 0;
+                    font-weight: bold;
+                    font-size: 12px;
+                    color: white;
+                    background-color: rgba(255, 255, 255, 0.2);
+                    border-radius: 3px;
+                    min-height: 30px;
+                    max-height: 30px;
+                    height: 30px;
+                }
+            """)
+            file_size_layout.addWidget(size_label)
+
+        main_layout.addLayout(file_size_layout)
 
     def load_current_config(self):
         """加载当前配置"""
@@ -1051,6 +1080,10 @@ class LogSettingsPopup(BaseSettingsPopup):
                 self.log_level_combo.setCurrentIndex(i)
                 break
         self.log_level_combo.blockSignals(False)
+
+        # 更新文件大小显示
+        # 这里不需要更新标签，因为标签是在_init_ui中创建的，
+        # 每次显示面板时都会重新初始化
 
     def on_log_level_changed(self, index):
         """日志级别改变时自动保存"""
@@ -1066,10 +1099,10 @@ class LogSettingsPopup(BaseSettingsPopup):
                                      QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             if clean_logs():
-                # 更新日志大小显示
-                log_size = get_log_size()
-                self.log_size_label.setText(f"当前日志大小: {log_size:.2f} MB")
                 QMessageBox.information(self, "成功", "日志已清理")
+                # 重新初始化UI以更新文件大小显示
+                self._init_ui()
+                self.load_current_config()
             else:
                 QMessageBox.critical(self, "错误", "清理日志失败")
 
