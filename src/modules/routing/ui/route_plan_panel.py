@@ -15,6 +15,7 @@ class RouteHistoryItem(QWidget):
     """路线历史记录列表项"""
 
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
+    delete_clicked = pyqtSignal(dict, object, object)  # 删除按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
 
     def __init__(self, history_data: dict, parent=None):
         super().__init__(parent)
@@ -61,6 +62,30 @@ class RouteHistoryItem(QWidget):
             }
         """)
         layout.addWidget(count_label)
+
+        # 删除按钮
+        self.delete_button = QPushButton()
+        self.delete_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
+        self.delete_button.setText("❌")
+        self.delete_button.setToolTip('删除历史记录')
+        self.delete_button.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled {
+                background-color: rgba(255, 87, 34, 0.2);
+                border: 1px solid rgba(255, 87, 34, 0.5);
+            }
+            QPushButton:pressed:enabled {
+                background-color: rgba(255, 87, 34, 0.3);
+                border: 1px solid rgba(255, 87, 34, 0.7);
+            }
+        """)
+        self.delete_button.clicked.connect(lambda: self.delete_clicked.emit(self.history_data, self.delete_button, self))
+        layout.addWidget(self.delete_button, 0, Qt.AlignVCenter)
 
         # 导出GPX按钮（放在最右侧）
         from PyQt5.QtGui import QIcon
@@ -460,6 +485,8 @@ class RoutePlanPanel(QWidget):
     route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击：(路线数据, 按钮实例, 条目实例)
     history_export_gpx_clicked = pyqtSignal(dict, object, object)  # 历史记录导出GPX按钮点击：(历史记录数据, 按钮实例, 条目实例)
+    history_delete_clicked = pyqtSignal(dict)  # 删除历史记录：(历史记录数据)
+    history_clear_all_clicked = pyqtSignal()  # 清空所有历史记录
 
     def __init__(self, parent=None):
         """初始化路线规划面板"""
@@ -895,8 +922,32 @@ class RoutePlanPanel(QWidget):
         """)
         history_header_layout.addWidget(history_label)
 
-        # 添加弹簧，使标签靠左
+        # 添加弹簧，使清空按钮靠右
         history_header_layout.addStretch(1)
+
+        # 清空历史记录按钮
+        self.clear_history_button = QPushButton()
+        self.clear_history_button.setFixedSize(32, 32)
+        self.clear_history_button.setText("🗑")
+        self.clear_history_button.setToolTip('清空历史记录')
+        self.clear_history_button.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled {
+                background-color: rgba(255, 87, 34, 0.2);
+                border: 1px solid rgba(255, 87, 34, 0.5);
+            }
+            QPushButton:pressed:enabled {
+                background-color: rgba(255, 87, 34, 0.3);
+                border: 1px solid rgba(255, 87, 34, 0.7);
+            }
+        """)
+        self.clear_history_button.clicked.connect(self._on_clear_all_history_clicked)
+        history_header_layout.addWidget(self.clear_history_button)
 
         history_container_layout.addLayout(history_header_layout)
 
@@ -1597,6 +1648,8 @@ class RoutePlanPanel(QWidget):
 
             # 连接导出GPX信号
             history_widget.export_gpx_clicked.connect(self.history_export_gpx_clicked.emit)
+            # 连接删除按钮信号
+            history_widget.delete_clicked.connect(self.history_delete_clicked.emit)
 
             # 创建列表项
             item = QListWidgetItem()
@@ -1900,4 +1953,12 @@ class RoutePlanPanel(QWidget):
                 # 其他项设置为未选中状态
                 widget.set_selected(False)
                 widget.set_route_data_available(False)
+
+    def _on_clear_all_history_clicked(self):
+        """清空所有历史记录按钮点击事件"""
+        self.history_clear_all_clicked.emit()
+
+    def _on_history_delete_clicked(self, history_data: dict, button: object, item: object):
+        """删除历史记录按钮点击事件"""
+        self.history_delete_clicked.emit(history_data)
 

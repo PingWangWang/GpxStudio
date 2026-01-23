@@ -263,6 +263,8 @@ class GpxStudio(QMainWindow):
             self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)  # 修正信号名称
             self.route_plan_panel.export_gpx_clicked.connect(self._on_export_gpx_clicked)
             self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
+            self.route_plan_panel.history_delete_clicked.connect(self._on_history_delete_clicked)
+            self.route_plan_panel.history_clear_all_clicked.connect(self._on_history_clear_all_clicked)
 
         except ImportError as e:
             if hasattr(self, 'logger'):
@@ -2466,7 +2468,12 @@ class GpxStudio(QMainWindow):
             )
 
             # 加载路线搜索历史
-            history_list = self.route_history_storage.get_history(10)
+            # 每次都从存储重新加载，确保使用最新数据
+            # 因为删除操作是在后台线程中执行的，可能会修改存储文件
+            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            # 创建新的存储实例，确保读取最新的文件数据
+            fresh_storage = RouteHistoryStorage()
+            history_list = fresh_storage.get_history(10)
             self.route_plan_panel.load_history(history_list)
 
             # 显示面板
@@ -3738,6 +3745,81 @@ class GpxStudio(QMainWindow):
         self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
 
         self.logger.info("[右键菜单] 路线已清除")
+
+    def _on_history_delete_clicked(self, history_data: dict):
+        """删除历史记录"""
+        from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot
+        from modules.routing.storage.route_history_storage import RouteHistoryStorage
+
+        # 1. 立即从界面中删除该记录
+        # 获取当前历史记录列表
+        current_history = []
+        for i in range(self.route_plan_panel.history_list.count()):
+            item = self.route_plan_panel.history_list.item(i)
+            widget = self.route_plan_panel.history_list.itemWidget(item)
+            if widget and hasattr(widget, 'history_data'):
+                current_history.append(widget.history_data)
+
+        # 过滤掉要删除的记录
+        new_history = [h for h in current_history if h != history_data]
+
+        # 立即更新界面
+        self.route_plan_panel.load_history(new_history)
+
+        # 2. 在后台线程中处理文件删除操作
+        class DeleteTask(QRunnable):
+            def __init__(self, app, history_data):
+                super().__init__()
+                self.app = app
+                self.history_data = history_data
+
+            @pyqtSlot()
+            def run(self):
+                try:
+                    storage = RouteHistoryStorage()
+                    storage.remove_record(self.history_data)
+                    # 删除完成后，更新存储中的历史记录
+                    updated_history = storage.get_history(10)
+                    # 确保更新 _last_history_list
+                    if hasattr(self.app.route_plan_panel, '_last_history_list'):
+                        self.app.route_plan_panel._last_history_list = updated_history
+                except Exception as e:
+                    if hasattr(self.app, 'logger'):
+                        self.app.logger.error(f"[历史记录] 异步删除失败: {str(e)}")
+
+        # 启动后台任务
+        task = DeleteTask(self, history_data)
+        QThreadPool.globalInstance().start(task)
+
+    def _on_history_clear_all_clicked(self):
+        """清空所有历史记录"""
+        from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot
+        from modules.routing.storage.route_history_storage import RouteHistoryStorage
+
+        # 1. 立即清空界面
+        self.route_plan_panel.load_history([])
+
+        # 2. 在后台线程中处理文件清空操作
+        class ClearTask(QRunnable):
+            def __init__(self, app):
+                super().__init__()
+                self.app = app
+
+            @pyqtSlot()
+            def run(self):
+                try:
+                    storage = RouteHistoryStorage()
+                    storage.clear_history()
+                    # 清空完成后，确保更新 _last_history_list
+                    if hasattr(self.app.route_plan_panel, '_last_history_list'):
+                        self.app.route_plan_panel._last_history_list = []
+                except Exception as e:
+                    if hasattr(self.app, 'logger'):
+                        self.app.logger.error(f"[历史记录] 异步清空失败: {str(e)}")
+
+        # 启动后台任务
+        task = ClearTask(self)
+        QThreadPool.globalInstance().start(task)
 
 
 if __name__ == "__main__":

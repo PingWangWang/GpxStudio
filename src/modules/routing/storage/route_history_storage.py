@@ -178,17 +178,27 @@ class RouteHistoryStorage:
         self.history_records = []
         return self._save_history()
 
-    def remove_record(self, index: int) -> bool:
+    def remove_record(self, record: int or dict) -> bool:
         """
-        删除指定索引的记录
+        删除指定记录
 
         Args:
-            index: 记录索引
+            record: 记录索引或记录数据
 
         Returns:
             bool: 是否删除成功
         """
-        if 0 <= index < len(self.history_records):
+        index = None
+        if isinstance(record, int):
+            index = record
+        elif isinstance(record, dict):
+            # 根据记录数据查找索引
+            for i, r in enumerate(self.history_records):
+                if r == record:
+                    index = i
+                    break
+        
+        if index is not None and 0 <= index < len(self.history_records):
             removed = self.history_records.pop(index)
             print(f"[路线历史存储] 删除记录: {removed.get('start')} → {removed.get('end')}")
             return self._save_history()
