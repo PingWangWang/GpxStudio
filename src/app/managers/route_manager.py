@@ -24,7 +24,7 @@ class RouteManager(QObject):
     支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None):
+    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None, route_history_storage=None):
         """
         初始化路线管理器
 
@@ -34,6 +34,7 @@ class RouteManager(QObject):
             ui_updater: UI更新回调函数字典，用于更新界面显示
             logger: 日志器，用于记录路线操作日志
             task_manager: 任务管理器实例，用于后台任务管理
+            route_history_storage: 路线历史存储实例，用于保存路线历史记录
         """
         super().__init__()
         self.service_manager = service_manager  # 服务管理器实例
@@ -41,6 +42,7 @@ class RouteManager(QObject):
         self.ui_updater = ui_updater  # UI更新回调函数字典
         self.logger = logger  # 日志器
         self.task_manager = task_manager  # 任务管理器
+        self.route_history_storage = route_history_storage  # 路线历史存储实例
 
     def plan_route(self, transport_mode: str):
         """
@@ -331,7 +333,7 @@ class RouteManager(QObject):
 
         # 4. 保存路线历史记录（在后台线程执行，只执行非UI操作）
         # 放在最后执行，确保不会阻塞地图渲染和页面加载
-        if self.task_manager and 'save_route_history' in self.ui_updater:
+        if self.task_manager and self.route_history_storage:
             selected_route = route_alternatives[default_index] if route_alternatives else None
             if selected_route:
                 def save_history_task(progress_callback=None, log_callback=None, cancel_check=None):
@@ -341,23 +343,23 @@ class RouteManager(QObject):
                         def save_history_data():
                             # 这里只执行数据保存，不涉及UI更新
                             # 路线历史存储的add_record方法只涉及文件IO操作
-                            if hasattr(self, 'route_history_storage'):
+                            if self.route_history_storage:
                                 # 直接调用存储的add_record方法
                                 info = {
                                     'start': self.data_manager.start_name,
                                     'end': self.data_manager.end_name,
                                     'mode': transport_mode,
-                                    'waypoints': [wp[0] for wp in self.data_manager.waypoints],
+                                    'waypoints': self.data_manager.waypoints_names,
                                     'start_coords': self.data_manager.start_coords,
                                     'end_coords': self.data_manager.end_coords,
-                                    'waypoint_coords': [wp[1] for wp in self.data_manager.waypoints_coords],
+                                    'waypoint_coords': self.data_manager.waypoints_coords,
                                     'distance': selected_route.get('distance'),
                                     'duration': selected_route.get('duration'),
                                     'route_points': self.data_manager.route_points
                                 }
 
                                 # 保存到历史记录
-                                self.route_history_storage.add_record(
+                                success = self.route_history_storage.add_record(
                                     info['start'],
                                     info['end'],
                                     info['mode'],
@@ -369,8 +371,11 @@ class RouteManager(QObject):
                                     duration=info['duration'],
                                     route_points=info['route_points']
                                 )
-                                self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
-                                               f"距离: {info['distance']}米, 时长: {info['duration']}秒")
+                                if success:
+                                    self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
+                                                   f"距离: {info['distance']}米, 时长: {info['duration']}秒")
+                                else:
+                                    self.logger.warning(f"[路线面板] 保存历史记录失败: {info['start']} → {info['end']}")
 
                         # 执行数据保存
                         save_history_data()
@@ -388,22 +393,49 @@ class RouteManager(QObject):
                     priority=TaskPriority.LOW,  # 历史记录保存优先级为低
                 )
                 self.logger.debug(f"保存路线历史记录任务已提交: {task_id}")
-        elif 'save_route_history' in self.ui_updater:
-            # 兼容模式：使用QTimer延迟执行
+        elif self.route_history_storage:
+            # 兼容模式：直接执行（如果没有任务管理器）
             selected_route = route_alternatives[default_index] if route_alternatives else None
             if selected_route:
                 def save_history():
                     try:
-                        self.ui_updater['save_route_history'](
-                            distance=selected_route.get('distance'),
-                            duration=selected_route.get('duration')
+                        # 直接调用存储的add_record方法
+                        info = {
+                            'start': self.data_manager.start_name,
+                            'end': self.data_manager.end_name,
+                            'mode': transport_mode,
+                            'waypoints': self.data_manager.waypoints_names,
+                            'start_coords': self.data_manager.start_coords,
+                            'end_coords': self.data_manager.end_coords,
+                            'waypoint_coords': self.data_manager.waypoints_coords,
+                            'distance': selected_route.get('distance'),
+                            'duration': selected_route.get('duration'),
+                            'route_points': self.data_manager.route_points
+                        }
+
+                        # 保存到历史记录
+                        success = self.route_history_storage.add_record(
+                            info['start'],
+                            info['end'],
+                            info['mode'],
+                            info['waypoints'],
+                            start_coords=info['start_coords'],
+                            end_coords=info['end_coords'],
+                            waypoint_coords=info['waypoint_coords'],
+                            distance=info['distance'],
+                            duration=info['duration'],
+                            route_points=info['route_points']
                         )
+                        if success:
+                            self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
+                                           f"距离: {info['distance']}米, 时长: {info['duration']}秒")
+                        else:
+                            self.logger.warning(f"[路线面板] 保存历史记录失败: {info['start']} → {info['end']}")
                     except Exception as e:
                         self.logger.error(f"保存路线历史记录失败: {e}")
 
-                # 使用QTimer延迟执行，确保不会阻塞其他操作
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(1000, save_history)  # 延迟1秒执行，给页面加载更多时间
+                # 直接执行
+                save_history()
 
     def _handle_route_failure(self):
         """处理路线规划失败（内部方法）

@@ -79,10 +79,12 @@ class OsmRoutingService(IRoutingService):
         cached_points = []
         uncached_points = []
         for point in points:
-            if point in self._elevation_cache:
-                cached_points.append((point[0], point[1], self._elevation_cache[point]))
+            # 确保point是元组，避免使用列表作为字典键
+            point_tuple = tuple(point) if isinstance(point, list) else point
+            if point_tuple in self._elevation_cache:
+                cached_points.append((point_tuple[0], point_tuple[1], self._elevation_cache[point_tuple]))
             else:
-                uncached_points.append(point)
+                uncached_points.append(point_tuple)
 
         self._log("DEBUG", f"从缓存中获取到 {len(cached_points)} 个点的海拔数据，需要请求 {len(uncached_points)} 个点")
 
@@ -261,8 +263,10 @@ class OsmRoutingService(IRoutingService):
         # 3. 按原始顺序返回结果
         result = []
         for point in points:
+            # 确保point是元组，与cached_point的类型一致
+            point_tuple = tuple(point) if isinstance(point, list) else point
             for cached_point in cached_points:
-                if (cached_point[0], cached_point[1]) == point:
+                if (cached_point[0], cached_point[1]) == point_tuple:
                     result.append(cached_point)
                     break
 

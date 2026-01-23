@@ -572,9 +572,26 @@ class GaodeRoutingService(IRoutingService):
                                 # 转换为 (lat, lon) 格式
                                 route_points.append((float(parts[1]), float(parts[0])))
 
+                # 保存原始GCJ-02坐标，用于高德地图直接渲染
+                # 同时将GCJ-02坐标转换为WGS-84坐标，以便统一存储和导出
+                # 所有保存在本地的路线都应该使用国际坐标系WGS-84坐标
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                original_gcj02_points = route_points.copy()
+                wgs84_route_points = []
+                for point in route_points:
+                    if point is not None:
+                        lat, lon = point
+                        wgs84_lat, wgs84_lon = CoordinateTransform.gcj02_to_wgs84(lat, lon)
+                        wgs84_route_points.append((wgs84_lat, wgs84_lon))
+                    else:
+                        wgs84_route_points.append(None)
+                route_points = wgs84_route_points
+                log_cb("INFO", f"已将{len(route_points)}个GCJ-02坐标转换为WGS-84坐标")
+
                 # 暂时保存路线数据（不生成描述）
                 route_alternatives.append({
-                    'route_points': route_points,  # 先使用不带海拔的路线点
+                    'route_points': route_points,  # 保存WGS-84坐标，用于统一存储和导出
+                    'gcj02_route_points': original_gcj02_points,  # 保存原始GCJ-02坐标，用于高德地图直接渲染
                     'duration': duration,
                     'distance': distance,
                     'tolls': tolls,

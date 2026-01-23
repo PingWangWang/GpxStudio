@@ -1,70 +1,59 @@
 """
 GPX导出服务
-将路线导出为GPX格式文件
+负责将路线数据导出为GPX文件格式
 """
 
-import gpxpy
-from gpxpy.gpx import GPXTrack, GPXTrackSegment, GPXTrackPoint
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Callable, Any, List, Dict
+from typing import List, Tuple, Optional, Callable
+import gpxpy
+import gpxpy.gpx
+from gpxpy.gpx import GPXTrack, GPXTrackSegment, GPXTrackPoint
+import requests
 
-from modules.gpx.interfaces.gpx_export_service import IGpxExportService
 
+class GpxExportService:
+    """
+    GPX导出服务类
+    负责将路线数据导出为GPX文件格式
+    """
 
-class GpxExportService(IGpxExportService):
-    """GPX导出服务"""
+    def __init__(self, logger: Optional[Callable[[str, str], None]] = None):
+        """
+        初始化GPX导出服务
 
-    def __init__(self, logger: Optional[Callable] = None):
+        Args:
+            logger: 日志记录回调函数，格式为 logger(level, message)
+        """
         self.logger = logger
 
-    def log(self, level: str, message: str):
-        """输出日志"""
-        if self.logger:
-            self.logger(level, message)
-
-    def _detect_timezone(self, latitude: float, longitude: float):
+    def _detect_timezone(self, latitude: float, longitude: float) -> timezone:
         """
-        根据坐标检测时区
+        根据经纬度检测时区
 
         Args:
             latitude: 纬度
             longitude: 经度
 
         Returns:
-            timezone: pytz时区对象，失败时返回UTC
+            timezone: 检测到的时区对象
         """
         try:
-            # 尝试导入时区库
+            # 使用TimezoneFinder库检测时区
             from timezonefinder import TimezoneFinder
-            import pytz
-
-            # 查找时区
             tf = TimezoneFinder()
-            timezone_name = tf.timezone_at(lng=longitude, lat=latitude)
+            tz_name = tf.timezone_at(lat=latitude, lng=longitude)
 
-            if timezone_name:
-                self.log("INFO", f"检测到时区: {timezone_name} (坐标: {latitude}, {longitude})")
-                return pytz.timezone(timezone_name)
+            if tz_name:
+                import pytz
+                return pytz.timezone(tz_name)
             else:
-                self.log("WARNING", f"坐标 ({latitude}, {longitude}) 未找到时区，使用UTC")
-                return pytz.UTC
-
-        except ImportError as e:
-            self.log("WARNING", f"时区库不可用: {e}，使用UTC")
-            try:
-                import pytz
-                return pytz.UTC
-            except ImportError:
-                # 如果连pytz都不可用，返回标准库的UTC
-                return timezone.utc
+                # 时区检测失败，使用东八区（中国地区默认）
+                return timezone(timedelta(hours=8))
         except Exception as e:
-            self.log("WARNING", f"时区检测失败: {e}，使用UTC")
-            try:
-                import pytz
-                return pytz.UTC
-            except ImportError:
-                # 如果连pytz都不可用，返回标准库的UTC
-                return timezone.utc
+            # 任何异常都返回东八区（中国地区默认）
+            if self.logger:
+                self.logger("WARNING", f"时区检测失败: {str(e)}，使用东八区")
+            return timezone(timedelta(hours=8))
 
     def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False):
         """
@@ -174,7 +163,7 @@ class GpxExportService(IGpxExportService):
             for point in route_points:
                 if point is None:
                     # 处理完一个段
-                    if len(route_segment) > 1:
+                    if len(route_segment) >= 1:
                         for coord in route_segment:
                             # 根据export_elevation参数决定是否包含海拔数据
                             if export_elevation and len(coord) >= 3:
@@ -200,7 +189,7 @@ class GpxExportService(IGpxExportService):
                     route_segment.append(point)
 
             # 处理最后一个段
-            if len(route_segment) > 1:
+            if len(route_segment) >= 1:
                 for coord in route_segment:
                     # 根据export_elevation参数决定是否包含海拔数据
                     if export_elevation and len(coord) >= 3:
@@ -265,30 +254,3 @@ class GpxExportService(IGpxExportService):
         except Exception as e:
             log_cb("ERROR", f"导出GPX文件失败: {str(e)}")
             return False
-
-    @staticmethod
-    def get_gpx_info(route_points):
-        """
-        获取GPX信息（点数、估计时长等）
-
-        Args:
-            route_points: 路线点列表
-
-        Returns:
-            dict: GPX信息
-        """
-        valid_points = [p for p in route_points if p is not None]
-        segments = 1
-
-        for point in route_points:
-            if point is None:
-                segments += 1
-
-        # 估算时长（每10秒一个点 + 段间隔）
-        estimated_duration = len(valid_points) * 10 + (segments - 1) * 300
-
-        return {
-            'total_points': len(valid_points),
-            'segments': segments,
-            'estimated_duration_seconds': estimated_duration
-        }

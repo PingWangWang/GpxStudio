@@ -163,7 +163,50 @@ class MapManager:
 
         # 如果有路线数据，添加路线到地图
         if self.data_manager.route_points:
-            MapRenderer.add_route(m, self.data_manager.route_points)
+            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+            route_points_to_render = self.data_manager.route_points
+
+            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+            if map_source == 'gaode':
+                # 当前地图源是高德地图
+                has_original_gcj02 = False
+                if is_route_planned:
+                    # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            self.logger.info(f"[路线预览] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                            has_original_gcj02 = True
+                    except (IndexError, AttributeError):
+                        # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                        self.logger.warning("[路线预览] 无法获取选中的路线方案，使用默认坐标转换")
+
+                # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            # 提取坐标部分（忽略海拔）
+                            lat, lon = point[0], point[1]
+                            # 转换坐标
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            # 保留原始格式（可能包含海拔）
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
+                    self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+            MapRenderer.add_route(m, route_points_to_render)
 
         # 多个地址时，自动适应所有搜索结果
         if len(locations) > 1:
@@ -225,6 +268,18 @@ class MapManager:
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
+        # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+        is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+        # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+        if map_source == 'gaode':
+            # 如果路线是通过路线规划服务获取的，那么中心点坐标已经是GCJ-02坐标，不需要转换
+            # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
+            if not is_route_planned:
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                # 转换地图中心点坐标
+                center_lat, center_lon = CoordinateTransform.wgs84_to_gcj02(center_lat, center_lon)
+
         # 创建基础地图
         m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=calculated_zoom_level, map_source=map_source)
 
@@ -234,11 +289,73 @@ class MapManager:
         # 添加搜索结果
         self._add_search_results_to_map(m)
 
+        # 如果有路线数据，添加路线到地图
+        if self.data_manager.route_points:
+            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+            route_points_to_render = self.data_manager.route_points
+
+            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+            if map_source == 'gaode':
+                # 当前地图源是高德地图
+                has_original_gcj02 = False
+                if is_route_planned:
+                    # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            self.logger.info(f"[路线预览] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                            has_original_gcj02 = True
+                    except (IndexError, AttributeError):
+                        # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                        self.logger.warning("[路线预览] 无法获取选中的路线方案，使用默认坐标转换")
+
+                # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            # 提取坐标部分（忽略海拔）
+                            lat, lon = point[0], point[1]
+                            # 转换坐标
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            # 保留原始格式（可能包含海拔）
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
+                    self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+            MapRenderer.add_route(m, route_points_to_render)
+
         # 如果需要自动适应所有点，调整地图边界
         if auto_fit:
             all_coords = self._get_all_selected_coords()
             if len(all_coords) >= 2:
-                MapRenderer.fit_bounds(m, all_coords)
+                # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+                bounds_coords = all_coords
+                if map_source == 'gaode':
+                    # 如果路线是通过路线规划服务获取的，那么边界点坐标已经是GCJ-02坐标，不需要转换
+                    # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
+                    if not is_route_planned:
+                        from modules.geolocation.coordinate_transform import CoordinateTransform
+                        # 转换边界点坐标
+                        transformed_bounds_coords = []
+                        for coords in bounds_coords:
+                            if coords:
+                                lat, lon = coords
+                                gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                                transformed_bounds_coords.append((gcj_lat, gcj_lon))
+                        bounds_coords = transformed_bounds_coords
+                MapRenderer.fit_bounds(m, bounds_coords)
                 # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
                 self.data_manager.last_map_zoom_level = None
 
@@ -272,6 +389,53 @@ class MapManager:
 
         # 添加搜索结果
         self._add_search_results_to_map(m)
+
+        # 如果有路线数据，添加路线到地图
+        if self.data_manager.route_points:
+            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+            route_points_to_render = self.data_manager.route_points
+
+            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+            if map_source == 'gaode':
+                # 当前地图源是高德地图
+                has_original_gcj02 = False
+                if is_route_planned:
+                    # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            self.logger.info(f"[路线预览] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                            has_original_gcj02 = True
+                    except (IndexError, AttributeError):
+                        # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                        self.logger.warning("[路线预览] 无法获取选中的路线方案，使用默认坐标转换")
+
+                # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            # 提取坐标部分（忽略海拔）
+                            lat, lon = point[0], point[1]
+                            # 转换坐标
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            # 保留原始格式（可能包含海拔）
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
+                    self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+            MapRenderer.add_route(m, route_points_to_render)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
@@ -392,12 +556,73 @@ class MapManager:
 
         # 添加路线到地图
         route_add_start = time.time()
-        MapRenderer.add_route(m, self.data_manager.route_points)
+
+        # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+        route_points_to_render = self.data_manager.route_points
+
+        # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+        is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+        if map_source == 'gaode':
+            # 当前地图源是高德地图
+            has_original_gcj02 = False
+            if is_route_planned:
+                # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                try:
+                    selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                    if selected_route and 'gcj02_route_points' in selected_route:
+                        # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                        route_points_to_render = selected_route['gcj02_route_points']
+                        self.logger.info(f"[路线渲染] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                        has_original_gcj02 = True
+                except (IndexError, AttributeError):
+                    # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                    self.logger.warning("[路线渲染] 无法获取选中的路线方案，使用默认坐标转换")
+
+            # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+            if not has_original_gcj02:
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                transformed_route_points = []
+                for point in route_points_to_render:
+                    if point is not None:
+                        # 提取坐标部分（忽略海拔）
+                        lat, lon = point[0], point[1]
+                        # 转换坐标
+                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        # 保留原始格式（可能包含海拔）
+                        if len(point) > 2:
+                            transformed_point = (gcj_lat, gcj_lon, point[2])
+                        else:
+                            transformed_point = (gcj_lat, gcj_lon)
+                        transformed_route_points.append(transformed_point)
+                    else:
+                        transformed_route_points.append(None)
+                route_points_to_render = transformed_route_points
+                self.logger.info(f"[路线渲染] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+        MapRenderer.add_route(m, route_points_to_render)
         route_add_time = (time.time() - route_add_start) * 1000
 
         # 调整地图边界以显示完整路线
         fit_bounds_start = time.time()
-        MapRenderer.fit_bounds(m, valid_points)
+
+        # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+        bounds_points = valid_points
+        if map_source == 'gaode':
+            # 当前地图源是高德地图，所有存储的路线数据都是WGS-84坐标，需要转换为GCJ-02坐标
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            # 转换边界点坐标
+            transformed_bounds_points = []
+            for point in bounds_points:
+                if point is not None:
+                    # 提取坐标部分（忽略海拔）
+                    lat, lon = point[0], point[1]
+                    # 转换坐标
+                    gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                    transformed_bounds_points.append((gcj_lat, gcj_lon))
+            bounds_points = transformed_bounds_points
+
+        MapRenderer.fit_bounds(m, bounds_points)
         fit_bounds_time = (time.time() - fit_bounds_start) * 1000
 
         # 保存地图并获取URL
@@ -452,7 +677,50 @@ class MapManager:
         # 如果有路线数据，添加路线到地图
         if self.data_manager.route_points:
             self.logger.debug("[MapManager] 添加路线到地图")
-            MapRenderer.add_route(m, self.data_manager.route_points)
+            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+            route_points_to_render = self.data_manager.route_points
+
+            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+            if map_source == 'gaode':
+                # 当前地图源是高德地图
+                has_original_gcj02 = False
+                if is_route_planned:
+                    # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            self.logger.info(f"[路线预览] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                            has_original_gcj02 = True
+                    except (IndexError, AttributeError):
+                        # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                        self.logger.warning("[路线预览] 无法获取选中的路线方案，使用默认坐标转换")
+
+                # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            # 提取坐标部分（忽略海拔）
+                            lat, lon = point[0], point[1]
+                            # 转换坐标
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            # 保留原始格式（可能包含海拔）
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
+                    self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+            MapRenderer.add_route(m, route_points_to_render)
 
         self.logger.debug("[MapManager] 保存地图并获取URL")
 
@@ -483,11 +751,32 @@ class MapManager:
         from app.constants import (COLOR_INFO, COLOR_SUCCESS, COLOR_ERROR,
                                    ICON_INFO, ICON_SUCCESS, ICON_ERROR)
 
+        # 获取当前配置的地图数据源
+        from services.config.map_config import map_config
+        map_source = map_config.get_map_source()
+
+        # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+        is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+        # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+        def transform_coords(coords):
+            if map_source == 'gaode':
+                # 如果路线是通过路线规划服务获取的，那么起点、终点和途径点的坐标已经是GCJ-02坐标，不需要转换
+                # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
+                if not is_route_planned:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    if coords:
+                        lat, lon = coords
+                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        return (gcj_lat, gcj_lon)
+            return coords
+
         # 添加起点（绿色标记）
         if self.data_manager.start_coords:
             start_name = self.data_manager.start_name or "起点"
+            start_coords_transformed = transform_coords(self.data_manager.start_coords)
             MapRenderer.add_marker(
-                map_obj, self.data_manager.start_coords, start_name,
+                map_obj, start_coords_transformed, start_name,
                 color=COLOR_SUCCESS, icon=ICON_SUCCESS
             )
 
@@ -497,16 +786,18 @@ class MapManager:
             self.data_manager.waypoints_names
         )):
             display_name = name if name else f"途径点 {i + 1}"
+            waypoint_transformed = transform_coords(waypoint)
             MapRenderer.add_marker(
-                map_obj, waypoint, display_name,
+                map_obj, waypoint_transformed, display_name,
                 color=COLOR_INFO, icon=ICON_INFO
             )
 
         # 添加终点（红色标记）
         if self.data_manager.end_coords:
             end_name = self.data_manager.end_name or "终点"
+            end_coords_transformed = transform_coords(self.data_manager.end_coords)
             MapRenderer.add_marker(
-                map_obj, self.data_manager.end_coords, end_name,
+                map_obj, end_coords_transformed, end_name,
                 color=COLOR_ERROR, icon=ICON_ERROR
             )
 

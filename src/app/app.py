@@ -382,7 +382,8 @@ class GpxStudio(QMainWindow):
 
         self.route_manager = RouteManager(
             self.service_manager, self.data_manager,
-            self.ui_updater, self.logger, self.task_manager
+            self.ui_updater, self.logger, self.task_manager,
+            route_history_storage=self.route_history_storage
         )
 
         self.time_manager = TimeManager(
