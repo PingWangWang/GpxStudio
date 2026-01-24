@@ -4,7 +4,7 @@
         {
             "label": "Run GPX Studio",
             "type": "shell",
-            "command": "python",
+            "command": ".venv_new/Scripts/python.exe",
             "args": [
                 "main.py"
             ],
@@ -23,7 +23,7 @@
         {
             "label": "Install Dependencies",
             "type": "shell",
-            "command": "pip",
+            "command": ".venv_new/Scripts/pip.exe",
             "args": [
                 "install",
                 "-r",
@@ -40,7 +40,7 @@
         {
             "label": "Test Services",
             "type": "shell",
-            "command": "python",
+            "command": ".venv_new/Scripts/python.exe",
             "args": [
                 "test_services.py"
             ],
@@ -55,7 +55,7 @@
         {
             "label": "Update Requirements",
             "type": "shell",
-            "command": "pip",
+            "command": ".venv_new/Scripts/pip.exe",
             "args": [
                 "freeze"
             ],

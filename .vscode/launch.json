@@ -2,42 +2,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: GPX Studio",
-            "type": "python",
+            "name": "Python: GPX Studio (推荐)",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
-            "pythonPath": "${command:python.interpreterPath}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
-            },
-            "stopOnEntry": false,
-            "redirectOutput": true,
-            "redirectInput": true
-        },
-        {
-            "name": "Python: GPX Studio (External Terminal)",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "externalTerminal",
-            "justMyCode": false,
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
-            },
-            "stopOnEntry": false
-        },
-        {
-            "name": "Python: Debug Core Module",
-            "type": "python",
-            "request": "launch",
-            "module": "core.app",
-            "console": "integratedTerminal",
-            "justMyCode": false,
-            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
@@ -45,13 +17,28 @@
             "redirectOutput": true
         },
         {
-            "name": "Python: Debug Services",
-            "type": "python",
+            "name": "Python: GPX Studio (外部终端)",
+            "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/test_services.py",
+            "program": "${workspaceFolder}/main.py",
+            "console": "externalTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
+            },
+            "stopOnEntry": false
+        },
+        {
+            "name": "Python: 调试测试",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug_test.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },

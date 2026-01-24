@@ -1,6 +1,6 @@
 {
-    "python.defaultInterpreterPath": "C:\\Users\\13417\\AppData\\Local\\Programs\\Python\\Python39\\python.exe",
-    "python.terminal.activateEnvironment": false,
+    "python.defaultInterpreterPath": "./.venv_new/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.formatting.provider": "black",
