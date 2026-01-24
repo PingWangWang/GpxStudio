@@ -65,11 +65,19 @@ class OsmRoutingService(IRoutingService):
         当点数超过1000时，只提取均匀分布的1000个点的海拔，然后对其他点进行插值计算
 
         Args:
-            points: 坐标点列表 [(lat, lon), ...]
+            points: 坐标点列表 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表 [(lat, lon, elevation), ...]
         """
+        # 处理可能带有海拔数据的点列表，确保只使用前两个元素(lat, lon)
+        def get_lat_lon(point):
+            """从点中提取经纬度，处理可能带有海拔数据的情况"""
+            if len(point) >= 2:
+                return point[0], point[1]
+            else:
+                return point[0], point[1] if len(point) > 1 else 0.0
+
         if not points:
             return []
 
@@ -81,10 +89,13 @@ class OsmRoutingService(IRoutingService):
         for point in points:
             # 确保point是元组，避免使用列表作为字典键
             point_tuple = tuple(point) if isinstance(point, list) else point
-            if point_tuple in self._elevation_cache:
-                cached_points.append((point_tuple[0], point_tuple[1], self._elevation_cache[point_tuple]))
+            # 提取经纬度作为缓存键
+            lat, lon = get_lat_lon(point_tuple)
+            cache_key = (lat, lon)
+            if cache_key in self._elevation_cache:
+                cached_points.append((lat, lon, self._elevation_cache[cache_key]))
             else:
-                uncached_points.append(point_tuple)
+                uncached_points.append(cache_key)
 
         self._log("DEBUG", f"从缓存中获取到 {len(cached_points)} 个点的海拔数据，需要请求 {len(uncached_points)} 个点")
 
@@ -263,10 +274,10 @@ class OsmRoutingService(IRoutingService):
         # 3. 按原始顺序返回结果
         result = []
         for point in points:
-            # 确保point是元组，与cached_point的类型一致
-            point_tuple = tuple(point) if isinstance(point, list) else point
+            # 提取经纬度作为匹配键
+            point_lat, point_lon = get_lat_lon(point)
             for cached_point in cached_points:
-                if (cached_point[0], cached_point[1]) == point_tuple:
+                if (cached_point[0], cached_point[1]) == (point_lat, point_lon):
                     result.append(cached_point)
                     break
 
@@ -308,14 +319,22 @@ class OsmRoutingService(IRoutingService):
         使用采样点的海拔数据对所有点进行插值计算
 
         Args:
-            all_points: 所有原始点列表
+            all_points: 所有原始点列表，格式为 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
             sampled_points_with_elevation: 带海拔的采样点列表
 
         Returns:
             所有点的带海拔列表
         """
+        # 处理可能带有海拔数据的点列表，确保只使用前两个元素(lat, lon)
+        def get_lat_lon(point):
+            """从点中提取经纬度，处理可能带有海拔数据的情况"""
+            if len(point) >= 2:
+                return point[0], point[1]
+            else:
+                return point[0], point[1] if len(point) > 1 else 0.0
+
         if not all_points or not sampled_points_with_elevation:
-            return [(lat, lon, 0.0) for lat, lon in all_points]
+            return [(get_lat_lon(p)[0], get_lat_lon(p)[1], 0.0) for p in all_points]
 
         # 创建采样点的索引映射
         sampled_indices = []
@@ -326,7 +345,8 @@ class OsmRoutingService(IRoutingService):
             lat, lon, elevation = sampled_point
             # 查找该点在原始列表中的索引
             for i, point in enumerate(all_points):
-                if point == (lat, lon):
+                point_lat, point_lon = get_lat_lon(point)
+                if point_lat == lat and point_lon == lon:
                     sampled_indices.append(i)
                     sampled_elevations.append(elevation)
                     break
@@ -334,7 +354,7 @@ class OsmRoutingService(IRoutingService):
         # 对所有点进行插值计算
         result = []
         for i, point in enumerate(all_points):
-            lat, lon = point
+            lat, lon = get_lat_lon(point)
 
             # 查找该点位于哪两个采样点之间
             left_idx = -1

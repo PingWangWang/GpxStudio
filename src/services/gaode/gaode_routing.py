@@ -125,7 +125,7 @@ class GaodeRoutingService(IRoutingService):
         使用Open-Elevation API获取给定坐标点的海拔信息，当点数超过1000时，只提取均匀分布的1000个点的海拔，然后对其他点进行插值计算
 
         Args:
-            points (List[Tuple[float, float]]): 坐标点列表，格式为 [(lat, lon), ...]
+            points (List[Tuple[float, float]]): 坐标点列表，格式为 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表，格式为 [(lat, lon, elevation), ...]
@@ -133,6 +133,14 @@ class GaodeRoutingService(IRoutingService):
         """
         if not points:
             return []
+
+        # 处理可能带有海拔数据的点列表，确保只使用前两个元素(lat, lon)
+        def get_lat_lon(point):
+            """从点中提取经纬度，处理可能带有海拔数据的情况"""
+            if len(point) >= 2:
+                return point[0], point[1]
+            else:
+                return point[0], point[1] if len(point) > 1 else 0.0
 
         # Open-Elevation API配置
         ELEVATION_API_URL = "https://api.open-elevation.com/api/v1/lookup"
@@ -163,7 +171,7 @@ class GaodeRoutingService(IRoutingService):
                     log_cb("DEBUG", f"处理第 {batch_index + 1}/{total_batches} 批，点数: {len(batch_points)}")
 
                     # 构建Open-Elevation API请求数据
-                    locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch_points]
+                    locations = [{"latitude": get_lat_lon(p)[0], "longitude": get_lat_lon(p)[1]} for p in batch_points]
                     payload = {"locations": locations}
 
                     # 请求重试机制
@@ -185,7 +193,7 @@ class GaodeRoutingService(IRoutingService):
                                 # 处理每个点的海拔数据
                                 for i, result in enumerate(results):
                                     if i < len(batch_points):
-                                        lat, lon = batch_points[i]
+                                        lat, lon = get_lat_lon(batch_points[i])
                                         elevation = result.get("elevation", 0.0)
                                         batch_result.append((lat, lon, elevation))
 
@@ -214,7 +222,8 @@ class GaodeRoutingService(IRoutingService):
                     # 如果重试失败，为这批点设置默认海拔
                     if not batch_success:
                         log_cb("WARNING", f"第 {batch_index + 1} 批点海拔数据获取失败，使用默认值0.0")
-                        for lat, lon in batch_points:
+                        for p in batch_points:
+                            lat, lon = get_lat_lon(p)
                             points_with_elevation.append((lat, lon, 0.0))
 
                     # 每批请求之间添加间隔时间，避免服务器拒绝连接
@@ -245,7 +254,7 @@ class GaodeRoutingService(IRoutingService):
                     log_cb("DEBUG", f"处理采样点批次 {batch_index + 1}/{total_batches}，点数: {len(batch_points)}")
 
                     # 构建Open-Elevation API请求数据
-                    locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch_points]
+                    locations = [{"latitude": get_lat_lon(p)[0], "longitude": get_lat_lon(p)[1]} for p in batch_points]
                     payload = {"locations": locations}
 
                     # 请求重试机制
@@ -267,7 +276,7 @@ class GaodeRoutingService(IRoutingService):
                                 # 处理每个点的海拔数据
                                 for i, result in enumerate(results):
                                     if i < len(batch_points):
-                                        lat, lon = batch_points[i]
+                                        lat, lon = get_lat_lon(batch_points[i])
                                         elevation = result.get("elevation", 0.0)
                                         batch_result.append((lat, lon, elevation))
 
@@ -296,7 +305,8 @@ class GaodeRoutingService(IRoutingService):
                     # 如果重试失败，为这批点设置默认海拔
                     if not batch_success:
                         log_cb("WARNING", f"第 {batch_index + 1} 批采样点海拔数据获取失败，使用默认值0.0")
-                        for lat, lon in batch_points:
+                        for p in batch_points:
+                            lat, lon = get_lat_lon(p)
                             sampled_points_with_elevation.append((lat, lon, 0.0))
 
                     # 每批请求之间添加间隔时间，避免服务器拒绝连接
@@ -318,7 +328,7 @@ class GaodeRoutingService(IRoutingService):
 
             log_cb("ERROR", f"获取海拔数据异常: {str(e)}")
             # 异常时返回默认海拔为0的点列表
-            return [(lat, lon, 0.0) for lat, lon in points]
+            return [(get_lat_lon(p)[0], get_lat_lon(p)[1], 0.0) for p in points]
 
     def _sample_points_uniformly(self, points: List[Tuple[float, float]], max_points: int) -> List[Tuple[float, float]]:
         """
@@ -355,14 +365,22 @@ class GaodeRoutingService(IRoutingService):
         使用采样点的海拔数据对所有点进行插值计算
 
         Args:
-            all_points: 所有原始点列表
+            all_points: 所有原始点列表，格式为 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
             sampled_points_with_elevation: 带海拔的采样点列表
 
         Returns:
             所有点的带海拔列表
         """
+        # 处理可能带有海拔数据的点列表，确保只使用前两个元素(lat, lon)
+        def get_lat_lon(point):
+            """从点中提取经纬度，处理可能带有海拔数据的情况"""
+            if len(point) >= 2:
+                return point[0], point[1]
+            else:
+                return point[0], point[1] if len(point) > 1 else 0.0
+
         if not all_points or not sampled_points_with_elevation:
-            return [(lat, lon, 0.0) for lat, lon in all_points]
+            return [(get_lat_lon(p)[0], get_lat_lon(p)[1], 0.0) for p in all_points]
 
         # 创建采样点的索引映射
         sampled_indices = []
@@ -373,7 +391,8 @@ class GaodeRoutingService(IRoutingService):
             lat, lon, elevation = sampled_point
             # 查找该点在原始列表中的索引
             for i, point in enumerate(all_points):
-                if point == (lat, lon):
+                point_lat, point_lon = get_lat_lon(point)
+                if point_lat == lat and point_lon == lon:
                     sampled_indices.append(i)
                     sampled_elevations.append(elevation)
                     break
@@ -381,7 +400,7 @@ class GaodeRoutingService(IRoutingService):
         # 对所有点进行插值计算
         result = []
         for i, point in enumerate(all_points):
-            lat, lon = point
+            lat, lon = get_lat_lon(point)
 
             # 查找该点位于哪两个采样点之间
             left_idx = -1
