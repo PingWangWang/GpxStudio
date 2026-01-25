@@ -35,6 +35,36 @@ class SplashScreen(QSplashScreen):
         # 创建布局和组件
         self._init_ui()
 
+    def _calculate_optimal_font_size(self, text, max_width, margin=40):
+        """
+        计算最佳字体大小，确保文字能在指定宽度内完全显示
+        
+        Args:
+            text: 要显示的文字
+            max_width: 最大可用宽度
+            margin: 左右边距总和
+            
+        Returns:
+            最佳字体大小（点）
+        """
+        available_width = max_width - (margin * 2)
+        
+        # 从大到小尝试字体大小
+        for font_size in range(100, 10, -1):
+            font = QFont()
+            font.setPointSize(font_size)
+            font.setBold(True)
+            
+            # 创建临时字体度量对象进行测量
+            from PyQt5.QtGui import QFontMetrics
+            metrics = QFontMetrics(font)
+            text_width = metrics.width(text)
+            
+            if text_width <= available_width:
+                return font_size
+        
+        return 10  # 最小字体大小
+
     def _init_ui(self):
         """初始化UI组件"""
         # 创建主widget和布局
@@ -46,8 +76,12 @@ class SplashScreen(QSplashScreen):
         # 标题标签
         self.title_label = QLabel("GPX STUDIO")
         self.title_label.setAlignment(Qt.AlignCenter)
+        
+        # 计算最佳字体大小
+        optimal_size = self._calculate_optimal_font_size("GPX STUDIO", self.width())
+        
         title_font = QFont()
-        title_font.setPointSize(60)
+        title_font.setPointSize(optimal_size)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         self.title_label.setStyleSheet("color: #ffffff;")
@@ -121,3 +155,38 @@ class SplashScreen(QSplashScreen):
             window: 主窗口实例
         """
         self.finish(window)
+
+    def test_font_size_calculation(self):
+        """
+        测试不同窗口大小下的字体大小计算
+        """
+        test_widths = [300, 400, 500, 600, 700, 800, 900, 1000]
+        
+        print("测试不同窗口宽度下的最佳字体大小:")
+        print("-" * 60)
+        
+        for width in test_widths:
+            # 临时设置宽度
+            original_width = self.width()
+            self.setFixedWidth(width)
+            
+            # 计算字体大小
+            font_size = self._calculate_optimal_font_size("GPX STUDIO", width)
+            
+            # 计算实际可用宽度
+            available_width = width - 80  # 40px边距 * 2
+            
+            # 计算文字宽度
+            from PyQt5.QtGui import QFontMetrics
+            font = QFont()
+            font.setPointSize(font_size)
+            font.setBold(True)
+            metrics = QFontMetrics(font)
+            text_width = metrics.width("GPX STUDIO")
+            
+            print(f"窗口宽度: {width}px | 可用宽度: {available_width}px | 字体大小: {font_size}pt | 文字宽度: {text_width}px")
+            
+            # 恢复原宽度
+            self.setFixedWidth(original_width)
+        
+        print("-" * 60)

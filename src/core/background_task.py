@@ -154,6 +154,9 @@ class TaskManager(QObject):
         self.threads: Dict[str, QThread] = {}        # 线程字典
         self.current_task_id: Optional[str] = None   # 当前正在执行的任务ID
         self._task_counter = 0                        # 任务计数器
+        self.task_queue = []                          # 任务队列（按优先级排序）
+        self.max_concurrent_tasks = 2                 # 最大并发任务数
+        self.running_tasks = 0                        # 当前运行的任务数
 
     def submit_task(self, task_type: str, task_func: Callable,
                     priority: TaskPriority = TaskPriority.NORMAL,
@@ -189,24 +192,47 @@ class TaskManager(QObject):
         task.cancelled.connect(lambda tid: self._on_task_cancelled(tid))
         task.log_message.connect(lambda tid, level, msg: self.task_log.emit(tid, level, msg))
 
-        # 创建线程
-        thread = QThread()
-        task.moveToThread(thread)
-        thread.started.connect(task.run)
-
-        # 保存任务和线程
+        # 保存任务
         self.tasks[task_id] = task
-        self.threads[task_id] = thread
+
+        # 添加到任务队列
+        self.task_queue.append((priority.value, task_id))
+        # 按优先级排序（值越小优先级越高）
+        self.task_queue.sort(key=lambda x: x[0])
 
         # 发射入队信号
         self.task_queued.emit(task_id, task_type)
         if self.logger:
-            self.logger.debug(f"[任务管理器] 任务已入队: {task_id} ({task_type})")
+            self.logger.debug(f"[任务管理器] 任务已入队: {task_id} ({task_type}) - 优先级: {priority.name}")
 
-        # 启动线程
-        thread.start()
+        # 尝试执行任务
+        self._process_task_queue()
 
         return task_id
+
+    def _process_task_queue(self):
+        """处理任务队列"""
+        while self.running_tasks < self.max_concurrent_tasks and self.task_queue:
+            # 获取优先级最高的任务
+            priority_value, task_id = self.task_queue.pop(0)
+            
+            if task_id in self.tasks:
+                task = self.tasks[task_id]
+                
+                # 创建线程
+                thread = QThread()
+                task.moveToThread(thread)
+                thread.started.connect(task.run)
+                
+                # 保存线程
+                self.threads[task_id] = thread
+                
+                # 启动线程
+                thread.start()
+                self.running_tasks += 1
+                
+                if self.logger:
+                    self.logger.debug(f"[任务管理器] 开始执行任务: {task_id} - 优先级: {TaskPriority(priority_value).name}")
 
     def cancel_task(self, task_id: str):
         """取消指定任务"""
@@ -244,6 +270,8 @@ class TaskManager(QObject):
         self._cleanup_task(task_id)
         if self.logger:
             self.logger.info(f"[任务管理器] 任务完成: {task_id}")
+        # 处理下一个任务
+        self._process_task_queue()
 
     def _on_task_failed(self, task_id: str, error: str):
         """任务失败回调"""
@@ -251,6 +279,8 @@ class TaskManager(QObject):
         self._cleanup_task(task_id)
         if self.logger:
             self.logger.error(f"[任务管理器] 任务失败: {task_id} - {error}")
+        # 处理下一个任务
+        self._process_task_queue()
 
     def _on_task_cancelled(self, task_id: str):
         """任务取消回调"""
@@ -258,6 +288,8 @@ class TaskManager(QObject):
         self._cleanup_task(task_id)
         if self.logger:
             self.logger.warning(f"[任务管理器] 任务已取消: {task_id}")
+        # 处理下一个任务
+        self._process_task_queue()
 
     def _cleanup_task(self, task_id: str):
         """清理任务资源"""
@@ -274,6 +306,12 @@ class TaskManager(QObject):
 
         if self.current_task_id == task_id:
             self.current_task_id = None
+
+        # 减少运行任务计数
+        if self.running_tasks > 0:
+            self.running_tasks -= 1
+            if self.logger:
+                self.logger.debug(f"[任务管理器] 任务清理完成: {task_id}, 剩余运行任务: {self.running_tasks}")
 
     def get_task_info(self, task_id: str) -> Optional[Dict[str, Any]]:
         """获取任务信息"""
