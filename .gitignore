@@ -9,6 +9,7 @@ __pycache__/
 .venv_new/
 env/
 venv/
+venv_new/
 
 # 构建文件
 *.egg-info/
