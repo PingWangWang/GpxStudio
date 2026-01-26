@@ -2521,6 +2521,12 @@ class GpxStudio(QMainWindow):
             self.route_plan_panel.show_route_plan_error("请先搜索并选择起点和终点位置")
             return
 
+        # 检查途径点的坐标是否已经被设置
+        if waypoints:
+            if len(self.data_manager.waypoints_coords) < len(waypoints):
+                self.route_plan_panel.show_route_plan_error("请先搜索并选择所有途径点位置")
+                return
+
         # 保存当前的路线信息（用于后续保存历史记录）
         self._current_route_info = {
             'start': start,
@@ -2672,8 +2678,18 @@ class GpxStudio(QMainWindow):
                 self.data_manager.set_end_location((lat_float, lng_float), name, level)
                 self.logger.info(f"[路线面板] 设置终点: {name} ({lat_float}, {lng_float})")
             elif location_type == "waypoint":
-                self.data_manager.add_waypoint((lat_float, lng_float), name)
-                self.logger.info(f"[路线面板] 添加途径点: {name} ({lat_float}, {lng_float})")
+                # 确保途径点数量与输入框数量匹配
+                waypoint_count = len(self.data_manager.waypoints_coords)
+                input_count = len(self.route_plan_panel.waypoint_widgets)
+
+                if waypoint_count < input_count:
+                    # 添加新途径点
+                    self.data_manager.add_waypoint((lat_float, lng_float), name)
+                    self.logger.info(f"[路线面板] 添加途径点: {name} ({lat_float}, {lng_float})")
+                else:
+                    # 更新最后一个途径点
+                    self.data_manager.update_waypoint(waypoint_count - 1, (lat_float, lng_float), name)
+                    self.logger.info(f"[路线面板] 更新途径点: {name} ({lat_float}, {lng_float})")
 
             # 保存到搜索历史记录
             search_text = address_data.get('_search_text', name)  # 获取原始搜索文本
