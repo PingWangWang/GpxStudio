@@ -39,7 +39,7 @@ class RouteHistoryItem(QWidget):
         start = self.history_data.get('start', '')
         end = self.history_data.get('end', '')
         waypoints = self.history_data.get('waypoints', [])
-        
+
         # 构建路线文本，包含途径点信息
         if waypoints:
             # 如果有途径点，格式为：起点-途径点1-途径点2-终点
@@ -50,7 +50,7 @@ class RouteHistoryItem(QWidget):
         else:
             # 没有途径点，格式为：起点 → 终点
             route_text = f"{start} → {end}"
-            
+
         route_label = QLabel(route_text)
         route_label.setStyleSheet("""
             QLabel {
@@ -1580,7 +1580,8 @@ class RoutePlanPanel(QWidget):
         waypoints = []
         for widget_dict in self.waypoint_widgets:
             waypoint_text = widget_dict['input'].text().strip()
-            waypoints.append(waypoint_text)
+            if waypoint_text:
+                waypoints.append(waypoint_text)
 
         # 发送信号
         self.plan_route_clicked.emit(start, end, self.current_transport_mode, waypoints)
@@ -1899,6 +1900,10 @@ class RoutePlanPanel(QWidget):
                 - description: 路线描述
             selected_index: 默认选中的方案索引
         """
+        # 隐藏地址待选列表，显示历史记录容器
+        self.address_suggestions_container.setVisible(False)
+        self.history_container.setVisible(True)
+
         # 清空历史记录列表
         self.history_list.clear()
 
