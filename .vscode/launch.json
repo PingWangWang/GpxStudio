@@ -9,7 +9,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
-            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
@@ -24,7 +24,7 @@
             "console": "externalTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
-            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },
@@ -38,7 +38,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
-            "python": "${workspaceFolder}/.venv_new/Scripts/python.exe",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/src"
             },

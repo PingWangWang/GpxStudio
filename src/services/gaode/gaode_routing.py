@@ -43,9 +43,8 @@ class GaodeRoutingService(IRoutingService):
 
     # 交通方式映射（中文到英文）
     TRANSPORT_MODES = {
-        "步行": "walking",    # 步行交通方式
-        "骑行": "bicycling",  # 骑行交通方式
-        "驾车": "driving"     # 驾车交通方式
+        "步行": "walking", "骑行": "bicycling", "驾车": "driving",
+        "walking": "walking", "cycling": "bicycling", "driving": "driving"  # 添加英文支持
     }
 
     # 海拔API基础URL（使用OpenTopoData API）

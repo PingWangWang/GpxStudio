@@ -284,14 +284,6 @@ class MapRenderTaskAdapter:
             if cancel_check():
                 return None
 
-            # 收集关键坐标点（仅起点、终点、途径点）
-            key_coords = []
-            if data_manager.start_coords:
-                key_coords.append(data_manager.start_coords)
-            key_coords.extend(data_manager.waypoints_coords)
-            if data_manager.end_coords:
-                key_coords.append(data_manager.end_coords)
-
             progress_callback(20, "正在创建地图...")
 
             if cancel_check():
@@ -301,7 +293,7 @@ class MapRenderTaskAdapter:
             from modules.map.map_renderer import MapRenderer
 
             # 确定地图中心
-            center = data_manager.start_coords or key_coords[0]
+            center = data_manager.start_coords or valid_points[0]
 
             # 创建基础地图
             map_create_start = time.time()
@@ -334,35 +326,27 @@ class MapRenderTaskAdapter:
             if cancel_check():
                 return None
 
-            # 快速预览：只渲染关键节点之间的路线，不渲染完整路线
-            # 这样可以显著缩短首次渲染时间
-            quick_route_start = time.time()
-            
-            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
-            is_route_planned = hasattr(data_manager, 'route_alternatives') and data_manager.route_alternatives
+            # 全量渲染：使用所有有效的路线点来渲染路线
+            route_start = time.time()
 
-            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
-            quick_route_points = []
-            
-            # 添加关键节点作为快速路线
-            if key_coords:
-                # 对于高德地图，需要转换坐标
-                if map_source == 'gaode':
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
-                    transformed_key_coords = []
-                    for point in key_coords:
-                        if point:
-                            lat, lon = point
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
-                            transformed_key_coords.append((gcj_lat, gcj_lon))
-                    quick_route_points = transformed_key_coords
-                else:
-                    quick_route_points = key_coords
-            
-            # 添加快速预览路线
-            if quick_route_points and len(quick_route_points) > 1:
-                MapRenderer.add_route(m, quick_route_points, color='#4CAF50', weight=3, opacity=0.6)
-            quick_route_time = (time.time() - quick_route_start) * 1000
+            # 处理坐标转换：根据地图源决定是否需要转换
+            route_points = []
+            if map_source == 'gaode':
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                transformed_route_points = []
+                for point in valid_points:
+                    if point:
+                        lat, lon = point
+                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        transformed_route_points.append((gcj_lat, gcj_lon))
+                route_points = transformed_route_points
+            else:
+                route_points = valid_points
+
+            # 添加完整路线
+            if route_points and len(route_points) > 1:
+                MapRenderer.add_route(m, route_points, color='#459c50', weight=5, opacity=0.8)
+            route_time = (time.time() - route_start) * 1000
 
             progress_callback(80, "正在调整地图边界...")
 
@@ -373,7 +357,7 @@ class MapRenderTaskAdapter:
             fit_bounds_start = time.time()
 
             # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
-            bounds_points = key_coords
+            bounds_points = valid_points
             if map_source == 'gaode':
                 # 当前地图源是高德地图，所有存储的路线数据都是WGS-84坐标，需要转换为GCJ-02坐标
                 from modules.geolocation.coordinate_transform import CoordinateTransform
@@ -404,7 +388,7 @@ class MapRenderTaskAdapter:
 
             total_time = (time.time() - total_start_time) * 1000
             log_callback("INFO", f"地图渲染完成: {url}")
-            log_callback("INFO", f"[地图渲染任务] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加标记: {markers_time:.2f}ms, 快速路线: {quick_route_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms)")
+            log_callback("INFO", f"[地图渲染任务] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加标记: {markers_time:.2f}ms, 完整路线: {route_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms)")
 
             progress_callback(100, "地图渲染完成")
             return url

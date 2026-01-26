@@ -613,9 +613,8 @@ class OsmRoutingService(IRoutingService):
             str: OSRM支持的profile类型
         """
         mode_map = {
-            "驾车": "car",
-            "步行": "foot",
-            "骑行": "bike"
+            "驾车": "car", "步行": "foot", "骑行": "bike",
+            "driving": "car", "walking": "foot", "cycling": "bike"  # 添加英文支持
         }
         return mode_map.get(transport_mode, "car")
 

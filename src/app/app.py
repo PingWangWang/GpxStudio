@@ -2476,6 +2476,9 @@ class GpxStudio(QMainWindow):
             history_list = fresh_storage.get_history(10)
             self.route_plan_panel.load_history(history_list)
 
+            # 设置默认交通方式为驾车，并更新UI状态
+            self.route_plan_panel._switch_transport_mode("driving")
+
             # 显示面板
             self.route_plan_panel.show()
             self.route_plan_panel.raise_()
@@ -2718,6 +2721,10 @@ class GpxStudio(QMainWindow):
             end = history_data.get('end', '')
             mode = history_data.get('mode', 'driving')
 
+            # 将中文交通方式转换为英文
+            mode_map = {"驾车": "driving", "骑行": "cycling", "步行": "walking"}
+            mode = mode_map.get(mode, mode)  # 兼容中英文输入
+
             # 获取坐标信息
             start_coords = history_data.get('start_coords')
             end_coords = history_data.get('end_coords')
@@ -2789,6 +2796,26 @@ class GpxStudio(QMainWindow):
                             if i < len(self.route_plan_panel.waypoint_widgets):
                                 self.route_plan_panel.waypoint_widgets[i]['input'].setText(waypoint_name)
                         self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords}")
+
+            # 重新更新交通方式UI（确保选中效果正确）
+            if hasattr(self, 'route_plan_panel'):
+                self.route_plan_panel._update_transport_mode_ui()
+
+            # 更新添加途径点按钮状态（仅驾车模式）
+            if hasattr(self, 'route_plan_panel'):
+                if mode == "driving":
+                    waypoint_count = len(waypoint_coords)
+                    if waypoint_count >= 5:
+                        self.route_plan_panel.add_waypoint_button.setEnabled(False)
+                        self.route_plan_panel.add_waypoint_button.setToolTip("最多添加5个途径点")
+                    else:
+                        self.route_plan_panel.add_waypoint_button.setEnabled(True)
+                        self.route_plan_panel.add_waypoint_button.setToolTip("添加途径点")
+                    # 更新添加途径点按钮位置
+                    self.route_plan_panel._update_add_button_position()
+                else:
+                    # 非驾车模式，确保添加途径点按钮隐藏
+                    self.route_plan_panel.add_waypoint_button.setVisible(False)
 
             # 如果没有坐标，自动搜索起点和终点
             if not has_coords:

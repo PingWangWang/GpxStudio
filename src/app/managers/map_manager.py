@@ -206,7 +206,7 @@ class MapManager:
                     route_points_to_render = transformed_route_points
                     self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
 
-            MapRenderer.add_route(m, route_points_to_render)
+            MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
 
         # 多个地址时，自动适应所有搜索结果
         if len(locations) > 1:
@@ -334,7 +334,7 @@ class MapManager:
                     route_points_to_render = transformed_route_points
                     self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
 
-            MapRenderer.add_route(m, route_points_to_render)
+            MapRenderer.add_route(m, route_points_to_render, color='#4CAF50', weight=3, opacity=0.6)
 
         # 如果需要自动适应所有点，调整地图边界
         if auto_fit:
@@ -600,7 +600,7 @@ class MapManager:
                 route_points_to_render = transformed_route_points
                 self.logger.info(f"[路线渲染] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
 
-        MapRenderer.add_route(m, route_points_to_render)
+        MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
         route_add_time = (time.time() - route_add_start) * 1000
 
         # 调整地图边界以显示完整路线

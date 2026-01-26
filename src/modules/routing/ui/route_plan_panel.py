@@ -6,7 +6,7 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLineEdit, QLabel, QScrollArea, QListWidget, QListWidgetItem)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
 
@@ -38,7 +38,20 @@ class RouteHistoryItem(QWidget):
         # 路线文本
         start = self.history_data.get('start', '')
         end = self.history_data.get('end', '')
-        route_label = QLabel(f"{start} → {end}")
+        waypoints = self.history_data.get('waypoints', [])
+        
+        # 构建路线文本，包含途径点信息
+        if waypoints:
+            # 如果有途径点，格式为：起点-途径点1-途径点2-终点
+            route_parts = [start]
+            route_parts.extend(waypoints)
+            route_parts.append(end)
+            route_text = '-'.join(route_parts)
+        else:
+            # 没有途径点，格式为：起点 → 终点
+            route_text = f"{start} → {end}"
+            
+        route_label = QLabel(route_text)
         route_label.setStyleSheet("""
             QLabel {
                 color: white;
@@ -522,6 +535,9 @@ class RoutePlanPanel(QWidget):
         # 加载图标
         self._load_icons()
 
+        # 初始化交通方式UI（默认驾车模式，显示选中效果和途径点添加按钮）
+        self._update_transport_mode_ui()
+
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 使用 RoutePlanPanel 作为选择器确保背景色应用
@@ -835,7 +851,7 @@ class RoutePlanPanel(QWidget):
 
         # 加载Loading图标
         self._load_loading_icon()
-        
+
         # 初始状态隐藏加载按钮
         self.hide_loading()
 
@@ -982,6 +998,13 @@ class RoutePlanPanel(QWidget):
         # 初始化交通方式
         self._update_transport_mode_ui()
 
+    def showEvent(self, event):
+        """面板显示事件"""
+        super().showEvent(event)
+        # 面板显示时，重新更新添加按钮的位置和可见性
+        # 使用 QTimer.singleShot 延迟执行，确保面板完全显示后再更新
+        QTimer.singleShot(0, self._update_add_button_position)
+
     def _load_icons(self):
         """加载图标"""
         # 使用emoji作为图标，与右键菜单面板保持一致
@@ -1000,6 +1023,10 @@ class RoutePlanPanel(QWidget):
             QPushButton:pressed {
                 background-color: rgba(255, 255, 255, 0.25);
             }
+            QPushButton[selected="true"] {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: none;
+            }
         """)
 
         # 骑行图标
@@ -1016,6 +1043,10 @@ class RoutePlanPanel(QWidget):
             QPushButton:pressed {
                 background-color: rgba(255, 255, 255, 0.25);
             }
+            QPushButton[selected="true"] {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: none;
+            }
         """)
 
         # 步行图标
@@ -1031,6 +1062,10 @@ class RoutePlanPanel(QWidget):
             }
             QPushButton:pressed {
                 background-color: rgba(255, 255, 255, 0.25);
+            }
+            QPushButton[selected="true"] {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: none;
             }
         """)
 
@@ -1262,7 +1297,9 @@ class RoutePlanPanel(QWidget):
 
     def _switch_transport_mode(self, mode: str):
         """切换交通方式"""
-        self.current_transport_mode = mode
+        # 将中文交通方式转换为英文
+        mode_map = {"驾车": "driving", "骑行": "cycling", "步行": "walking"}
+        self.current_transport_mode = mode_map.get(mode, mode)  # 兼容中英文输入
         self._update_transport_mode_ui()
 
     def _update_transport_mode_ui(self):
@@ -1288,8 +1325,8 @@ class RoutePlanPanel(QWidget):
         }
         self.plan_button.setText(mode_text.get(self.current_transport_mode, "开车去"))
 
-        # 显示/隐藏添加途径点按钮（仅驾车模式）
-        self.add_waypoint_button.setVisible(self.current_transport_mode == "driving")
+        # 更新添加途径点按钮的位置和可见性（仅驾车模式）
+        self._update_add_button_position()
 
         # 显示/隐藏途径点容器（仅驾车模式且有途径点时显示）
         is_driving = self.current_transport_mode == "driving"
@@ -1457,6 +1494,9 @@ class RoutePlanPanel(QWidget):
 
     def _update_add_button_position(self):
         """更新添加途径点按钮的位置"""
+        # 确保在驾车模式下添加途径点按钮是可见的
+        self.add_waypoint_button.setVisible(self.current_transport_mode == "driving")
+
         if len(self.waypoint_widgets) == 0:
             # 没有途径点时，添加按钮在主容器右侧垂直居中
             # 先从终点行移除（如果存在）
@@ -1540,8 +1580,7 @@ class RoutePlanPanel(QWidget):
         waypoints = []
         for widget_dict in self.waypoint_widgets:
             waypoint_text = widget_dict['input'].text().strip()
-            if waypoint_text:
-                waypoints.append(waypoint_text)
+            waypoints.append(waypoint_text)
 
         # 发送信号
         self.plan_route_clicked.emit(start, end, self.current_transport_mode, waypoints)
@@ -1630,6 +1669,9 @@ class RoutePlanPanel(QWidget):
         while self.waypoint_widgets:
             widget_dict = self.waypoint_widgets[0]
             self._remove_waypoint(widget_dict['container'])
+
+        # 清空途径点后，更新添加按钮位置
+        self._update_add_button_position()
 
     def load_history(self, history_list: list):
         """加载历史记录"""
