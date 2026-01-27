@@ -86,7 +86,7 @@ class UpdateManager(QObject):
             release_data = response.json()
 
             # 提取版本号和发布日期
-            latest_version = release_data.get("tag_name", "").lstrip("v")
+            latest_version = release_data.get("tag_name", "").lstrip("vV")
             release_date = release_data.get("published_at", "").split("T")[0]
             release_notes = release_data.get("body", "")
 

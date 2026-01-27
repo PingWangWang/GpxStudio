@@ -156,6 +156,33 @@ class TestUpdateManager(unittest.TestCase):
         self.update_manager.update_error.emit.assert_not_called()
 
     @patch('requests.get')
+    def test_check_for_updates_uppercase_v(self, mock_get):
+        """
+        测试检查更新方法 - 大写V前缀
+        """
+        # 模拟响应
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "tag_name": "V2.0.1",
+            "published_at": "2026-01-26T00:00:00Z",
+            "body": "发布说明"
+        }
+        mock_get.return_value = mock_response
+
+        # 模拟信号
+        self.update_manager.update_available = Mock()
+        self.update_manager.update_available.emit = Mock()
+        self.update_manager.update_error = Mock()
+        self.update_manager.update_error.emit = Mock()
+
+        # 调用方法
+        self.update_manager.check_for_updates()
+
+        # 验证结果 - 应该识别为 2.0.1 并发出信号
+        self.update_manager.update_available.emit.assert_called_once_with("2.0.1", "发布说明")
+        self.update_manager.update_error.emit.assert_not_called()
+
+    @patch('requests.get')
     def test_check_for_updates_skipped_version(self, mock_get):
         """
         测试检查更新方法 - 跳过版本
