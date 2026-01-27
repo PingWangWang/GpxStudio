@@ -52,9 +52,9 @@ class TestUpdateManager(unittest.TestCase):
         self.assertEqual(self.update_manager.current_version, self.current_version)
         self.assertEqual(self.update_manager.logger, self.logger)
         self.assertEqual(self.update_manager.config_manager, self.config_manager)
-        self.assertEqual(self.update_manager.repo_owner, "GpxStudio")
+        self.assertEqual(self.update_manager.repo_owner, "PingWangWang")
         self.assertEqual(self.update_manager.repo_name, "GpxStudio")
-        self.assertEqual(self.update_manager.api_url, "https://api.github.com/repos/GpxStudio/GpxStudio/releases/latest")
+        self.assertEqual(self.update_manager.api_url, "https://api.github.com/repos/PingWangWang/GpxStudio/releases/latest")
         self.assertEqual(self.update_manager.skip_versions, [])
 
     def test_is_new_version(self):

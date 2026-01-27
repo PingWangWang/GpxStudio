@@ -45,7 +45,7 @@ class UpdateManager(QObject):
         self.current_version = current_version
         self.logger = logger
         self.config_manager = config_manager
-        self.repo_owner = "GpxStudio"  # GitHub 仓库所有者
+        self.repo_owner = "PingWangWang"  # GitHub 仓库所有者
         self.repo_name = "GpxStudio"  # GitHub 仓库名称
         self.api_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest"
         self.skip_versions = self._load_skip_versions()

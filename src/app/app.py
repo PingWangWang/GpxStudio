@@ -93,6 +93,12 @@ class GpxStudio(QMainWindow):
         self._update_splash(90, "正在加载用户界面...")
         self._init_ui()
 
+        self._update_splash(92, "正在初始化功能管理器...")
+        self._init_functional_managers()
+
+        self._update_splash(94, "正在连接信号...")
+        self._connect_signals()
+
         self._update_splash(95, "准备就绪...")
 
         # 启动完成
