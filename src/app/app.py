@@ -46,7 +46,7 @@ from .constants import (
 from .managers import (
     WindowManager, ServiceManager, DataManager,
     LocationManager, SearchManager, MapManager,
-    RouteManager, TimeManager
+    RouteManager, TimeManager, UpdateManager
 )
 
 
@@ -72,26 +72,26 @@ class GpxStudio(QMainWindow):
         init_data_directories()
 
         # 初始化各个部分（进度范围：10-95，为启动和完成阶段留出空间）
-        self._update_splash(15, "正在初始化管理器...")
+        self._update_splash(15, "正在初始化日志系统...")
+        self._init_logging()
+
+        self._update_splash(30, "正在初始化管理器...")
         self._init_managers()
 
-        self._update_splash(30, "正在设置窗口...")
+        self._update_splash(45, "正在设置窗口...")
         self._init_window()
 
-        self._update_splash(45, "正在初始化服务...")
+        self._update_splash(60, "正在初始化服务...")
         self._init_services()
 
-        self._update_splash(60, "正在初始化信号系统...")
+        self._update_splash(70, "正在初始化信号系统...")
         self._init_signals()
 
-        self._update_splash(70, "正在初始化弹出面板管理...")
+        self._update_splash(80, "正在初始化弹出面板管理...")
         self._init_popup_management()
 
-        self._update_splash(80, "正在加载用户界面...")
+        self._update_splash(90, "正在加载用户界面...")
         self._init_ui()
-
-        self._update_splash(90, "正在初始化日志系统...")
-        self._init_logging()
 
         self._update_splash(95, "准备就绪...")
 
@@ -103,6 +103,9 @@ class GpxStudio(QMainWindow):
         # 标记首次启动完成
         from core.logging_setup import mark_first_run_completed
         mark_first_run_completed()
+
+        # 启动定时检查更新的任务
+        self.start_update_check()
 
     def _update_splash(self, progress: int, message: str = ""):
         """
@@ -136,6 +139,10 @@ class GpxStudio(QMainWindow):
         # 服务管理器
         self.service_manager = ServiceManager(self.logger_callbacks)
 
+        # 初始化Windows定位服务（需要logger）
+        if hasattr(self, 'logger'):
+            self.service_manager.initialize_windows_location_service()
+
         # 窗口管理器
         self.window_manager = WindowManager(self, WINDOW_TITLE, WINDOW_SIZE)
 
@@ -144,6 +151,12 @@ class GpxStudio(QMainWindow):
 
         # 任务管理器（延迟初始化，需要logger）
         self.task_manager = None
+
+        # 导入版本信息
+        from version import __version__ as current_version
+
+        # 更新管理器
+        self.update_manager = UpdateManager(current_version, self.logger)
 
         print("管理器初始化完成")
 
@@ -174,6 +187,13 @@ class GpxStudio(QMainWindow):
         self.geolocation_handler = GeolocationHandler(signal_manager=self.signal_manager)
 
         # 连接信号（稍后在各管理器初始化后连接具体处理）
+
+        # 连接更新相关信号
+        if hasattr(self, 'update_manager'):
+            self.update_manager.update_available.connect(self._on_update_available)
+            self.update_manager.update_downloaded.connect(self._on_update_downloaded)
+            self.update_manager.update_error.connect(self._on_update_error)
+
         print("信号系统初始化完成")
 
     def _init_ui(self):
@@ -323,7 +343,9 @@ class GpxStudio(QMainWindow):
         QApplication.processEvents()
 
     def _init_logging(self):
-        """初始化日志系统"""
+        """
+        初始化日志系统
+        """
         print("开始初始化日志系统")
         self.logger = setup_logger(None, "GpxStudio")  # 不使用UI日志面板，只输出到文件
 
@@ -333,15 +355,6 @@ class GpxStudio(QMainWindow):
 
         # 连接任务管理器信号
         self._connect_task_manager_signals()
-
-        # 初始化Windows定位服务（需要logger）
-        self.service_manager.initialize_windows_location_service()
-
-        # 初始化其他管理器（需要logger和UI组件）
-        self._init_functional_managers()
-
-        # 连接信号
-        self._connect_signals()
 
         self.logger.debug("日志系统初始化完成")
 
@@ -3863,6 +3876,143 @@ class GpxStudio(QMainWindow):
         # 启动后台任务
         task = ClearTask(self)
         QThreadPool.globalInstance().start(task)
+
+    def _on_update_available(self, latest_version: str, release_notes: str):
+        """
+        发现新版本
+
+        Args:
+            latest_version: 最新版本号
+            release_notes: 发布说明
+        """
+        try:
+            from ui.popups.update_popup import UpdatePopup
+            
+            popup = UpdatePopup(self, latest_version, release_notes)
+            result = popup.exec_()
+
+            if result == UpdatePopup.RESULT_UPDATE:
+                # 立即更新
+                self.update_manager.download_update(latest_version)
+            elif result == UpdatePopup.RESULT_SKIP:
+                # 跳过此版本
+                self.update_manager.skip_version(latest_version)
+            # 稍后再说按钮不做处理
+            
+        except ImportError:
+            # 回退到原生消息框（以防万一文件未找到）
+            from PyQt5.QtWidgets import QMessageBox
+
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("发现新版本")
+            msg_box.setText(f"发现新版本: v{latest_version}")
+            msg_box.setInformativeText("是否立即更新？")
+            msg_box.setDetailedText(release_notes)
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            msg_box.setDefaultButton(QMessageBox.Yes)
+
+            # 自定义按钮文本
+            yes_button = msg_box.button(QMessageBox.Yes)
+            yes_button.setText("立即更新")
+            no_button = msg_box.button(QMessageBox.No)
+            no_button.setText("跳过此版本")
+            cancel_button = msg_box.button(QMessageBox.Cancel)
+            cancel_button.setText("稍后再说")
+
+            result = msg_box.exec_()
+
+            if result == QMessageBox.Yes:
+                # 立即更新
+                self.update_manager.download_update(latest_version)
+            elif result == QMessageBox.No:
+                # 跳过此版本
+                self.update_manager.skip_version(latest_version)
+
+
+    def _on_update_downloaded(self, download_path: str):
+        """
+        更新下载完成
+
+        Args:
+            download_path: 下载文件路径
+        """
+        try:
+            from ui.popups.update_popup import CustomMessageDialog
+            
+            dialog = CustomMessageDialog(
+                self,
+                title="安装更新",
+                message="更新已下载完成，是否立即安装？",
+                informative_text="安装过程中会关闭当前程序并启动新程序",
+                ok_text="立即安装",
+                cancel_text="稍后"
+            )
+            
+            if dialog.exec_() == QDialog.Accepted:
+                self.update_manager.install_update(download_path)
+                
+        except ImportError:
+            # 回退到原生消息框
+            from PyQt5.QtWidgets import QMessageBox
+            
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("安装更新")
+            msg_box.setText("更新已下载完成，是否立即安装？")
+            msg_box.setInformativeText("安装过程中会关闭当前程序并启动新程序")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.Yes)
+            
+            if msg_box.exec_() == QMessageBox.Yes:
+                self.update_manager.install_update(download_path)
+
+    def _on_update_error(self, error_message: str):
+        """
+        更新错误
+
+        Args:
+            error_message: 错误信息
+        """
+        try:
+            from ui.popups.update_popup import CustomMessageDialog
+            
+            dialog = CustomMessageDialog(
+                self,
+                title="更新错误",
+                message="更新过程中发生错误",
+                informative_text=error_message,
+                show_cancel=False,
+                ok_text="确定"
+            )
+            dialog.exec_()
+        except ImportError:
+            from PyQt5.QtWidgets import QMessageBox
+
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("更新错误")
+            msg_box.setText("更新过程中发生错误")
+            msg_box.setInformativeText(error_message)
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            msg_box.exec_()
+
+    def start_update_check(self):
+        """
+        启动定时检查更新的任务
+        """
+        # 立即检查一次更新
+        def check_update():
+            try:
+                self.update_manager.check_for_updates()
+            except Exception as e:
+                if hasattr(self, 'logger'):
+                    self.logger.error(f"检查更新失败: {e}")
+
+        # 延迟10秒后检查，避免启动时卡顿
+        QTimer.singleShot(10000, check_update)
+
+        # 每24小时检查一次更新
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(check_update)
+        self.update_timer.start(24 * 60 * 60 * 1000)  # 24小时
 
 
 if __name__ == "__main__":

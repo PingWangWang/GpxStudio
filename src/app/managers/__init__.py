@@ -20,6 +20,7 @@ from .location_manager import LocationManager
 from .map_manager import MapManager
 from .route_manager import RouteManager
 from .time_manager import TimeManager
+from .update_manager import UpdateManager
 
 # 为了向后兼容，从新位置导入 SearchManager
 from modules.search.managers import SearchManager
@@ -32,6 +33,7 @@ __all__ = [
     'SearchManager',  # 保留以保持向后兼容
     'MapManager',
     'RouteManager',
-    'TimeManager'
+    'TimeManager',
+    'UpdateManager'
 ]
 
