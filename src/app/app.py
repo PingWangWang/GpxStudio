@@ -155,14 +155,11 @@ class GpxStudio(QMainWindow):
         # UI更新器回调（稍后在UI初始化后连接）
         self.ui_updater = {}
 
-        # 任务管理器（延迟初始化，需要logger）
-        self.task_manager = None
-
         # 导入版本信息
         from version import __version__ as current_version
 
         # 更新管理器
-        self.update_manager = UpdateManager(current_version, self.logger)
+        self.update_manager = UpdateManager(current_version, self.logger, main_window=self)
 
         print("管理器初始化完成")
 
@@ -779,32 +776,20 @@ class GpxStudio(QMainWindow):
         """)
         right_buttons_layout.addWidget(self.locate_button)
 
-        # 创建加载进度按钮
-        # 创建加载进度按钮
-        self.loading_button = QPushButton()
-        self.loading_button.setText("🔄")
-        self.loading_button.setToolTip("加载状态指示器")
+        # 创建加载进度按钮（使用SVG动画按钮）
+        from ui.widgets.svg_animated_button import create_icon_button as create_svg_button
+        loading_svg_path = resource_path('res/icons/Loading.svg')
+        self.loading_button = create_svg_button(
+            svg_path=loading_svg_path,
+            tooltip="加载状态指示器",
+            size=control_height,
+            parent=self
+        )
         print(f"[调试] 加载按钮: {self.loading_button}")
-        self.loading_button.setFixedSize(control_height, control_height)
-        self.loading_button.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 4px;
-                padding: 0px;
-                font-size: 18px;
-            }
-            QPushButton:hover {
-                background-color: #f0f0f0;
-            }
-            QPushButton:pressed {
-                background-color: #e0e0e0;
-            }
-        """)
         self.loading_button.show()  # 固定显示，不做显隐切换
         right_buttons_layout.addWidget(self.loading_button)
 
-        # 创建加载动画定时器
+        # 创建加载动画定时器（保留以兼容现有逻辑）
         from PyQt5.QtCore import QTimer
         self.loading_timer = QTimer()
         self.loading_timer.timeout.connect(self._animate_loading)
@@ -1513,11 +1498,21 @@ class GpxStudio(QMainWindow):
 
     def _show_warning(self, title: str, message: str):
         """显示警告对话框"""
-        QMessageBox.warning(self, title, message)
+        try:
+            from ui.dialogs.custom_message_dialog import CustomMessageDialog
+            dialog = CustomMessageDialog(self, title=title, message=message, show_cancel=False, ok_text="确定")
+            dialog.exec_()
+        except ImportError:
+            QMessageBox.warning(self, title, message)
 
     def _show_info(self, title: str, message: str):
         """显示信息对话框"""
-        QMessageBox.information(self, title, message)
+        try:
+            from ui.dialogs.custom_message_dialog import CustomMessageDialog
+            dialog = CustomMessageDialog(self, title=title, message=message, show_cancel=False, ok_text="确定")
+            dialog.exec_()
+        except ImportError:
+            QMessageBox.information(self, title, message)
 
     def _set_progress_indeterminate(self):
         """设置进度条为不确定模式"""
@@ -2327,6 +2322,11 @@ class GpxStudio(QMainWindow):
 
         # 在任务进度面板显示任务开始
         self.task_progress_panel.start_task(task_id, task_type, task_name)
+        
+        # 如果是定位任务，启动加载按钮的旋转动画
+        if task_type == 'location' and hasattr(self, 'loading_button'):
+            if hasattr(self.loading_button, 'start_animation'):
+                self.loading_button.start_animation()
 
     def _on_task_progress(self, task_id: str, percent: int, message: str):
         """任务进度更新事件"""
@@ -2341,6 +2341,9 @@ class GpxStudio(QMainWindow):
         if task_id.startswith('location_'):
             self.location_manager.on_location_task_completed(task_id, result)
             self.task_progress_panel.task_completed("定位完成")
+            # 停止加载按钮的旋转动画
+            if hasattr(self, 'loading_button') and hasattr(self.loading_button, 'stop_animation'):
+                self.loading_button.stop_animation()
         elif task_id.startswith('search_'):
             self.search_manager.on_search_task_completed(task_id, result)
             self.task_progress_panel.task_completed("搜索完成")
@@ -2397,6 +2400,9 @@ class GpxStudio(QMainWindow):
         # 根据任务ID判断任务类型并处理错误
         if task_id.startswith('location_'):
             self.location_manager.on_location_task_failed(task_id, error)
+            # 停止加载按钮的旋转动画
+            if hasattr(self, 'loading_button') and hasattr(self.loading_button, 'stop_animation'):
+                self.loading_button.stop_animation()
         elif task_id.startswith('search_'):
             self.hide_loading()  # 隐藏主界面加载状态
             self.search_manager.on_search_task_failed(task_id, error)
@@ -4004,20 +4010,43 @@ class GpxStudio(QMainWindow):
         """
         启动定时检查更新的任务
         """
-        # 立即检查一次更新
-        def check_update():
-            try:
-                self.update_manager.check_for_updates()
-            except Exception as e:
-                if hasattr(self, 'logger'):
-                    self.logger.error(f"检查更新失败: {e}")
+        from core.background_task import TaskPriority
 
-        # 延迟10秒后检查，避免启动时卡顿
-        QTimer.singleShot(10000, check_update)
+        # 提交更新任务的包装函数
+        def submit_update_task():
+            if not getattr(self, 'task_manager', None):
+                # 如果没有任务管理器，回退到直接调用（延迟保护），静默模式
+                QTimer.singleShot(1000, lambda: self.update_manager.check_for_updates(silent=True))
+                return
+
+            # 定义工作函数
+            def update_worker(**kwargs):
+                # 检查是否有回调
+                progress_callback = kwargs.get('progress_callback')
+                if progress_callback:
+                    progress_callback(0, "开始检查更新...")
+                
+                # 静默检查更新
+                self.update_manager.check_for_updates(silent=True)
+                
+                if progress_callback:
+                    progress_callback(100, "检查更新完成")
+
+            # 提交任务，优先级最低
+            self.task_manager.submit_task(
+                task_type="update",
+                task_func=update_worker,
+                priority=TaskPriority.LOW
+            )
+
+        # 延迟10秒后首次检查，避免启动时抢占资源
+        QTimer.singleShot(10000, submit_update_task)
 
         # 每24小时检查一次更新
         self.update_timer = QTimer()
-        self.update_timer.timeout.connect(check_update)
+        self.update_timer.setInterval(24 * 60 * 60 * 1000)
+        self.update_timer.timeout.connect(submit_update_task)
+        self.update_timer.start()
         self.update_timer.start(24 * 60 * 60 * 1000)  # 24小时
 
 

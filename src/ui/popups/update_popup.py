@@ -27,9 +27,6 @@ class UpdatePopup(QDialog):
         # 设置窗口标志 - 无边框对话框
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-        # 居中显示
-        self._center_on_screen()
 
     def _init_ui(self):
         """初始化UI"""
@@ -153,7 +150,8 @@ class UpdatePopup(QDialog):
             self.notes_area = QTextEdit()
             self.notes_area.setReadOnly(True)
             self.notes_area.setText(self.release_notes)
-            self.notes_area.setMinimumHeight(150)
+            self.notes_area.setMinimumHeight(60)  # 缩小最小高度
+            self.notes_area.setMaximumHeight(120)  # 限制最大高度
             layout.addWidget(self.notes_area)
 
         # 底部按钮区域
@@ -197,16 +195,30 @@ class UpdatePopup(QDialog):
 
     def exec_(self):
         """重写exec_方法，返回自定义结果码"""
+        # 在显示前居中，确保布局已完成
+        self.adjustSize()  # 调整到合适的大小
+        self._center_on_screen()
         super().exec_()
         return self.result_code
 
     def _center_on_screen(self):
-        """居中显示"""
-        from PyQt5.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - self.width()) // 2
-        y = (screen.height() - self.height()) // 2
-        self.move(x, y)
+        """居中显示（在布局完成后调用）"""
+        # 确保几何信息已更新
+        self.updateGeometry()
+        
+        if self.parent() and self.parent().isVisible():
+            # 居中于父窗口
+            parent_geo = self.parent().geometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 2
+            self.move(x, y)
+        else:
+            # 居中于屏幕
+            from PyQt5.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().geometry()
+            x = (screen.width() - self.width()) // 2
+            y = (screen.height() - self.height()) // 2
+            self.move(x, y)
 
     # 支持拖动窗口
     def mousePressEvent(self, event):
@@ -220,21 +232,27 @@ class UpdatePopup(QDialog):
             event.accept()
 
 
-class CustomMessageDialog(QDialog):
-    """自定义消息对话框（替代QMessageBox）"""
-
-    def __init__(self, parent=None, title="", message="", informative_text="", 
-                 show_cancel=True, ok_text="确定", cancel_text="取消"):
+class DownloadProgressDialog(QDialog):
+    """自定义下载进度对话框（暗色主题）"""
+    
+    # 信号：用户取消下载
+    canceled = pyqtSignal()
+    
+    def __init__(self, parent=None):
         super().__init__(parent)
+        self.user_canceled = False
+        self._init_ui()
+        
+        # 设置窗口标志 - 无边框对话框
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-        self._init_ui(title, message, informative_text, show_cancel, ok_text, cancel_text)
-        self._center_on_screen()
-
-    def _init_ui(self, title, message, informative_text, show_cancel, ok_text, cancel_text):
+        self.setModal(True)
+    
+    def _init_ui(self):
+        """初始化UI"""
+        # 设置样式 - 与其他弹出面板保持一致
         self.setStyleSheet("""
-            CustomMessageDialog {
+            DownloadProgressDialog {
                 background-color: #3b4453;
                 border-radius: 8px;
                 border: 2px solid rgba(0, 123, 255, 0.2);
@@ -244,24 +262,25 @@ class CustomMessageDialog(QDialog):
                 color: white;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
+            QProgressBar {
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+                background-color: rgba(0, 0, 0, 0.3);
+                text-align: center;
+                color: white;
+                font-size: 12px;
+                height: 25px;
+            }
+            QProgressBar::chunk {
+                background-color: #4A90E2;
+                border-radius: 3px;
+            }
             QPushButton {
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-size: 13px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 min-width: 80px;
-            }
-            QPushButton#primaryButton {
-                background-color: #4A90E2;
-                color: white;
-                border: none;
-                font-weight: bold;
-            }
-            QPushButton#primaryButton:hover {
-                background-color: #357ABD;
-            }
-            QPushButton#primaryButton:pressed {
-                background-color: #2A629A;
             }
             QPushButton#secondaryButton {
                 background-color: rgba(255, 255, 255, 0.1);
@@ -288,81 +307,129 @@ class CustomMessageDialog(QDialog):
                 border-radius: 10px;
             }
         """)
-
+        
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 15, 20, 20)
         layout.setSpacing(15)
-
+        
         # 标题栏
         title_layout = QHBoxLayout()
-        title_label = QLabel(title)
+        title_layout.setSpacing(10)
+        
+        # 标题
+        title_label = QLabel("下载更新")
         title_font = QFont()
-        title_font.setPointSize(12)
+        title_font.setPointSize(14)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_layout.addWidget(title_label)
+        
         title_layout.addStretch()
         
+        # 关闭按钮
         close_btn = QPushButton("✕")
         close_btn.setObjectName("closeButton")
         close_btn.setFixedSize(24, 24)
-        close_btn.clicked.connect(self.reject)
+        close_btn.clicked.connect(self.on_cancel_clicked)
         title_layout.addWidget(close_btn)
+        
         layout.addLayout(title_layout)
-
+        
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
         layout.addWidget(line)
-
-        # 内容
-        if message:
-            msg_label = QLabel(message)
-            msg_label.setStyleSheet("font-size: 14px; color: white;")
-            msg_label.setWordWrap(True)
-            layout.addWidget(msg_label)
-            
-        if informative_text:
-            info_label = QLabel(informative_text)
-            info_label.setStyleSheet("font-size: 12px; color: #cccccc;")
-            info_label.setWordWrap(True)
-            layout.addWidget(info_label)
-
-        layout.addStretch()
-
-        # 按钮
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
         
-        if show_cancel:
-            cancel_btn = QPushButton(cancel_text)
-            cancel_btn.setObjectName("secondaryButton")
-            cancel_btn.clicked.connect(self.reject)
-            btn_layout.addWidget(cancel_btn)
-            
-        ok_btn = QPushButton(ok_text)
-        ok_btn.setObjectName("primaryButton")
-        ok_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(ok_btn)
+        # 提示文本
+        self.message_label = QLabel("正在下载更新...")
+        self.message_label.setStyleSheet("font-size: 13px; margin-top: 5px;")
+        layout.addWidget(self.message_label)
         
-        layout.addLayout(btn_layout)
+        # 进度条
+        from PyQt5.QtWidgets import QProgressBar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        layout.addWidget(self.progress_bar)
         
-        self.setFixedWidth(350)
-
+        layout.addSpacing(10)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setObjectName("secondaryButton")
+        cancel_btn.clicked.connect(self.on_cancel_clicked)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 设置固定宽度
+        self.setFixedWidth(450)
+    
+    def set_value(self, value):
+        """设置进度值"""
+        self.progress_bar.setValue(value)
+    
+    def set_message(self, message):
+        """设置提示消息"""
+        self.message_label.setText(message)
+    
+    def on_cancel_clicked(self):
+        """取消按钮点击"""
+        self.user_canceled = True
+        self.canceled.emit()
+        self.reject()
+    
+    def was_canceled(self):
+        """检查是否被取消"""
+        return self.user_canceled
+    
+    def exec_(self):
+        """重写exec_方法，在显示前居中"""
+        # 在显示前居中，确保布局已完成
+        self.adjustSize()
+        self._center_on_screen()
+        return super().exec_()
+    
     def _center_on_screen(self):
-        from PyQt5.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - self.width()) // 2
-        y = (screen.height() - self.height()) // 2
-        self.move(x, y)
+        """居中显示（在布局完成后调用）"""
+        # 确保几何信息已更新
+        self.updateGeometry()
         
+        if self.parent() and self.parent().isVisible():
+            # 居中于父窗口
+            parent_geo = self.parent().geometry()
+            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            y = parent_geo.y() + (parent_geo.height() - self.height()) // 2
+            self.move(x, y)
+        else:
+            # 居中于屏幕
+            from PyQt5.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().geometry()
+            x = (screen.width() - self.width()) // 2
+            y = (screen.height() - self.height()) // 2
+            self.move(x, y)
+    
+    # 支持拖动窗口
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
             event.accept()
-
+    
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton:
             self.move(event.globalPos() - self.drag_position)
             event.accept()
+
+
+# 为了兼容性，重新导出 CustomMessageDialog
+try:
+    from ui.dialogs.custom_message_dialog import CustomMessageDialog
+except ImportError:
+    pass
+

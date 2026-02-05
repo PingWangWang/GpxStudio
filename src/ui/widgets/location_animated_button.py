@@ -19,7 +19,9 @@ class LocationAnimatedButton(QPushButton):
         
         # 动画属性
         self._animation_progress = 0.0  # 0.0 = 初始状态, 1.0 = 动画状态
+        self._rotation_angle = 0.0      # 0.0 - 360.0
         self._is_animating = False
+        self._is_loading = False
         
         # 加载SVG渲染器
         self.svg_renderer = None
@@ -72,6 +74,14 @@ class LocationAnimatedButton(QPushButton):
         self.hover_animation = QPropertyAnimation(self, b"animationProgress")
         self.hover_animation.setDuration(500)
         self.hover_animation.setEasingCurve(QEasingCurve.OutBack)
+        
+        # 加载旋转动画（缓慢顺时针旋转）
+        self.rotation_animation = QPropertyAnimation(self, b"rotationAngle")
+        self.rotation_animation.setDuration(2000)  # 2秒完成一圈
+        self.rotation_animation.setStartValue(0.0)
+        self.rotation_animation.setEndValue(360.0)
+        self.rotation_animation.setEasingCurve(QEasingCurve.Linear)
+        self.rotation_animation.setLoopCount(-1)  # 无限循环
     
     @pyqtProperty(float)
     def animationProgress(self):
@@ -82,6 +92,17 @@ class LocationAnimatedButton(QPushButton):
     def animationProgress(self, value):
         """设置动画进度"""
         self._animation_progress = max(0.0, min(1.0, value))
+        self.update()
+    
+    @pyqtProperty(float)
+    def rotationAngle(self):
+        """获取旋转角度"""
+        return self._rotation_angle
+    
+    @rotationAngle.setter
+    def rotationAngle(self, value):
+        """设置旋转角度"""
+        self._rotation_angle = value % 360.0
         self.update()
     
     def start_animation(self):
@@ -105,6 +126,29 @@ class LocationAnimatedButton(QPushButton):
     def is_animating(self):
         """检查是否正在动画"""
         return self._is_animating
+    
+    def start_loading_animation(self):
+        """开始加载旋转动画"""
+        if not self._is_loading:
+            self._is_loading = True
+            # 停止跳跃动画
+            if self._is_animating:
+                self.stop_animation()
+            # 启动旋转动画
+            self.rotation_animation.start()
+    
+    def stop_loading_animation(self):
+        """停止加载旋转动画"""
+        if self._is_loading:
+            self._is_loading = False
+            self.rotation_animation.stop()
+            # 平滑回到初始角度
+            self._rotation_angle = 0.0
+            self.update()
+    
+    def is_loading(self):
+        """检查是否正在加载"""
+        return self._is_loading
     
     def enterEvent(self, event):
         """鼠标进入事件"""
@@ -184,9 +228,18 @@ class LocationAnimatedButton(QPushButton):
         margin = 3  # 减小边距，从6改为3
         icon_rect = rect.adjusted(margin, margin, -margin, -margin)
         
-        # 应用Y轴偏移
         painter.save()
-        painter.translate(0, y_offset)
+        
+        # 如果正在加载，应用旋转变换（围绕图标中心）
+        if self._is_loading:
+            center_x = rect.width() / 2
+            center_y = rect.height() / 2
+            painter.translate(center_x, center_y)
+            painter.rotate(self._rotation_angle)
+            painter.translate(-center_x, -center_y)
+        else:
+            # 否则应用Y轴跳跃偏移
+            painter.translate(0, y_offset)
         
         # 渲染SVG
         self.svg_renderer.render(painter, QRectF(icon_rect))

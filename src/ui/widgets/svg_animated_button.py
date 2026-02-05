@@ -313,6 +313,28 @@ class LucideSvgButton(SvgAnimatedButton):
             super().paintEvent(event)
 
 
+def create_icon_button(svg_path=None, tooltip=None, size=36, parent=None):
+    """
+    创建SVG图标按钮的工厂函数
+    
+    Args:
+        svg_path: SVG文件路径
+        tooltip: 工具提示文本
+        size: 按钮大小
+        parent: 父组件
+    
+    Returns:
+        SvgAnimatedButton: 配置好的按钮实例
+    """
+    button = SvgAnimatedButton(svg_path, parent)
+    button.setFixedSize(size, size)
+    
+    if tooltip:
+        button.setToolTip(tooltip)
+    
+    return button
+
+
 def create_lucide_button(icon_name, tooltip=None, parent=None):
     """
     创建Lucide风格按钮的工厂函数
