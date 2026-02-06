@@ -776,20 +776,72 @@ class GpxStudio(QMainWindow):
         """)
         right_buttons_layout.addWidget(self.locate_button)
 
-        # 创建加载进度按钮（使用SVG动画按钮）
-        from ui.widgets.svg_animated_button import create_icon_button as create_svg_button
-        loading_svg_path = resource_path('res/icons/Loading.svg')
-        self.loading_button = create_svg_button(
-            svg_path=loading_svg_path,
-            tooltip="加载状态指示器",
-            size=control_height,
-            parent=self
-        )
+        # 创建加载进度按钮（使用emoji样式）
+        self.loading_button = QPushButton()
+        self.loading_button.setText("🔄")
+        self.loading_button.setToolTip("加载状态指示器")
         print(f"[调试] 加载按钮: {self.loading_button}")
+        self.loading_button.setFixedSize(control_height, control_height)
+        self.loading_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
         self.loading_button.show()  # 固定显示，不做显隐切换
+        
+        # 重写paintEvent以实现旋转效果
+        def loading_button_paint_event(event):
+            from PyQt5.QtGui import QPainter, QFont
+            from PyQt5.QtCore import Qt, QPointF
+            
+            painter = QPainter(self.loading_button)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # 绘制背景
+            rect = self.loading_button.rect()
+            if self.loading_button.isDown():
+                painter.fillRect(rect, self.loading_button.palette().color(self.loading_button.backgroundRole()).darker(110))
+            elif self.loading_button.underMouse():
+                painter.fillRect(rect, self.loading_button.palette().color(self.loading_button.backgroundRole()).lighter(105))
+            
+            # 设置字体
+            font = QFont()
+            font.setPointSize(18)
+            painter.setFont(font)
+            
+            # 保存painter状态
+            painter.save()
+            
+            # 移动到按钮中心
+            center = QPointF(rect.width() / 2.0, rect.height() / 2.0)
+            painter.translate(center)
+            
+            # 应用旋转
+            painter.rotate(self.loading_rotation)
+            
+            # 绘制emoji文本（居中）
+            text = "🔄"
+            text_rect = painter.fontMetrics().boundingRect(text)
+            painter.drawText(int(-text_rect.width() / 2), int(text_rect.height() / 4), text)
+            
+            # 恢复painter状态
+            painter.restore()
+            painter.end()
+        
+        self.loading_button.paintEvent = loading_button_paint_event
         right_buttons_layout.addWidget(self.loading_button)
 
-        # 创建加载动画定时器（保留以兼容现有逻辑）
+        # 创建加载动画定时器
         from PyQt5.QtCore import QTimer
         self.loading_timer = QTimer()
         self.loading_timer.timeout.connect(self._animate_loading)
@@ -1815,7 +1867,7 @@ class GpxStudio(QMainWindow):
 
     def on_locate_clicked(self):
         """定位按钮点击"""
-        self.show_loading()  # 显示加载状态
+        self.start_loading_animation()  # 启动加载动画
         self.location_manager.get_current_location()
 
     def on_map_settings_clicked(self):
@@ -2215,17 +2267,26 @@ class GpxStudio(QMainWindow):
         """显示加载动画"""
         if not self.is_loading:
             self.is_loading = True
+            self.loading_rotation = 0
+            self.loading_timer.start(50)  # 启动定时器，50ms刷新一次
             self.loading_button.setToolTip("正在加载...")
-            # 使用emoji作为加载图标，不需要额外的动画处理
             self.logger.debug("[加载] 开始加载动画")
 
     def hide_loading(self):
         """停止加载动画"""
+        self.logger.debug(f"[加载] hide_loading被调用 - is_loading={self.is_loading}, timer_active={self.loading_timer.isActive()}")
         if self.is_loading:
             self.is_loading = False
+            self.loading_timer.stop()  # 停止动画定时器
+            self.loading_rotation = 0  # 重置旋转角度
+            self.loading_button.update()  # 更新按钮显示
             self.loading_button.setToolTip("加载状态指示器")
-            # 使用emoji作为加载图标，不需要额外的动画处理
             self.logger.debug("[加载] 停止加载动画")
+        else:
+            # 即使状态不对，也强制停止定时器
+            self.loading_timer.stop()
+            self.loading_rotation = 0
+            self.loading_button.update()
 
     def _reset_loading_icon(self):
         """重置加载图标到初始状态"""
@@ -2233,12 +2294,23 @@ class GpxStudio(QMainWindow):
         pass
 
     def _animate_loading(self):
-        """加载动画效果"""
+        """加载动画效果 - 旋转emoji图标"""
         if not self.is_loading:
             return
-
-        # 使用emoji作为加载图标，不需要额外的动画处理
-        pass
+        
+        # 更新旋转角度（每次增加15度）
+        self.loading_rotation = (self.loading_rotation + 15) % 360
+        
+        # 触发按钮重绘
+        self.loading_button.update()
+    
+    def start_loading_animation(self):
+        """启动加载动画"""
+        self.show_loading()  # 直接调用show_loading
+    
+    def stop_loading_animation(self):
+        """停止加载动画"""
+        self.hide_loading()  # 直接调用hide_loading
 
     def closeEvent(self, event):
         """重写关闭事件"""
@@ -2324,9 +2396,8 @@ class GpxStudio(QMainWindow):
         self.task_progress_panel.start_task(task_id, task_type, task_name)
         
         # 如果是定位任务，启动加载按钮的旋转动画
-        if task_type == 'location' and hasattr(self, 'loading_button'):
-            if hasattr(self.loading_button, 'start_animation'):
-                self.loading_button.start_animation()
+        if task_type == 'location':
+            self.start_loading_animation()
 
     def _on_task_progress(self, task_id: str, percent: int, message: str):
         """任务进度更新事件"""
@@ -2339,11 +2410,10 @@ class GpxStudio(QMainWindow):
 
         # 根据任务ID判断任务类型并处理结果
         if task_id.startswith('location_'):
+            # 先停止加载按钮的旋转动画（无论成功与否）
+            self.stop_loading_animation()
             self.location_manager.on_location_task_completed(task_id, result)
             self.task_progress_panel.task_completed("定位完成")
-            # 停止加载按钮的旋转动画
-            if hasattr(self, 'loading_button') and hasattr(self.loading_button, 'stop_animation'):
-                self.loading_button.stop_animation()
         elif task_id.startswith('search_'):
             self.search_manager.on_search_task_completed(task_id, result)
             self.task_progress_panel.task_completed("搜索完成")
@@ -2399,10 +2469,9 @@ class GpxStudio(QMainWindow):
 
         # 根据任务ID判断任务类型并处理错误
         if task_id.startswith('location_'):
+            # 先停止加载按钮的旋转动画
+            self.stop_loading_animation()
             self.location_manager.on_location_task_failed(task_id, error)
-            # 停止加载按钮的旋转动画
-            if hasattr(self, 'loading_button') and hasattr(self.loading_button, 'stop_animation'):
-                self.loading_button.stop_animation()
         elif task_id.startswith('search_'):
             self.hide_loading()  # 隐藏主界面加载状态
             self.search_manager.on_search_task_failed(task_id, error)
