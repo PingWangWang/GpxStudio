@@ -227,23 +227,36 @@ class UpdateManager(QObject):
                 self.update_error.emit("无法获取版本信息，请检查网络连接")
                 return
 
-            # 找到Windows可执行文件
+            # 找到Windows安装包（Setup.exe）
             asset_url = None
+            asset_name = None
             for asset in release_data.get("assets", []):
-                if asset.get("name", "").endswith(".exe"):
+                name = asset.get("name", "")
+                # 优先查找Setup安装包
+                if "Setup" in name and name.endswith(".exe"):
                     asset_url = asset.get("browser_download_url")
+                    asset_name = name
                     break
+            
+            # 如果没找到Setup，则查找普通exe（兼容旧版本）
+            if not asset_url:
+                for asset in release_data.get("assets", []):
+                    name = asset.get("name", "")
+                    if name.endswith(".exe"):
+                        asset_url = asset.get("browser_download_url")
+                        asset_name = name
+                        break
 
             if not asset_url:
-                self.logger.error("未找到Windows可执行文件")
-                self.update_error.emit("未找到Windows可执行文件")
+                self.logger.error("未找到Windows安装包")
+                self.update_error.emit("未找到Windows安装包")
                 return
 
             self.logger.info(f"原始下载地址: {asset_url}")
 
-            # 创建临时文件
+            # 创建临时文件（使用实际的资源名称）
             temp_dir = tempfile.gettempdir()
-            download_path = os.path.join(temp_dir, f"GPXStudio-{latest_version}.exe")
+            download_path = os.path.join(temp_dir, asset_name or f"GPXStudio_Setup_v{latest_version}.exe")
 
             # 显示下载进度对话框（使用自定义暗色主题对话框）
             from ui.popups.update_popup import DownloadProgressDialog
@@ -355,12 +368,49 @@ class UpdateManager(QObject):
             self._save_skip_versions()
             self.logger.info(f"已跳过版本: {version}")
 
-    def install_update(self, download_path: str):
+    def _get_install_base_dir(self) -> str:
+        """
+        获取当前程序的安装基础目录（不含版本号）
+        
+        Returns:
+            安装基础目录路径，例如 C:\\Program Files\\GPX Studio
+        """
+        try:
+            # 尝试获取当前可执行文件的路径
+            if getattr(sys, 'frozen', False):
+                # 打包后的环境
+                current_exe = sys.executable
+                # 获取可执行文件所在目录
+                install_dir = os.path.dirname(current_exe)
+                
+                # 检查是否在版本号目录中 (例如: C:\\Program Files\\GPX Studio\\v2.0.0)
+                parent_dir = os.path.dirname(install_dir)
+                parent_name = os.path.basename(parent_dir)
+                
+                # 如果父目录是"GPX Studio"或类似名称，返回父目录
+                if "GPX Studio" in parent_name or "GpxStudio" in parent_name:
+                    return parent_dir
+                    
+                # 否则，当前目录可能就是版本目录，返回其父目录
+                if os.path.basename(install_dir).startswith('v'):
+                    return parent_dir
+                    
+                # 默认返回当前目录的父目录
+                return parent_dir
+            else:
+                # 开发环境，返回默认路径
+                return os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'GPX Studio')
+        except Exception as e:
+            self.logger.warning(f"获取安装目录失败: {e}，使用默认路径")
+            return os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'GPX Studio')
+
+    def install_update(self, download_path: str, new_version: str = None):
         """
         安装更新
 
         Args:
             download_path: 下载文件路径
+            new_version: 新版本号（可选）
         """
         try:
             self.logger.info(f"开始安装更新: {download_path}")
@@ -371,8 +421,47 @@ class UpdateManager(QObject):
                 self.update_error.emit("更新文件不存在")
                 return
 
-            # 启动新程序并退出当前程序
-            subprocess.Popen([download_path])
+            # 判断是安装包还是单文件exe
+            is_setup = "Setup" in os.path.basename(download_path)
+            
+            if is_setup:
+                # 获取当前安装基础目录
+                base_dir = self._get_install_base_dir()
+                
+                # 构建新版本的安装目录
+                if new_version:
+                    new_install_dir = os.path.join(base_dir, f"v{new_version}")
+                else:
+                    # 如果没有提供版本号，使用默认目录
+                    new_install_dir = base_dir
+                
+                self.logger.info(f"目标安装目录: {new_install_dir}")
+                
+                # Inno Setup 安装包：使用静默安装参数
+                # /VERYSILENT: 完全静默安装
+                # /SUPPRESSMSGBOXES: 抑制消息框
+                # /NORESTART: 不重启系统
+                # /CLOSEAPPLICATIONS: 自动关闭正在运行的应用
+                # /DIR="path": 指定安装目录
+                self.logger.info("检测到安装包，使用静默安装模式")
+                
+                args = [
+                    download_path,
+                    "/VERYSILENT",
+                    "/SUPPRESSMSGBOXES",
+                    "/NORESTART",
+                    "/CLOSEAPPLICATIONS",
+                    f'/DIR="{new_install_dir}"'
+                ]
+                
+                self.logger.info(f"安装参数: {' '.join(args)}")
+                subprocess.Popen(args)
+            else:
+                # 单文件exe（兼容旧版本）：直接运行
+                self.logger.info("检测到单文件exe，直接运行")
+                subprocess.Popen([download_path])
+            
+            # 退出当前程序
             QApplication.quit()
 
         except Exception as e:

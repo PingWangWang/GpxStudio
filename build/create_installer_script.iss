@@ -2,11 +2,57 @@
 ; 请先安装 Inno Setup: https://jrsoftware.org/isdl.php
 
 #define MyAppName "GPX Studio"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "PingWangWang"
 #define MyAppURL "https://github.com/PingWangWang/GpxStudio"
-#define MyAppExeName "GPXStudio_1.0.0.exe"
-#define MyBuildDir "..\dist\GPXStudio_1.0.0"
+#define MyAppExeName "GPXStudio_2.0.0.exe"
+#define MyBuildDir "..\dist\GPXStudio_2.0.0"
+
+[Code]
+var
+  OldInstallPath: string;
+
+// 查找旧版本的安装目录
+function GetOldInstallPath(): string;
+var
+  BaseDir: string;
+  SearchRec: TFindRec;
+begin
+  Result := '';
+  BaseDir := ExpandConstant('{autopf}\GPX Studio');
+  
+  // 如果基础目录存在，查找版本子目录
+  if DirExists(BaseDir) then
+  begin
+    if FindFirst(BaseDir + '\v*', SearchRec) then
+    begin
+      try
+        repeat
+          // 跳过当前要安装的版本
+          if (SearchRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0) and 
+             (SearchRec.Name <> '.') and (SearchRec.Name <> '..') and
+             (SearchRec.Name <> 'v{#MyAppVersion}') then
+          begin
+            Result := BaseDir + '\' + SearchRec.Name;
+            Break;
+          end;
+        until not FindNext(SearchRec);
+      finally
+        FindClose(SearchRec);
+      end;
+    end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  Result := True;
+  OldInstallPath := GetOldInstallPath();
+  if OldInstallPath <> '' then
+  begin
+    Log('Found old installation at: ' + OldInstallPath);
+  end;
+end;
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -19,10 +65,12 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppName}\v{#MyAppVersion}
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
+; 当目录已存在时，询问用户
+DirExistsWarning=yes
 OutputDir=..\dist
 OutputBaseFilename=GPXStudio_Setup_v{#MyAppVersion}
 SetupIconFile=..\res\GPXStudio.ico

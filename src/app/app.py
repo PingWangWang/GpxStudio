@@ -4020,6 +4020,11 @@ class GpxStudio(QMainWindow):
         try:
             from ui.popups.update_popup import CustomMessageDialog
             
+            # 尝试从文件名中提取版本号
+            import re
+            version_match = re.search(r'v?(\d+\.\d+\.\d+)', os.path.basename(download_path))
+            new_version = version_match.group(1) if version_match else None
+            
             dialog = CustomMessageDialog(
                 self,
                 title="安装更新",
@@ -4030,7 +4035,7 @@ class GpxStudio(QMainWindow):
             )
             
             if dialog.exec_() == QDialog.Accepted:
-                self.update_manager.install_update(download_path)
+                self.update_manager.install_update(download_path, new_version)
                 
         except ImportError:
             # 回退到原生消息框
@@ -4043,8 +4048,13 @@ class GpxStudio(QMainWindow):
             msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             msg_box.setDefaultButton(QMessageBox.Yes)
             
+            # 尝试从文件名中提取版本号
+            import re
+            version_match = re.search(r'v?(\d+\.\d+\.\d+)', os.path.basename(download_path))
+            new_version = version_match.group(1) if version_match else None
+            
             if msg_box.exec_() == QMessageBox.Yes:
-                self.update_manager.install_update(download_path)
+                self.update_manager.install_update(download_path, new_version)
 
     def _on_update_error(self, error_message: str):
         """
