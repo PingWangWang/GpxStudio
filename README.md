@@ -91,7 +91,7 @@ GPXStudio/
     └── tests/              # 测试代码
 ```
 
-**注意**：打包后的exe会在同目录创建 `GPXStudioData` 文件夹存储所有数据。
+**注意**：打包后的程序会在安装目录旁创建 `GPXStudioData` 文件夹存储所有数据。
 
 ## 开发指南
 
@@ -111,11 +111,20 @@ python scripts/clean.py --build    # 只清理构建文件
 python scripts/clean.py --cache    # 只清理缓存
 ```
 
-### 打包程序
+### 打包与安装包
 ```bash
-python build/build_release_pyinstaller.py    # PyInstaller打包
-python build/build_release_nuitka.py         # Nuitka打包
+# 生成 onedir 目录（启动更快，适合制作安装包）
+python build/build_release_pyinstaller.py
+
+# 生成安装包（Inno Setup）
+# 1) 先运行上面的打包脚本
+# 2) 使用 Inno Setup 编译 build/create_installer_script.iss
 ```
+
+**安装目录规则**
+- 默认安装目录：`C:\Program Files\GPX Studio\v{版本号}`
+- 每次升级会创建新的版本目录（例如：`v1.0.0` → `v2.0.0`）
+- 如果目标目录已存在，安装器会提示用户选择处理方式
 
 ## 技术栈
 
@@ -136,7 +145,7 @@ python build/build_release_nuitka.py         # Nuitka打包
 ### 统一数据管理（v2.0新增）
 所有数据文件统一存储在 `GPXStudioData` 目录：
 - **开发环境**：`项目根目录/Dist/GPXStudioData`
-- **打包环境**：`exe同目录/GPXStudioData`
+- **打包环境**：`安装目录旁/GPXStudioData`
 - **自动分类**：配置、日志、缓存分别存储
 - **地图缓存**：高德和OSM地图数据独立缓存，加快加载速度
 
