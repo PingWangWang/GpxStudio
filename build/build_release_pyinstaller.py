@@ -22,9 +22,12 @@ with open(VERSION_FILE, "r", encoding="utf-8") as f:
     exec(f.read())
 
 # 构建配置
-BUILD_NAME = f"GPXStudio_{__version__}_py"
+BUILD_NAME = f"GPXStudio_{__version__}"
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build", BUILD_NAME)
-DIST_FILE = os.path.join(PROJECT_ROOT, "dist", f"{BUILD_NAME}.exe")
+# output directory in dist
+DIST_DIR_NAME = BUILD_NAME
+DIST_PATH = os.path.join(PROJECT_ROOT, "dist", DIST_DIR_NAME)
+EXECUTABLE_PATH = os.path.join(DIST_PATH, "main.exe") if os.name == 'nt' else os.path.join(DIST_PATH, "main")
 
 # 虚拟环境配置
 VENV_DIR = os.path.join(PROJECT_ROOT, ".venv")
@@ -36,6 +39,38 @@ ICO_FILE = os.path.join(PROJECT_ROOT, "res", "GPXStudio.ico")
 
 # 声明全局变量，将在main函数中初始化
 XYZ_SERVICES_DATA = None
+
+
+def update_iss_script():
+    """更新 Inno Setup 脚本中的版本号和文件路径"""
+    iss_file = os.path.join(SCRIPT_DIR, "create_installer_script.iss")
+    if not os.path.exists(iss_file):
+        print(f"[GPXStudio] 警告：找不到 Inno Setup 脚本: {iss_file}")
+        return
+
+    print(f"[GPXStudio] 更新 Inno Setup 脚本版本号: {iss_file}")
+    
+    try:
+        with open(iss_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith('#define MyAppVersion'):
+                new_lines.append(f'#define MyAppVersion "{__version__}"\n')
+            elif line.strip().startswith('#define MyAppExeName'):
+                new_lines.append(f'#define MyAppExeName "{BUILD_NAME}.exe"\n')
+            elif line.strip().startswith('#define MyBuildDir'):
+                new_lines.append(f'#define MyBuildDir "..\\dist\\{BUILD_NAME}"\n')
+            else:
+                new_lines.append(line)
+                
+        with open(iss_file, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+            
+        print(f"[GPXStudio] Inno Setup 脚本更新完成")
+    except Exception as e:
+        print(f"[GPXStudio] 警告：更新 Inno Setup 脚本失败: {e}")
 
 
 def convert_png_to_ico():
@@ -271,13 +306,13 @@ def main():
     # 在Windows中，--add-data参数使用分号分隔，需要正确处理路径
     command = [
         pyinstaller_path,
-        "--onefile",
+        "--onedir",  # 使用目录模式，启动速度快，适合制作安装包
         "--windowed",
         "--clean",  # 强制清理，确保图标正确应用
         "--noconfirm",  # 不询问覆盖
         "--noupx",  # 禁用UPX压缩，加快打包速度
         "--optimize=2",  # 优化级别2
-        f"--name={BUILD_NAME}"
+        f"--name={BUILD_NAME}"  # 输出目录名称
     ]
 
     # 如果ICO文件存在，立即添加图标参数（在其他参数之前）
@@ -458,8 +493,23 @@ def main():
             sys.stdout.flush()
 
             print("[GPXStudio] 发布版本构建成功！")
-            print(f"[GPXStudio] 可执行文件位置: {DIST_FILE}")
+            
+            # 更新安装脚本
+            update_iss_script()
+            
+            # 重命名主程序（如果需要）
+            # 默认生成的是 BUILD_NAME.exe，我们可能想要 main.exe 或者更友好的名字
+            # 但 onedir 模式下，主程序名字由 --name 决定
+            
+            final_exe_path = os.path.join(PROJECT_ROOT, "dist", BUILD_NAME, f"{BUILD_NAME}.exe")
+            print(f"[GPXStudio] 程序目录: {os.path.join(PROJECT_ROOT, 'dist', BUILD_NAME)}")
+            print(f"[GPXStudio] 主程序入口: {final_exe_path}")
             print("[GPXStudio] 构建完成！")
+            
+            print("\n[GPXStudio] 提示: 这是一个目录形式的构建，启动速度快。")
+            print("[GPXStudio] 如果需要制作 MSI 或 Setup.exe 安装包，请使用 Inno Setup 或 Advanced Installer 等工具")
+            print(f"[GPXStudio] 对目录进行打包即可: {os.path.join(PROJECT_ROOT, 'dist', BUILD_NAME)}")
+            
             input("按Enter键退出...")
         else:
             raise subprocess.CalledProcessError(process.returncode, command)

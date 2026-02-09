@@ -14,7 +14,10 @@ venv_new/
 # 构建文件
 *.egg-info/
 dist/
-build/
+build/*
+!build/*.py
+!build/create_installer_script.iss
+!build/innosetup*.exe
 *.egg
 *.nuitka
 *.nuitka-build/
