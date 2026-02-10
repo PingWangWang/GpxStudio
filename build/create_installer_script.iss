@@ -2,11 +2,11 @@
 ; 请先安装 Inno Setup: https://jrsoftware.org/isdl.php
 
 #define MyAppName "GPX Studio"
-#define MyAppVersion "2.0.4"
+#define MyAppVersion "2.0.6"
 #define MyAppPublisher "PingWangWang"
 #define MyAppURL "https://github.com/PingWangWang/GpxStudio"
-#define MyAppExeName "GPXStudio_2.0.4.exe"
-#define MyBuildDir "..\dist\GPXStudio_2.0.4"
+#define MyAppExeName "GPXStudio_2.0.6.exe"
+#define MyBuildDir "..\dist\GPXStudio_2.0.6"
 
 [Code]
 var
