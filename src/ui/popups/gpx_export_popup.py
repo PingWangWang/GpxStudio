@@ -131,18 +131,11 @@ class GpxExportPopup(QWidget):
         from PyQt5.QtWidgets import QLineEdit
         self.datetime_text_edit = QLineEdit()
         
-        # 尝试从route_data中获取timestamp作为默认时间
-        default_datetime = QDateTime.currentDateTime()
-        timestamp = self.route_data.get('timestamp')
-        if timestamp:
-            try:
-                # 解析ISO格式的时间戳
-                from datetime import datetime
-                dt = datetime.fromisoformat(timestamp)
-                # 转换为QDateTime
-                default_datetime = QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-            except Exception as e:
-                print(f"[GPX导出] 解析时间戳失败: {e}")
+        # 尝试从配置文件中加载上次设置的时间
+        default_datetime = self._load_last_export_time()
+        if not default_datetime or not default_datetime.isValid():
+            # 如果没有上次设置的时间或时间无效，使用当前时间
+            default_datetime = QDateTime.currentDateTime()
         
         self.datetime_text_edit.setText(default_datetime.toString("yyyy-MM-dd hh:mm"))
         self.datetime_text_edit.setReadOnly(True)  # 设置为只读
@@ -442,25 +435,65 @@ class GpxExportPopup(QWidget):
             print(f"加载配置失败: {e}")
         return False
 
-    def _save_config(self, value):
-        """保存配置"""
-        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio")
-        config_file = os.path.join(config_path, "config.json")
+    def _load_last_export_time(self):
+        """加载上次导出的时间"""
+        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio", "config.json")
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    last_time_str = config.get('last_export_time')
+                    if last_time_str:
+                        try:
+                            last_time = QDateTime.fromString(last_time_str, "yyyy-MM-dd hh:mm")
+                            if last_time.isValid():
+                                return last_time
+                        except Exception as e:
+                            print(f"[GPX导出] 解析上次导出时间失败: {e}")
+        except Exception as e:
+            print(f"[GPX导出] 加载配置失败: {e}")
+        return None
+
+    def _save_last_export_time(self, datetime):
+        """保存上次导出的时间"""
+        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio", "config.json")
         try:
             # 确保目录存在
-            os.makedirs(config_path, exist_ok=True)
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
 
             # 加载现有配置
             config = {}
-            if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+            # 更新配置
+            config['last_export_time'] = datetime.toString("yyyy-MM-dd hh:mm")
+
+            # 保存配置
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[GPX导出] 保存上次导出时间失败: {e}")
+
+    def _save_config(self, value):
+        """保存配置"""
+        config_path = os.path.join(os.path.expanduser("~"), ".gpxstudio", "config.json")
+        try:
+            # 确保目录存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+
+            # 加载现有配置
+            config = {}
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
 
             # 更新配置
             config['export_elevation'] = value
 
             # 保存配置
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"保存配置失败: {e}")
@@ -486,6 +519,8 @@ class GpxExportPopup(QWidget):
     def _on_export_clicked(self):
         """确认导出按钮点击"""
         start_time = self.get_start_time()
+        # 保存当前设置的时间到配置文件
+        self._save_last_export_time(start_time)
         self.export_confirmed.emit(start_time, self.export_elevation)
         self.hide()
         self.closed.emit()
