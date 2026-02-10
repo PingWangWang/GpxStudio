@@ -778,7 +778,7 @@ class GpxStudio(QMainWindow):
 
         # 创建加载进度按钮（使用emoji样式）
         self.loading_button = QPushButton()
-        self.loading_button.setText("🔄")
+        self.loading_button.setText("🔆")
         self.loading_button.setToolTip("加载状态指示器")
         print(f"[调试] 加载按钮: {self.loading_button}")
         self.loading_button.setFixedSize(control_height, control_height)
@@ -788,7 +788,8 @@ class GpxStudio(QMainWindow):
                 border: none;
                 border-radius: 4px;
                 padding: 0px;
-                font-size: 18px;
+                font-size: 16px;
+                text-align: left;
             }
             QPushButton:hover {
                 background-color: #f0f0f0;
@@ -816,7 +817,7 @@ class GpxStudio(QMainWindow):
             
             # 设置字体
             font = QFont()
-            font.setPointSize(18)
+            font.setPointSize(16)
             painter.setFont(font)
             
             # 保存painter状态
@@ -829,10 +830,10 @@ class GpxStudio(QMainWindow):
             # 应用旋转
             painter.rotate(self.loading_rotation)
             
-            # 绘制emoji文本（居中）
-            text = "🔄"
-            text_rect = painter.fontMetrics().boundingRect(text)
-            painter.drawText(int(-text_rect.width() / 2), int(text_rect.height() / 4), text)
+            # 绘制emoji文本（左侧对齐，与其他按钮保持一致）
+            text = "🔆"
+            # 使用固定坐标确保左侧对齐
+            painter.drawText(-12, 8, text)
             
             # 恢复painter状态
             painter.restore()
@@ -2395,8 +2396,8 @@ class GpxStudio(QMainWindow):
         # 在任务进度面板显示任务开始
         self.task_progress_panel.start_task(task_id, task_type, task_name)
         
-        # 如果是定位任务，启动加载按钮的旋转动画
-        if task_type == 'location':
+        # 如果是定位、搜索或路线规划任务，启动加载按钮的旋转动画
+        if task_type in ['location', 'search', 'routing']:
             self.start_loading_animation()
 
     def _on_task_progress(self, task_id: str, percent: int, message: str):
@@ -2415,9 +2416,13 @@ class GpxStudio(QMainWindow):
             self.location_manager.on_location_task_completed(task_id, result)
             self.task_progress_panel.task_completed("定位完成")
         elif task_id.startswith('search_'):
+            # 停止加载按钮的旋转动画
+            self.stop_loading_animation()
             self.search_manager.on_search_task_completed(task_id, result)
             self.task_progress_panel.task_completed("搜索完成")
         elif task_id.startswith('routing_'):
+            # 停止加载按钮的旋转动画
+            self.stop_loading_animation()
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_completed(task_id, result)
             self.task_progress_panel.task_completed("路线规划完成")
@@ -2473,9 +2478,13 @@ class GpxStudio(QMainWindow):
             self.stop_loading_animation()
             self.location_manager.on_location_task_failed(task_id, error)
         elif task_id.startswith('search_'):
+            # 停止加载按钮的旋转动画
+            self.stop_loading_animation()
             self.hide_loading()  # 隐藏主界面加载状态
             self.search_manager.on_search_task_failed(task_id, error)
         elif task_id.startswith('routing_'):
+            # 停止加载按钮的旋转动画
+            self.stop_loading_animation()
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_failed(task_id, error)
             # 路线规划失败时隐藏加载状态并显示错误提示

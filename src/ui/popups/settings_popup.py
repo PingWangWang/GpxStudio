@@ -255,6 +255,8 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
+        # 测试连接状态
+        self.connection_tested = False
         self._init_ui()
         self.load_current_config()
 
@@ -466,6 +468,8 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.api_key_edit.setTextMargins(0, 2, 0, 2)  # 减小上下边距以防止提示语被截断
         # 确保文本始终从左侧开始显示
         self.api_key_edit.textChanged.connect(self.ensure_text_left_aligned)
+        # API Key变更时，重置测试连接状态
+        self.api_key_edit.textChanged.connect(self._on_api_key_changed)
 
         self.api_key_eye_btn = QPushButton("👁️")
         self.api_key_eye_btn.setFixedSize(30, 30)
@@ -708,6 +712,10 @@ class MapSettingsPopup(BaseSettingsPopup):
             QPushButton:hover {
                 background-color: rgba(255, 255, 255, 0.4);
             }
+            QPushButton:disabled {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: rgba(255, 255, 255, 0.5);
+            }
         """)
         btn_layout.addWidget(self.save_btn)
 
@@ -748,6 +756,7 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEnabled(False)
             self.security_key_eye_btn.setEnabled(False)
             self.test_btn.setEnabled(False)
+            self.save_btn.setEnabled(True)  # 无地图时保存按钮可用
             self.status_label.setText("未选择")
             self.status_label.setStyleSheet("""
                 QLabel {
@@ -765,6 +774,8 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEnabled(True)
             self.security_key_eye_btn.setEnabled(True)
             self.test_btn.setEnabled(True)
+            self.save_btn.setEnabled(False)  # 切换到高德地图时，保存按钮禁用
+            self.connection_tested = False  # 重置测试连接状态
             # 恢复占位符文本
             self.api_key_edit.setPlaceholderText("请输入高德地图API Key")
             self.security_key_edit.setPlaceholderText("可选：安全密钥")
@@ -812,6 +823,7 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEnabled(False)
             self.security_key_eye_btn.setEnabled(False)
             self.test_btn.setEnabled(False)
+            self.save_btn.setEnabled(True)  # OpenStreetMap时保存按钮可用
             # 清空编辑框内容
             self.api_key_edit.clear()
             self.security_key_edit.clear()
@@ -867,10 +879,14 @@ class MapSettingsPopup(BaseSettingsPopup):
             # 使用自定义消息提示框
             msg_box = CustomMessageBox(self, "成功", f"连接测试成功！\n找到 {len(result)} 个结果")
             msg_box.show_message()
+            self.save_btn.setEnabled(True)  # 测试成功后，启用保存按钮
+            self.connection_tested = True  # 设置测试连接状态为成功
         else:
             # 使用自定义消息提示框
             msg_box = CustomMessageBox(self, "失败", "连接测试失败，请检查API Key是否正确")
             msg_box.show_message()
+            self.save_btn.setEnabled(False)  # 测试失败后，保持保存按钮禁用
+            self.connection_tested = False  # 设置测试连接状态为失败
 
     def save_config(self):
         """保存配置"""
@@ -948,6 +964,13 @@ class MapSettingsPopup(BaseSettingsPopup):
         else:
             self.security_key_edit.setEchoMode(QLineEdit.Normal)
             self.security_key_eye_btn.setText("👁️‍🗨️")
+
+    def _on_api_key_changed(self, text):
+        """API Key变更时的处理"""
+        # 只有当当前地图源是高德地图时，才需要重置测试连接状态
+        if self.map_source_combo.currentIndex() == 2:
+            self.connection_tested = False
+            self.save_btn.setEnabled(False)
 
     def hide(self):
         """隐藏弹出面板并发出关闭信号"""

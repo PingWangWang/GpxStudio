@@ -841,19 +841,10 @@ class RoutePlanPanel(QWidget):
         self.plan_button.clicked.connect(self._on_plan_route)
         buttons_container_layout.addWidget(self.plan_button)
 
-        # 加载中按钮（默认隐藏，放在开车去右侧，但始终占据空间）
-        self.loading_button = QLabel()
-        self.loading_button.setFixedSize(32, 32)
-        self.loading_button.setAlignment(Qt.AlignCenter)
-        # 使用透明度隐藏，而不是setVisible，这样可以保持占据空间
-        self.loading_button.setStyleSheet("QLabel { background: transparent; }")
-        buttons_container_layout.addWidget(self.loading_button)
-
-        # 加载Loading图标
-        self._load_loading_icon()
-
-        # 初始状态隐藏加载按钮
-        self.hide_loading()
+        # 占位按钮，保持布局对齐
+        placeholder_button = QWidget()
+        placeholder_button.setFixedSize(32, 32)
+        buttons_container_layout.addWidget(placeholder_button)
 
         main_layout.addWidget(buttons_container)
 
@@ -1200,13 +1191,14 @@ class RoutePlanPanel(QWidget):
     def show_loading(self):
         """显示加载中状态"""
         # 不使用setVisible，而是通过设置pixmap来显示
-        if hasattr(self, 'loading_timer'):
+        if hasattr(self, 'loading_timer') and hasattr(self, 'loading_button'):
             self.loading_timer.start(50)  # 每50ms旋转一次
 
     def hide_loading(self):
         """隐藏加载中状态"""
         # 清除pixmap来隐藏，但保持占据空间
-        self.loading_button.clear()
+        if hasattr(self, 'loading_button'):
+            self.loading_button.clear()
         if hasattr(self, 'loading_timer'):
             self.loading_timer.stop()
 
