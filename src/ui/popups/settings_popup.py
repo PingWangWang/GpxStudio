@@ -984,7 +984,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 280)  # 增加高度以容纳更多内容
+        self.setFixedSize(300, 220)
         self._init_ui()
         self.load_current_config()
 
@@ -1001,32 +1001,27 @@ class LogSettingsPopup(BaseSettingsPopup):
         Args:
             button_widget: 触发按钮控件（用于定位）
         """
-        # 获取按钮的全局位置
         button_rect = button_widget.rect()
         button_global_pos = button_widget.mapToGlobal(button_rect.topLeft())
 
-        # 获取按钮列表容器的位置（假设按钮是right_buttons_container的子元素）
         if hasattr(button_widget.parent(), 'rect'):
             buttons_container = button_widget.parent()
             container_rect = buttons_container.rect()
             container_global_pos = buttons_container.mapToGlobal(container_rect.topLeft())
 
-            # 设置面板位置：与按钮顶部对齐，面板右侧与按钮列表左侧间隔1-2px
             popup_x = container_global_pos.x() - self.width() - 2
             popup_y = button_global_pos.y()
         else:
-            #  fallback: 使用默认位置
             popup_x = button_global_pos.x() - self.width() - 10
             popup_y = button_global_pos.y()
 
         self.move(popup_x, popup_y)
         self.show()
         self.raise_()
-        self.setFocus()  # 设置焦点以接收键盘事件
+        self.setFocus()
 
     def _init_ui(self):
         """初始化UI"""
-        # 设置面板样式 - 与地图设置面板保持一致
         self.setStyleSheet("""
             LogSettingsPopup {
                 background-color: #3b4453;
@@ -1044,14 +1039,12 @@ class LogSettingsPopup(BaseSettingsPopup):
             }
         """)
 
-        # 设置自动填充背景
         self.setAutoFillBackground(True)
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(4, 4, 4, 4)
-        main_layout.setSpacing(2)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
 
-        # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("日志设置")
         title_label.setStyleSheet("""
@@ -1065,7 +1058,6 @@ class LogSettingsPopup(BaseSettingsPopup):
         title_layout.addWidget(title_label)
         title_layout.addStretch()
 
-        # 关闭按钮
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(28, 28)
         close_btn.setStyleSheet("""
@@ -1085,31 +1077,35 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         main_layout.addLayout(title_layout)
 
-        # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
+        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
         main_layout.addWidget(line)
 
-        # 配置表单
-        config_layout = QVBoxLayout()
-        config_layout.setSpacing(-1)
-        config_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(6)
+        content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 日志级别设置
-        log_level_row = QHBoxLayout()
-        log_level_label = QLabel("日志级别:")
-        log_level_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
-        log_level_label.setFixedWidth(80)
-        log_level_label.setFixedHeight(30)
-        log_level_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        log_level_row.addWidget(log_level_label)
-        log_level_row.addSpacing(10)
+        row1_layout = QHBoxLayout()
+        row1_layout.setSpacing(6)
 
-        # 创建下拉框容器
-        log_level_container = QWidget()
-        log_level_layout = QHBoxLayout(log_level_container)
-        log_level_layout.setContentsMargins(0, 0, 0, 0)
+        log_size_text = QLineEdit()
+        log_size_text.setReadOnly(True)
+        log_size_text.setFixedHeight(30)
+        log_size_text.setPlaceholderText("日志级别")
+        log_size_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #666666;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row1_layout.addWidget(log_size_text, 2)
 
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItem("DEBUG", "DEBUG")
@@ -1118,7 +1114,6 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_level_combo.addItem("ERROR", "ERROR")
         self.log_level_combo.addItem("CRITICAL", "CRITICAL")
         self.log_level_combo.setFixedHeight(30)
-        self.log_level_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.log_level_combo.setStyleSheet("""
             QComboBox {
                 padding: 0px 30px 0px 8px;
@@ -1143,57 +1138,12 @@ class LogSettingsPopup(BaseSettingsPopup):
                 font-size: 12px;
             }
         """)
-        # 连接信号实现自动保存
         self.log_level_combo.currentIndexChanged.connect(self.on_log_level_changed)
-        log_level_layout.addWidget(self.log_level_combo)
-        log_level_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        log_level_row.addWidget(log_level_container)
-        log_level_row.setContentsMargins(0, 0, 0, 0)
-        log_level_row.setSpacing(0)
-        log_level_row.setStretch(0, 0)
-        log_level_row.setStretch(1, 0)
-        log_level_row.setStretch(2, 1)
-        config_layout.addLayout(log_level_row)
-
-        main_layout.addLayout(config_layout)
-
-        # 添加分隔线
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 20px 0;")
-        main_layout.addWidget(separator)
-
-        # 按钮区域
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(12)
-        btn_layout.addStretch(1)
-
-        self.clean_log_btn = QPushButton("清理日志")
-        self.clean_log_btn.clicked.connect(self.on_clean_logs)
-        self.clean_log_btn.setMinimumWidth(80)
-        self.clean_log_btn.setMinimumHeight(30)
-        self.clean_log_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
-            }
-        """)
-        btn_layout.addWidget(self.clean_log_btn)
+        row1_layout.addWidget(self.log_level_combo, 1)
 
         self.open_log_btn = QPushButton("打开日志目录")
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
-        self.open_log_btn.setMinimumWidth(80)
-        self.open_log_btn.setMinimumHeight(30)
+        self.open_log_btn.setFixedHeight(30)
         self.open_log_btn.setStyleSheet("""
             QPushButton {
                 padding: 4px 12px;
@@ -1208,49 +1158,140 @@ class LogSettingsPopup(BaseSettingsPopup):
                 background-color: rgba(255, 255, 255, 0.3);
             }
         """)
-        btn_layout.addWidget(self.open_log_btn)
+        row1_layout.addWidget(self.open_log_btn, 0)
 
-        btn_layout.addStretch(1)
-        main_layout.addLayout(btn_layout)
+        content_layout.addLayout(row1_layout)
 
-        # 文件大小信息区域
-        file_size_layout = QVBoxLayout()
-        file_size_layout.setContentsMargins(0, 4, 0, 0)
-        file_size_layout.setSpacing(4)
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(6)
 
-        # 获取各文件大小
         log_size = get_log_size()
+        self.log_size_text = QLineEdit()
+        self.log_size_text.setReadOnly(True)
+        self.log_size_text.setFixedHeight(30)
+        self.log_size_text.setText(f"当前日志大小: {log_size:.2f} MB")
+        self.log_size_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row2_layout.addWidget(self.log_size_text, 3)
+
+        self.clean_log_btn = QPushButton("清理日志")
+        self.clean_log_btn.clicked.connect(self.on_clean_logs)
+        self.clean_log_btn.setFixedHeight(30)
+        self.clean_log_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        row2_layout.addWidget(self.clean_log_btn, 0)
+
+        content_layout.addLayout(row2_layout)
+
+        row3_layout = QHBoxLayout()
+        row3_layout.setSpacing(6)
+
         geo_info_size = self.get_file_size(get_geo_info_file())
+        self.geo_info_text = QLineEdit()
+        self.geo_info_text.setReadOnly(True)
+        self.geo_info_text.setFixedHeight(30)
+        self.geo_info_text.setText(f"地理信息文件大小: {geo_info_size:.2f} MB")
+        self.geo_info_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row3_layout.addWidget(self.geo_info_text, 3)
+
+        self.clean_geo_info_btn = QPushButton("清理信息")
+        self.clean_geo_info_btn.clicked.connect(self.on_clean_geo_info)
+        self.clean_geo_info_btn.setFixedHeight(30)
+        self.clean_geo_info_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        row3_layout.addWidget(self.clean_geo_info_btn, 0)
+
+        content_layout.addLayout(row3_layout)
+
+        row4_layout = QHBoxLayout()
+        row4_layout.setSpacing(6)
+
         route_history_size = self.get_file_size(get_route_history_file())
+        self.route_history_text = QLineEdit()
+        self.route_history_text.setReadOnly(True)
+        self.route_history_text.setFixedHeight(30)
+        self.route_history_text.setText(f"路线历史文件大小: {route_history_size:.2f} MB")
+        self.route_history_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row4_layout.addWidget(self.route_history_text, 3)
 
-        # 创建文件大小标签
-        file_size_labels = [
-            ("当前日志大小:", f"{log_size:.2f} MB"),
-            ("地理信息列表大小:", f"{geo_info_size:.2f} MB"),
-            ("路线历史记录大小:", f"{route_history_size:.2f} MB")
-        ]
+        self.clean_route_history_btn = QPushButton("清理文件")
+        self.clean_route_history_btn.clicked.connect(self.on_clean_route_history)
+        self.clean_route_history_btn.setFixedHeight(30)
+        self.clean_route_history_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        row4_layout.addWidget(self.clean_route_history_btn, 0)
 
-        for label_text, size_text in file_size_labels:
-            size_label = QLabel(f"{label_text} {size_text}")
-            size_label.setAlignment(Qt.AlignCenter)
-            size_label.setMinimumHeight(30)  # 与按钮高度保持一致
-            size_label.setStyleSheet("""
-                QLabel {
-                    padding: 2px;
-                    margin: 0;
-                    font-weight: bold;
-                    font-size: 12px;
-                    color: white;
-                    background-color: rgba(255, 255, 255, 0.2);
-                    border-radius: 3px;
-                    min-height: 30px;
-                    max-height: 30px;
-                    height: 30px;
-                }
-            """)
-            file_size_layout.addWidget(size_label)
+        content_layout.addLayout(row4_layout)
 
-        main_layout.addLayout(file_size_layout)
+        main_layout.addLayout(content_layout)
 
     def load_current_config(self):
         """加载当前配置"""
@@ -1292,6 +1333,36 @@ class LogSettingsPopup(BaseSettingsPopup):
         """打开日志目录"""
         if not open_log_directory():
             QMessageBox.critical(self, "错误", "打开日志目录失败")
+
+    def on_clean_geo_info(self):
+        """清理地理信息文件"""
+        reply = QMessageBox.question(self, "确认", "确定要清理地理信息文件吗？",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                geo_info_file = get_geo_info_file()
+                if os.path.exists(geo_info_file):
+                    os.remove(geo_info_file)
+                QMessageBox.information(self, "成功", "地理信息文件已清理")
+                self._init_ui()
+                self.load_current_config()
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"清理地理信息文件失败: {str(e)}")
+
+    def on_clean_route_history(self):
+        """清理路线历史文件"""
+        reply = QMessageBox.question(self, "确认", "确定要清理路线历史文件吗？",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                route_history_file = get_route_history_file()
+                if os.path.exists(route_history_file):
+                    os.remove(route_history_file)
+                QMessageBox.information(self, "成功", "路线历史文件已清理")
+                self._init_ui()
+                self.load_current_config()
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"清理路线历史文件失败: {str(e)}")
 
 
 class AboutPopup(BaseSettingsPopup):
