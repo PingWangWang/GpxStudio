@@ -21,7 +21,7 @@ class IGpxExportService:
         """
         ...
 
-    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str, start_name: Optional[str] = None, end_name: Optional[str] = None, export_elevation: bool = False) -> bool:
+    def export_to_gpx(self, route_points: List[Any], start_datetime: Any, file_path: str, start_name: Optional[str] = None, end_name: Optional[str] = None, export_elevation: bool = False, total_duration_seconds: Optional[float] = None) -> bool:
         """
         导出路线为GPX文件
 
@@ -32,6 +32,7 @@ class IGpxExportService:
             start_name: 起点名称
             end_name: 终点名称
             export_elevation: 是否导出海拔数据
+            total_duration_seconds: 路线预估总时长（秒），用于计算每个点的时间。如果为None，则使用默认的10秒间隔
 
         Returns:
             bool: 是否成功

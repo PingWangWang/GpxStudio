@@ -3333,13 +3333,16 @@ class GpxStudio(QMainWindow):
             progress_popup = ProgressPopup(self)
             progress_popup.show_at_center()
 
+            # 获取预估总时长
+            total_duration_seconds = route_data.get('duration', None)
+
             # 创建导出线程
             class ExportThread(QThread):
                 """导出线程"""
                 progress_updated = pyqtSignal(int, str)
                 export_completed = pyqtSignal(bool, str)
 
-                def __init__(self, parent, route_points, start_time, file_path, start_name, end_name, export_elevation):
+                def __init__(self, parent, route_points, start_time, file_path, start_name, end_name, export_elevation, total_duration_seconds):
                     super().__init__(parent)
                     self.route_points = route_points
                     self.start_time = start_time
@@ -3347,6 +3350,7 @@ class GpxStudio(QMainWindow):
                     self.start_name = start_name
                     self.end_name = end_name
                     self.export_elevation = export_elevation
+                    self.total_duration_seconds = total_duration_seconds
 
                 def run(self):
                     """线程运行"""
@@ -3386,7 +3390,8 @@ class GpxStudio(QMainWindow):
                             file_path=self.file_path,
                             start_name=self.start_name,
                             end_name=self.end_name,
-                            export_elevation=self.export_elevation
+                            export_elevation=self.export_elevation,
+                            total_duration_seconds=self.total_duration_seconds
                         )
 
                         self.progress_updated.emit(100, "导出完成")
@@ -3398,7 +3403,7 @@ class GpxStudio(QMainWindow):
                         self.export_completed.emit(False, str(e))
 
             # 创建并启动导出线程
-            export_thread = ExportThread(self, route_points, start_time, file_path, start_name, end_name, export_elevation)
+            export_thread = ExportThread(self, route_points, start_time, file_path, start_name, end_name, export_elevation, total_duration_seconds)
 
             # 连接信号
             def on_progress_updated(value, message):

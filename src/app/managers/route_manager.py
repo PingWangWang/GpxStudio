@@ -691,6 +691,9 @@ class RouteManager(QObject):
             start_city = self._extract_city_name(self.data_manager.start_name or "起点")
             end_city = self._extract_city_name(self.data_manager.end_name or "终点")
 
+            # 获取预估总时长
+            total_duration_seconds = self.data_manager.estimated_duration_seconds
+
             # 执行GPX导出
             success = self.service_manager.gpx_service.export_to_gpx(
                 self.data_manager.route_points,  # 路线点
@@ -698,7 +701,8 @@ class RouteManager(QObject):
                 file_path,  # 保存路径
                 start_name=start_city,  # 起点名称
                 end_name=end_city,  # 终点名称
-                export_elevation=False  # 默认为False，因为route_manager直接调用时没有用户界面设置
+                export_elevation=False,  # 默认为False，因为route_manager直接调用时没有用户界面设置
+                total_duration_seconds=total_duration_seconds  # 预估总时长，用于计算每个点的时间
             )
 
             # 更新UI显示导出完成

@@ -55,7 +55,7 @@ class GpxExportService:
                 self.logger("WARNING", f"时区检测失败: {str(e)}，使用东八区")
             return timezone(timedelta(hours=8))
 
-    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None):
         """
         导出路线为GPX文件
 
@@ -66,6 +66,7 @@ class GpxExportService:
             start_name: 起点名称
             end_name: 终点名称
             export_elevation: 是否导出海拔数据
+            total_duration_seconds: 路线预估总时长（秒），用于计算每个点的时间。如果为None，则使用默认的10秒间隔
 
         Returns:
             bool: 是否成功
@@ -157,6 +158,20 @@ class GpxExportService:
 
             log_cb("DEBUG", f"起始时间: {current_time}")
 
+            # 统计所有有效点的数量（不包括段分隔符None）
+            total_points = sum(1 for point in route_points if point is not None)
+            log_cb("DEBUG", f"路线点总数: {total_points}")
+
+            # 计算每个点的时间间隔
+            # 如果提供了总时长，根据总时长计算每个点的时间间隔
+            # 否则使用默认的10秒间隔
+            if total_duration_seconds is not None and total_duration_seconds > 0 and total_points > 1:
+                time_interval_seconds = total_duration_seconds / (total_points - 1)
+                log_cb("INFO", f"使用预估总时长: {total_duration_seconds}秒，每个点间隔: {time_interval_seconds:.2f}秒")
+            else:
+                time_interval_seconds = 10
+                log_cb("INFO", f"未提供预估总时长或点数不足，使用默认间隔: {time_interval_seconds}秒")
+
             # 添加轨迹点
             route_segment = []
             point_count = 0
@@ -180,7 +195,7 @@ class GpxExportService:
                                     time=current_time
                                 )
                             gpx_segment.points.append(gpx_point)
-                            current_time += timedelta(seconds=10)
+                            current_time += timedelta(seconds=time_interval_seconds)
                             point_count += 1
                     route_segment = []
                     current_time += timedelta(minutes=5)  # 段间隔5分钟
@@ -206,7 +221,7 @@ class GpxExportService:
                             time=current_time
                         )
                     gpx_segment.points.append(gpx_point)
-                    current_time += timedelta(seconds=10)
+                    current_time += timedelta(seconds=time_interval_seconds)
                     point_count += 1
 
             log_cb("DEBUG", f"共添加 {point_count} 个轨迹点")
