@@ -11,6 +11,7 @@ import shutil
 import site
 import sys
 import time
+import winreg
 
 # 项目根目录（相对路径，脚本位于build目录下）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +40,125 @@ ICO_FILE = os.path.join(PROJECT_ROOT, "res", "GPXStudio.ico")
 
 # 声明全局变量，将在main函数中初始化
 XYZ_SERVICES_DATA = None
+
+
+def find_inno_setup_path():
+    """查找 Inno Setup 的安装路径"""
+    print("[GPXStudio] 查找 Inno Setup 安装路径...")
+    
+    # 方法1：从注册表查找
+    try:
+        # 尝试从 HKLM 读取（64位系统）
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                               r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                               0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+            install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
+            winreg.CloseKey(key)
+            print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
+            return install_location
+        except Exception:
+            # 尝试从 HKLM 读取（32位系统）
+            try:
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                                   r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                                   0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+                install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
+                winreg.CloseKey(key)
+                print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
+                return install_location
+            except Exception:
+                # 尝试从 HKCU 读取
+                try:
+                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                                       r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                                       0, winreg.KEY_READ)
+                    install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
+                    winreg.CloseKey(key)
+                    print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
+                    return install_location
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[GPXStudio] 从注册表查找 Inno Setup 失败: {e}")
+    
+    # 方法2：检查常见安装路径
+    common_paths = [
+        r"D:\Program Files (x86)\Inno Setup 6",
+        r"C:\Program Files (x86)\Inno Setup 6",
+        r"C:\Program Files\Inno Setup 6"
+    ]
+    
+    for path in common_paths:
+        if os.path.exists(path):
+            print(f"[GPXStudio] 从常见路径找到 Inno Setup: {path}")
+            return path
+    
+    # 方法3：检查 PATH 环境变量
+    path_env = os.environ.get("PATH", "")
+    for path in path_env.split(os.pathsep):
+        if "Inno Setup" in path and os.path.exists(path):
+            print(f"[GPXStudio] 从 PATH 环境变量找到 Inno Setup: {path}")
+            return path
+    
+    print("[GPXStudio] 找不到 Inno Setup 安装路径")
+    return None
+
+
+def build_installer():
+    """使用 Inno Setup 构建安装包"""
+    print("[GPXStudio] 开始构建安装包...")
+    
+    # 查找 Inno Setup 路径
+    inno_path = find_inno_setup_path()
+    if not inno_path:
+        print("[GPXStudio] 错误：找不到 Inno Setup 安装路径，无法构建安装包")
+        return False
+    
+    # 构建 iscc.exe 路径
+    iscc_path = os.path.join(inno_path, "iscc.exe")
+    if not os.path.exists(iscc_path):
+        print(f"[GPXStudio] 错误：找不到 iscc.exe: {iscc_path}")
+        return False
+    
+    # 更新 Inno Setup 脚本
+    update_iss_script()
+    
+    # 构建 iss 脚本路径
+    iss_file = os.path.join(SCRIPT_DIR, "create_installer_script.iss")
+    if not os.path.exists(iss_file):
+        print(f"[GPXStudio] 错误：找不到 Inno Setup 脚本: {iss_file}")
+        return False
+    
+    print(f"[GPXStudio] 使用 Inno Setup 构建安装包")
+    print(f"[GPXStudio] Inno Setup 路径: {inno_path}")
+    print(f"[GPXStudio] ISS 脚本: {iss_file}")
+    
+    # 执行 Inno Setup 命令
+    try:
+        # 构建命令
+        command = [iscc_path, iss_file]
+        print(f"[GPXStudio] 执行命令: {' '.join(command)}")
+        
+        # 执行命令
+        result = subprocess.run(command, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("[GPXStudio] 安装包构建成功！")
+            # 查找生成的安装包
+            output_dir = os.path.join(PROJECT_ROOT, "dist")
+            for file in os.listdir(output_dir):
+                if file.endswith(".exe") and "Setup" in file:
+                    setup_file = os.path.join(output_dir, file)
+                    print(f"[GPXStudio] 安装包路径: {setup_file}")
+                    return True
+        else:
+            print(f"[GPXStudio] 错误：安装包构建失败")
+            print(f"[GPXStudio] 错误信息: {result.stderr}")
+            return False
+    except Exception as e:
+        print(f"[GPXStudio] 错误：构建安装包时发生异常: {e}")
+        return False
 
 
 def update_iss_script():
@@ -120,31 +240,34 @@ def main():
     else:
         print(f"[GPXStudio] 警告：找不到图标文件: {ICON_FILE}")
 
-    # 清理之前的构建文件
+    # 清理之前的构建文件（只清理当前版本的构建目录）
     if os.path.exists(BUILD_DIR):
-        print(f"[GPXStudio] 清理之前的构建目录: {BUILD_DIR}")
+        print(f"[GPXStudio] 清理当前版本的构建目录: {BUILD_DIR}")
         shutil.rmtree(BUILD_DIR)
 
-    # 清理dist目录中的旧文件，但保留GPXStudioData数据目录
+    # 清理dist目录中的当前版本文件，但保留其他版本和GPXStudioData数据目录
     dist_dir = os.path.join(PROJECT_ROOT, "dist")
     if os.path.exists(dist_dir):
-        print(f"[GPXStudio] 清理dist目录中的旧文件（保留GPXStudioData）...")
+        print(f"[GPXStudio] 清理dist目录中的当前版本文件（保留其他版本和GPXStudioData）...")
         for item in os.listdir(dist_dir):
             item_path = os.path.join(dist_dir, item)
             # 跳过GPXStudioData目录
             if item == "GPXStudioData":
                 print(f"[GPXStudio] 保留数据目录: {item_path}")
                 continue
-            # 删除其他文件和目录
-            try:
-                if os.path.isfile(item_path):
-                    os.remove(item_path)
-                    print(f"[GPXStudio] 删除文件: {item_path}")
-                elif os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                    print(f"[GPXStudio] 删除目录: {item_path}")
-            except Exception as e:
-                print(f"[GPXStudio] 警告：无法删除 {item_path}: {e}")
+            # 只删除当前版本的文件和目录
+            if item == DIST_DIR_NAME or item == f"GPXStudio_Setup_v{__version__}.exe":
+                try:
+                    if os.path.isfile(item_path):
+                        os.remove(item_path)
+                        print(f"[GPXStudio] 删除当前版本文件: {item_path}")
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                        print(f"[GPXStudio] 删除当前版本目录: {item_path}")
+                except Exception as e:
+                    print(f"[GPXStudio] 警告：无法删除 {item_path}: {e}")
+            else:
+                print(f"[GPXStudio] 保留其他版本: {item}")
     else:
         print(f"[GPXStudio] dist目录不存在，将自动创建")
 
@@ -497,6 +620,10 @@ def main():
             # 更新安装脚本
             update_iss_script()
             
+            # 构建安装包
+            print("\n[GPXStudio] 开始构建安装包...")
+            installer_success = build_installer()
+            
             # 重命名主程序（如果需要）
             # 默认生成的是 BUILD_NAME.exe，我们可能想要 main.exe 或者更友好的名字
             # 但 onedir 模式下，主程序名字由 --name 决定
@@ -504,11 +631,16 @@ def main():
             final_exe_path = os.path.join(PROJECT_ROOT, "dist", BUILD_NAME, f"{BUILD_NAME}.exe")
             print(f"[GPXStudio] 程序目录: {os.path.join(PROJECT_ROOT, 'dist', BUILD_NAME)}")
             print(f"[GPXStudio] 主程序入口: {final_exe_path}")
-            print("[GPXStudio] 构建完成！")
             
-            print("\n[GPXStudio] 提示: 这是一个目录形式的构建，启动速度快。")
-            print("[GPXStudio] 如果需要制作 MSI 或 Setup.exe 安装包，请使用 Inno Setup 或 Advanced Installer 等工具")
-            print(f"[GPXStudio] 对目录进行打包即可: {os.path.join(PROJECT_ROOT, 'dist', BUILD_NAME)}")
+            if installer_success:
+                print("[GPXStudio] 构建完成！")
+                print("\n[GPXStudio] 提示: 这是一个目录形式的构建，启动速度快。")
+                print("[GPXStudio] 安装包已自动构建完成")
+                print(f"[GPXStudio] 安装包路径: {os.path.join(PROJECT_ROOT, 'dist', f'GPXStudio_Setup_v{__version__}.exe')}")
+            else:
+                print("[GPXStudio] 构建过程中出现错误！")
+                print("[GPXStudio] 程序目录已生成，但安装包构建失败。")
+                print("[GPXStudio] 请查看以上错误信息，解决问题后重新运行脚本。")
             
             input("按Enter键退出...")
         else:

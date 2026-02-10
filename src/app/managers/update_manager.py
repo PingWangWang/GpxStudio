@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from datetime import datetime
@@ -50,10 +51,11 @@ class UpdateManager(QObject):
         self.repo_owner = "PingWangWang"  # GitHub 仓库所有者
         self.repo_name = "GpxStudio"  # GitHub 仓库名称
         
-        # 多个API地址，按优先级尝试（国内镜像优先）
+        # 多个API地址，按优先级尝试
+        # 同时支持API地址和网页地址作为备选
         self.api_urls = [
-            f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest",
-            # 可以添加其他镜像地址
+            f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest",  # API方式
+            f"https://github.com/{self.repo_owner}/{self.repo_name}/releases/latest",  # 网页方式（备选）
         ]
         
         # 下载文件的镜像地址（用于加速）
@@ -74,7 +76,11 @@ class UpdateManager(QObject):
         """
         try:
             if self.config_manager:
-                return self.config_manager.get("update", "skip_versions", [])
+                skip_list = self.config_manager.get("update", "skip_versions", [])
+                self.logger.info(f"从配置加载跳过版本列表: {skip_list}")
+                return skip_list
+            else:
+                self.logger.warning("config_manager 为 None，无法加载跳过版本列表")
             return []
         except Exception as e:
             self.logger.error(f"加载跳过版本列表失败: {e}")
@@ -157,10 +163,14 @@ class UpdateManager(QObject):
 
             # 检查是否有新版本
             if self._is_new_version(latest_version) and latest_version not in self.skip_versions:
-                self.logger.info("发现新版本!")
+                self.logger.info(f"🎉 发现新版本! 当前: {self.current_version}, 最新: {latest_version}")
                 self.update_available.emit(latest_version, release_notes)
             else:
-                self.logger.info("当前已是最新版本或版本已被跳过")
+                if latest_version in self.skip_versions:
+                    self.logger.info(f"版本 {latest_version} 在跳过列表中，不提示更新")
+                    self.logger.info(f"当前跳过版本列表: {self.skip_versions}")
+                else:
+                    self.logger.info("当前已是最新版本")
 
         except requests.RequestException as e:
             self.logger.error(f"检查更新失败: {e}")
@@ -257,6 +267,12 @@ class UpdateManager(QObject):
             # 创建临时文件（使用实际的资源名称）
             temp_dir = tempfile.gettempdir()
             download_path = os.path.join(temp_dir, asset_name or f"GPXStudio_Setup_v{latest_version}.exe")
+            
+            self.logger.info(f"="*60)
+            self.logger.info(f"下载目标路径: {download_path}")
+            self.logger.info(f"临时目录: {temp_dir}")
+            self.logger.info(f"文件名: {asset_name}")
+            self.logger.info(f"="*60)
 
             # 显示下载进度对话框（使用自定义暗色主题对话框）
             from ui.popups.update_popup import DownloadProgressDialog
@@ -373,36 +389,57 @@ class UpdateManager(QObject):
         获取当前程序的安装基础目录（不含版本号）
         
         Returns:
-            安装基础目录路径，例如 C:\\Program Files\\GPX Studio
+            安装基础目录路径，例如 C:\\Program Files (x86)\\GPX Studio
         """
         try:
             # 尝试获取当前可执行文件的路径
             if getattr(sys, 'frozen', False):
-                # 打包后的环境
+                # 打包后的环境 - 从当前运行路径获取
                 current_exe = sys.executable
-                # 获取可执行文件所在目录
+                self.logger.info(f"当前可执行文件: {current_exe}")
+                
+                # 获取可执行文件所在目录 (例如: C:\Program Files (x86)\GPX Studio\v1.5.0)
                 install_dir = os.path.dirname(current_exe)
+                self.logger.info(f"当前安装目录: {install_dir}")
                 
-                # 检查是否在版本号目录中 (例如: C:\\Program Files\\GPX Studio\\v2.0.0)
+                # 获取父目录（去掉版本号部分）
                 parent_dir = os.path.dirname(install_dir)
-                parent_name = os.path.basename(parent_dir)
+                self.logger.info(f"基础目录: {parent_dir}")
                 
-                # 如果父目录是"GPX Studio"或类似名称，返回父目录
+                # 检查父目录名称是否包含 "GPX Studio"
+                parent_name = os.path.basename(parent_dir)
                 if "GPX Studio" in parent_name or "GpxStudio" in parent_name:
+                    self.logger.info(f"✅ 检测到正确的基础目录: {parent_dir}")
                     return parent_dir
-                    
-                # 否则，当前目录可能就是版本目录，返回其父目录
+                
+                # 如果当前目录看起来像版本目录（以v开头），返回父目录
                 if os.path.basename(install_dir).startswith('v'):
+                    self.logger.info(f"✅ 检测到版本目录，返回父目录: {parent_dir}")
                     return parent_dir
-                    
-                # 默认返回当前目录的父目录
+                
+                # 兜底：返回父目录
+                self.logger.warning(f"使用兜底方案，返回: {parent_dir}")
                 return parent_dir
             else:
-                # 开发环境，返回默认路径
-                return os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'GPX Studio')
+                # 开发环境，尝试多个可能的路径
+                # 优先检查 Program Files (x86)，因为 32 位程序通常安装在这里
+                possible_paths = [
+                    os.path.join(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'), 'GPX Studio'),
+                    os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'GPX Studio'),
+                ]
+                
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        self.logger.info(f"开发环境：找到已安装版本在 {path}")
+                        return path
+                
+                # 如果都不存在，返回第一个作为默认
+                self.logger.info(f"开发环境：使用默认路径 {possible_paths[0]}")
+                return possible_paths[0]
         except Exception as e:
-            self.logger.warning(f"获取安装目录失败: {e}，使用默认路径")
-            return os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'GPX Studio')
+            self.logger.error(f"获取安装目录失败: {e}，使用默认路径")
+            # 优先使用 Program Files (x86)
+            return os.path.join(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'), 'GPX Studio')
 
     def install_update(self, download_path: str, new_version: str = None):
         """
@@ -410,6 +447,12 @@ class UpdateManager(QObject):
 
         Args:
             download_path: 下载文件路径
+            
+            # 安装更新时，自动清除该版本的跳过记录（如果有）
+            if new_version and new_version in self.skip_versions:
+                self.logger.info(f"清除版本 {new_version} 的跳过记录")
+                self.skip_versions.remove(new_version)
+                self._save_skip_versions()
             new_version: 新版本号（可选）
         """
         try:
@@ -435,26 +478,38 @@ class UpdateManager(QObject):
                     # 如果没有提供版本号，使用默认目录
                     new_install_dir = base_dir
                 
-                self.logger.info(f"目标安装目录: {new_install_dir}")
-                
-                # Inno Setup 安装包：使用静默安装参数
-                # /VERYSILENT: 完全静默安装
-                # /SUPPRESSMSGBOXES: 抑制消息框
+                # Inno Setup 安装包：使用可见的安装界面
                 # /NORESTART: 不重启系统
-                # /CLOSEAPPLICATIONS: 自动关闭正在运行的应用
-                # /DIR="path": 指定安装目录
-                self.logger.info("检测到安装包，使用静默安装模式")
+                # /CLOSEAPPLICATIONS: 自动关闭正在运行的应用（会提示用户）
+                # /DIR=path: 指定安装目录（注意：路径不需要额外的引号）
+                self.logger.info("检测到安装包，将显示安装界面")
                 
+                # 重要：subprocess.Popen 的列表参数会自动处理路径中的空格
+                # 不需要手动添加引号，直接传递路径即可
                 args = [
                     download_path,
-                    "/VERYSILENT",
-                    "/SUPPRESSMSGBOXES",
                     "/NORESTART",
                     "/CLOSEAPPLICATIONS",
-                    f'/DIR="{new_install_dir}"'
+                    f"/DIR={new_install_dir}"  # 不要用引号包裹路径，Popen会自动处理
                 ]
                 
-                self.logger.info(f"安装参数: {' '.join(args)}")
+                self.logger.info(f"="*60)
+                self.logger.info(f"启动安装程序")
+                self.logger.info(f"安装包路径: {download_path}")
+                self.logger.info(f"目标安装目录: {new_install_dir}")
+                self.logger.info(f"安装参数: {args}")
+                self.logger.info(f"="*60)
+                
+                # 检查文件是否真的存在
+                if os.path.exists(download_path):
+                    file_size = os.path.getsize(download_path)
+                    self.logger.info(f"✅ 安装包文件存在，大小: {file_size / 1024 / 1024:.2f} MB")
+                else:
+                    self.logger.error(f"❌ 安装包文件不存在: {download_path}")
+                    self.update_error.emit(f"安装包文件不存在: {download_path}")
+                    return
+                
+                self.logger.info(f"准备退出当前程序并启动安装程序...")
                 subprocess.Popen(args)
             else:
                 # 单文件exe（兼容旧版本）：直接运行
