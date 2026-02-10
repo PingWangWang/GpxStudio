@@ -230,22 +230,60 @@ class MapRenderer:
 
             tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
 
+            # 添加卫星地图瓦片图层
             folium.TileLayer(
-                tiles=tile_url,
+                tiles=tile_urls['satellite'] if map_type in ['satellite', 'hybrid'] else tile_url,
                 attr='© 高德地图',
-                name='高德地图',
+                name='高德卫星地图',
                 overlay=False,
                 control=False
             ).add_to(m)
+            
+            # 如果是卫星地图或混合地图，添加标注图层
+            if map_type in ['satellite', 'hybrid']:
+                folium.TileLayer(
+                    tiles='https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                    attr='© 高德地图',
+                    name='高德地图标注',
+                    overlay=True,
+                    control=False
+                ).add_to(m)
         else:
             # 使用OSM地图瓦片
-            folium.TileLayer(
-                tiles='OpenStreetMap',
-                attr='© OpenStreetMap contributors',
-                name='OpenStreetMap',
-                overlay=False,
-                control=False
-            ).add_to(m)
+            osm_tile_urls = {
+                'roadmap': 'OpenStreetMap',
+                'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                'hybrid': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            }
+            
+            tile_url = osm_tile_urls.get(map_type, osm_tile_urls['roadmap'])
+            
+            if map_type == 'roadmap':
+                folium.TileLayer(
+                    tiles=tile_url,
+                    attr='© OpenStreetMap contributors',
+                    name='OpenStreetMap',
+                    overlay=False,
+                    control=False
+                ).add_to(m)
+            else:
+                # 添加卫星地图瓦片图层
+                folium.TileLayer(
+                    tiles=tile_url,
+                    attr='© Esri',
+                    name='Satellite',
+                    overlay=False,
+                    control=False
+                ).add_to(m)
+                
+                # 添加OpenStreetMap标注图层（使用CartoDB的标注服务）
+                folium.TileLayer(
+                    tiles='https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+                    attr='© OpenStreetMap contributors, © CartoDB',
+                    name='OpenStreetMap Labels',
+                    overlay=True,
+                    control=False
+                ).add_to(m)
 
         scroll_zoom_script = """
         <script>

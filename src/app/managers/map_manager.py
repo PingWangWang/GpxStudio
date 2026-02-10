@@ -41,9 +41,11 @@ class MapManager:
         """显示初始地图（默认北京中心）"""
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
 
         # 创建以北京为中心的基础地图
-        m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10, map_source=map_source)
+        m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10, map_type=map_mode, map_source=map_source)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
@@ -56,6 +58,9 @@ class MapManager:
 
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [39.9042, 116.4074]
+                self.current_zoom = 10
                 self.logger.info("初始地图已加载")
             else:
                 self.logger.error("地图视图为None，无法加载地图")
@@ -67,6 +72,9 @@ class MapManager:
                 # 重新尝试加载地图
                 try:
                     self.map_view.setUrl(url)
+                    # 保存当前中心和缩放级别
+                    self.current_center = [39.9042, 116.4074]
+                    self.current_zoom = 10
                     self.logger.info("重新创建地图视图成功，初始地图已加载")
                 except RuntimeError as e2:
                     self.logger.error(f"重新创建的地图视图也被删除: {e2}")
@@ -138,15 +146,19 @@ class MapManager:
             # 保存缩放级别
             self.data_manager.last_map_zoom_level = zoom_level
 
+            # 获取地图模式
+            map_mode = map_config.get_map_mode()
             # 创建基础地图，使用智能缩放级别
-            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_source=map_source)
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
         else:
             # 多个地址：计算中心点，稍后使用fit_bounds自动适应
             center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
             center_lon = sum(get_lon(loc) for loc in locations) / len(locations)
 
+            # 获取地图模式
+            map_mode = map_config.get_map_mode()
             # 创建基础地图，使用默认缩放级别（稍后会被fit_bounds覆盖）
-            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_source=map_source)
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_type=map_mode, map_source=map_source)
             # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
             self.data_manager.last_map_zoom_level = None
 
@@ -220,6 +232,10 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [center_lat, center_lon]
+                self.current_zoom = zoom_level if len(locations) == 1 else 12
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法显示搜索结果")
         except RuntimeError as e:
@@ -280,8 +296,10 @@ class MapManager:
                 # 转换地图中心点坐标
                 center_lat, center_lon = CoordinateTransform.wgs84_to_gcj02(center_lat, center_lon)
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建基础地图
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=calculated_zoom_level, map_source=map_source)
+        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=calculated_zoom_level, map_type=map_mode, map_source=map_source)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
@@ -366,6 +384,10 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [center_lat, center_lon]
+                self.current_zoom = calculated_zoom_level
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法更新地图预览")
         except RuntimeError as e:
@@ -381,8 +403,10 @@ class MapManager:
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建基础地图，使用指定的缩放级别
-        m = MapRenderer.create_base_map([center_coords[0], center_coords[1]], zoom_start=zoom_level, map_source=map_source)
+        m = MapRenderer.create_base_map([center_coords[0], center_coords[1]], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
@@ -444,6 +468,10 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [center_coords[0], center_coords[1]]
+                self.current_zoom = zoom_level
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法更新简单地图预览")
         except RuntimeError as e:
@@ -483,8 +511,10 @@ class MapManager:
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建地图，聚焦到选中的位置
-        m = MapRenderer.create_base_map([coords[0], coords[1]], zoom_start=zoom_level, map_source=map_source)
+        m = MapRenderer.create_base_map([coords[0], coords[1]], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
 
         # 添加高亮标记（使用绿色颜色和图标表示选中）
         MapRenderer.add_marker(
@@ -506,7 +536,11 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [coords[0], coords[1]]
+                self.current_zoom = zoom_level
                 self.logger.debug(f"预览搜索结果: {name} at {coords}, zoom_level: {zoom_level}")
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法预览搜索结果")
         except RuntimeError as e:
@@ -544,9 +578,11 @@ class MapManager:
         # 确定地图中心（优先使用起点，否则使用第一个坐标点）
         center = self.data_manager.start_coords or valid_points[0]
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建基础地图
         map_create_start = time.time()
-        m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source)
+        m = MapRenderer.create_base_map(center, zoom_start=12, map_type=map_mode, map_source=map_source)
         map_create_time = (time.time() - map_create_start) * 1000
 
         # 添加已选择的点（起点、终点、途径点）
@@ -635,6 +671,10 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = center
+                self.current_zoom = 12
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法显示路线")
         except RuntimeError as e:
@@ -661,8 +701,10 @@ class MapManager:
         map_source = map_config.get_map_source()
         self.logger.debug(f"[MapManager] 地图数据源: {map_source}")
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建基础地图
-        m = MapRenderer.create_base_map([lat, lon], zoom_start=13, map_source=map_source)
+        m = MapRenderer.create_base_map([lat, lon], zoom_start=13, map_type=map_mode, map_source=map_source)
         self.logger.debug("[MapManager] 基础地图创建完成")
 
         # 添加定位标记
@@ -733,6 +775,10 @@ class MapManager:
         try:
             if self.map_view:
                 self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = [lat, lon]
+                self.current_zoom = 13
+                self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
                 self.logger.info(f"[MapManager] 地图显示完成: {lat}, {lon}")
             else:
                 self.logger.error("[MapManager] 地图视图为None，无法显示位置")
@@ -1037,11 +1083,14 @@ class MapManager:
         else:
             center_lat, center_lon = 39.9042, 116.4074
 
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
         # 创建地图（使用当前缩放级别）
         map_source = map_config.get_map_source()
         m = MapRenderer.create_base_map(
             [center_lat, center_lon],
             zoom_start=self.data_manager.current_zoom_level,
+            map_type=map_mode,
             map_source=map_source
         )
 
@@ -1066,3 +1115,43 @@ class MapManager:
             self.logger.info(f"[路线重渲染-降级] ✅ 完成: 耗时={elapsed:.2f}ms")
         else:
             self.logger.error("[路线重渲染-降级] 地图视图为None")
+
+    def show_map(self, center, zoom=10, title="地图"):
+        """
+        显示地图
+
+        参数:
+            center: 地图中心坐标 [纬度, 经度]
+            zoom: 缩放级别
+            title: 地图标题
+        """
+        from modules.map.map_renderer import MapRenderer
+        from services.config.map_config import map_config
+
+        # 获取地图模式
+        map_mode = map_config.get_map_mode()
+        # 获取地图源
+        map_source = map_config.get_map_source()
+
+        # 创建地图
+        m = MapRenderer.create_base_map(
+            center,
+            zoom_start=zoom,
+            map_type=map_mode,
+            map_source=map_source
+        )
+
+        # 保存地图并获取URL
+        url = MapRenderer.save_and_get_url(m)
+
+        # 在地图视图中加载地图
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+                # 保存当前中心和缩放级别
+                self.current_center = center
+                self.current_zoom = zoom
+            else:
+                self.logger.error("地图视图为None，无法显示地图")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法显示地图: {e}")

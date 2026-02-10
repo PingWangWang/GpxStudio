@@ -631,6 +631,39 @@ class GpxStudio(QMainWindow):
             }
         """
 
+        # 创建地图模式切换按钮（最顶部）
+        self.map_mode_button = QPushButton()
+        self.map_mode_button.setText("🗺️")
+        self.map_mode_button.setToolTip("切换地图模式（卫星/街道）")
+        print(f"[调试] 地图模式按钮: {self.map_mode_button}")
+        self.map_mode_button.setFixedSize(control_height, control_height)
+        self.map_mode_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+            QPushButton:checked {
+                background-color: #e3f2fd;
+                border: 1px solid #2196f3;
+            }
+        """)
+        self.map_mode_button.setCheckable(True)  # 允许按钮被选中
+        self.map_mode_button.clicked.connect(self.on_map_mode_toggled)
+        # 加载地图模式设置并更新按钮状态
+        from services.config.map_config import map_config
+        map_mode = map_config.get_map_mode()
+        self.map_mode_button.setChecked(map_mode == 'satellite')
+        right_buttons_layout.addWidget(self.map_mode_button)
+
         # 创建地图设置按钮
         self.map_settings_button = QPushButton()
         self.map_settings_button.setText("⚙️")
@@ -778,7 +811,7 @@ class GpxStudio(QMainWindow):
 
         # 创建加载进度按钮（使用emoji样式）
         self.loading_button = QPushButton()
-        self.loading_button.setText("🔆")
+        self.loading_button.setText("")  # 空文本，避免父类绘制重复图标
         self.loading_button.setToolTip("加载状态指示器")
         print(f"[调试] 加载按钮: {self.loading_button}")
         self.loading_button.setFixedSize(control_height, control_height)
@@ -788,14 +821,16 @@ class GpxStudio(QMainWindow):
                 border: none;
                 border-radius: 4px;
                 padding: 0px;
-                font-size: 16px;
-                text-align: left;
+                font-size: 18px;
+                text-align: center;
             }
             QPushButton:hover {
                 background-color: #f0f0f0;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             }
             QPushButton:pressed {
                 background-color: #e0e0e0;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
             }
         """)
         self.loading_button.show()  # 固定显示，不做显隐切换
@@ -805,20 +840,14 @@ class GpxStudio(QMainWindow):
             from PyQt5.QtGui import QPainter, QFont
             from PyQt5.QtCore import Qt, QPointF
             
+            # 先调用父类的paintEvent，确保样式表（包括阴影）能够正常应用
+            QPushButton.paintEvent(self.loading_button, event)
+            
             painter = QPainter(self.loading_button)
             painter.setRenderHint(QPainter.Antialiasing)
             
-            # 绘制背景
+            # 获取按钮矩形
             rect = self.loading_button.rect()
-            if self.loading_button.isDown():
-                painter.fillRect(rect, self.loading_button.palette().color(self.loading_button.backgroundRole()).darker(110))
-            elif self.loading_button.underMouse():
-                painter.fillRect(rect, self.loading_button.palette().color(self.loading_button.backgroundRole()).lighter(105))
-            
-            # 设置字体
-            font = QFont()
-            font.setPointSize(16)
-            painter.setFont(font)
             
             # 保存painter状态
             painter.save()
@@ -830,10 +859,15 @@ class GpxStudio(QMainWindow):
             # 应用旋转
             painter.rotate(self.loading_rotation)
             
-            # 绘制emoji文本（左侧对齐，与其他按钮保持一致）
+            # 绘制emoji文本（居中显示）
             text = "🔆"
-            # 使用固定坐标确保左侧对齐
-            painter.drawText(-12, 8, text)
+            # 设置字体
+            font = QFont()
+            font.setPointSize(18)
+            painter.setFont(font)
+            # 使用Qt的对齐方式确保居中
+            # 绘制一个以原点为中心的矩形，然后在其中居中绘制文本
+            painter.drawText(-18, -18, 36, 36, Qt.AlignCenter, text)
             
             # 恢复painter状态
             painter.restore()
@@ -948,7 +982,7 @@ class GpxStudio(QMainWindow):
 
         # 路线按钮
         self.route_button = QPushButton()
-        self.route_button.setText("🗺️")
+        self.route_button.setText("🛣")
         self.route_button.setToolTip("路线")
         self.route_button.clicked.connect(self.on_route_button_clicked)
         self.route_button.setFixedSize(control_height, control_height)
@@ -1870,6 +1904,30 @@ class GpxStudio(QMainWindow):
         """定位按钮点击"""
         self.start_loading_animation()  # 启动加载动画
         self.location_manager.get_current_location()
+
+    def on_map_mode_toggled(self, checked):
+        """地图模式切换按钮点击事件"""
+        self.logger.debug(f"[地图] 地图模式切换按钮点击: {checked}")
+        
+        # 根据按钮状态切换地图模式
+        map_mode = 'satellite' if checked else 'roadmap'
+        
+        # 保存地图模式到配置
+        from services.config.map_config import map_config
+        map_config.set_map_mode(map_mode)
+        
+        # 重新加载地图，使用新的地图模式
+        if hasattr(self, 'map_manager'):
+            # 获取当前地图的中心和缩放级别
+            current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
+            current_zoom = getattr(self.map_manager, 'current_zoom', 10)
+            
+            # 重新显示地图
+            self.map_manager.show_map(
+                center=current_center,
+                zoom=current_zoom,
+                title="地图"
+            )
 
     def on_map_settings_clicked(self):
         """地图设置按钮点击"""

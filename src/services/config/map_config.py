@@ -36,6 +36,11 @@ class MapConfig(IConfigService):
             self._config_data['map_source'] = ""
             config_updated = True
 
+        # 确保包含地图模式配置
+        if 'map_mode' not in self._config_data:
+            self._config_data['map_mode'] = "roadmap"
+            config_updated = True
+
         # 确保包含高德地图配置
         if 'gaode' not in self._config_data:
             self._config_data['gaode'] = {
@@ -237,6 +242,18 @@ class MapConfig(IConfigService):
     def is_available(self) -> bool:
         """检查配置是否可用"""
         return self.is_configured
+
+    def get_map_mode(self) -> str:
+        """获取地图模式"""
+        return self._config_data.get('map_mode', 'roadmap')
+
+    def set_map_mode(self, map_mode: str) -> bool:
+        """设置地图模式"""
+        try:
+            self._config_data['map_mode'] = map_mode
+            return self.save_config(self._config_data)
+        except Exception:
+            return False
 
 
 map_config = MapConfig()
