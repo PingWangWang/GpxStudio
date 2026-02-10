@@ -646,11 +646,18 @@ class RouteManager(QObject):
         default_filename = self._generate_gpx_filename()
         self.logger.debug(f"生成默认文件名: {default_filename}")
 
+        # 读取上次导出路径
+        last_export_path = self._get_last_export_path()
+        if last_export_path:
+            default_path = os.path.join(last_export_path, default_filename)
+        else:
+            default_path = default_filename
+
         # 打开文件保存对话框
         file_path, _ = QFileDialog.getSaveFileName(
             self.ui_updater['main_window'],
             "保存GPX文件",
-            default_filename,
+            default_path,
             "GPX文件 (*.gpx);;所有文件 (*.*)"
         )
 
@@ -658,6 +665,12 @@ class RouteManager(QObject):
             # 用户取消了保存操作
             self.logger.info("GPX导出取消：用户未选择文件路径")
             return
+
+        # 保存上次导出路径
+        import os
+        export_dir = os.path.dirname(file_path)
+        if os.path.isdir(export_dir):
+            self._save_last_export_path(export_dir)
 
         self.logger.info(f"开始导出GPX文件: {file_path}")
 
@@ -724,7 +737,7 @@ class RouteManager(QObject):
     def _generate_gpx_filename(self) -> str:
         """生成默认GPX文件名（内部方法）
 
-        根据起点、终点、交通方式、时间和耗时生成默认文件名。
+        根据起点、终点和起始时间生成默认文件名。
 
         返回:
             默认的GPX文件名
@@ -733,20 +746,12 @@ class RouteManager(QObject):
         start_city = self._extract_city_name(self.data_manager.start_name or "起点")
         end_city = self._extract_city_name(self.data_manager.end_name or "终点")
 
-        # 获取交通方式
-        transport_mode = self.ui_updater['get_transport_mode']()
-
         # 获取起始时间
         start_datetime = self.ui_updater['get_start_time']()
         start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
 
-        # 格式化途径时间
-        duration_hours = self.data_manager.estimated_duration_seconds // 3600
-        duration_minutes = (self.data_manager.estimated_duration_seconds % 3600) // 60
-        duration_str = f"{duration_hours}小时{duration_minutes}分钟"
-
-        # 生成文件名：起点_终点_交通方式_时间_耗时.gpx
-        return f"{start_city}_{end_city}_{transport_mode}_{start_time_str}_{duration_str}.gpx"
+        # 生成文件名：起点_终点_时间.gpx
+        return f"{start_city}_{end_city}_{start_time_str}.gpx"
 
     def _extract_city_name(self, full_name: str) -> str:
         """从完整名称中提取城市名称（内部方法）
@@ -764,3 +769,42 @@ class RouteManager(QObject):
         # 清理空白字符
         city_name = city_name.strip()
         return city_name
+
+    def _get_last_export_path(self):
+        """获取上次导出路径"""
+        try:
+            from app.data_paths import get_config_dir
+            import json
+            import os
+            
+            config_path = os.path.join(get_config_dir(), 'export_config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get('last_export_path')
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 读取上次导出路径失败: {e}")
+        return None
+
+    def _save_last_export_path(self, export_path):
+        """保存上次导出路径"""
+        try:
+            from app.data_paths import get_config_dir
+            import json
+            import os
+            
+            config_path = os.path.join(get_config_dir(), 'export_config.json')
+            config = {}
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            
+            config['last_export_path'] = export_path
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+                
+            self.logger.debug(f"[GPX导出] 已保存上次导出路径: {export_path}")
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 保存上次导出路径失败: {e}")

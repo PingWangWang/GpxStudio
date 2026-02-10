@@ -3224,6 +3224,45 @@ class GpxStudio(QMainWindow):
         """GPX导出弹出面板关闭"""
         self.logger.debug("[GPX导出] 弹出面板已关闭")
 
+    def _get_last_export_path(self):
+        """获取上次导出路径"""
+        try:
+            from app.data_paths import get_config_dir
+            import json
+            import os
+            
+            config_path = os.path.join(get_config_dir(), 'export_config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get('last_export_path')
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 读取上次导出路径失败: {e}")
+        return None
+
+    def _save_last_export_path(self, export_path):
+        """保存上次导出路径"""
+        try:
+            from app.data_paths import get_config_dir
+            import json
+            import os
+            
+            config_path = os.path.join(get_config_dir(), 'export_config.json')
+            config = {}
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            
+            config['last_export_path'] = export_path
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+                
+            self.logger.debug(f"[GPX导出] 已保存上次导出路径: {export_path}")
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 保存上次导出路径失败: {e}")
+
     def _export_gpx_file(self, route_data: dict, start_time, export_elevation=False):
         """执行GPX文件导出"""
         try:
@@ -3251,19 +3290,37 @@ class GpxStudio(QMainWindow):
             import re
             safe_start = re.sub(r'[\\/:*?"<>|]', '', start_name)
             safe_end = re.sub(r'[\\/:*?"<>|]', '', end_name)
-            default_filename = f"{safe_start}_{safe_end}.gpx"
+            
+            # 添加起始时间后缀
+            if start_time and hasattr(start_time, 'toString'):
+                time_str = start_time.toString("yyyyMMdd_hhmm")
+                default_filename = f"{safe_start}_{safe_end}_{time_str}.gpx"
+            else:
+                default_filename = f"{safe_start}_{safe_end}.gpx"
+
+            # 读取上次导出路径
+            last_export_path = self._get_last_export_path()
+            if last_export_path:
+                default_path = os.path.join(last_export_path, default_filename)
+            else:
+                default_path = default_filename
 
             # 显示文件保存对话框
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "保存GPX文件",
-                default_filename,
+                default_path,
                 "GPX文件 (*.gpx);;所有文件 (*)"
             )
 
             if not file_path:
                 self.logger.info("[GPX导出] 用户取消了文件保存")
                 return
+
+            # 保存上次导出路径
+            export_dir = os.path.dirname(file_path)
+            if os.path.isdir(export_dir):
+                self._save_last_export_path(export_dir)
 
             # 确保文件扩展名为.gpx
             if not file_path.lower().endswith('.gpx'):
