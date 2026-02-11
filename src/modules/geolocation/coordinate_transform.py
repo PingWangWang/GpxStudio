@@ -98,16 +98,35 @@ class CoordinateTransform:
     @staticmethod
     def _out_of_china(lat: float, lon: float) -> bool:
         """
-        判断坐标是否在中国境外
+        判断坐标是否在中国境外（GCJ-02坐标系适用区域之外）
+        
+        注意：GCJ-02坐标系仅适用于中国大陆地区
+        台湾、香港、澳门等地区不使用GCJ-02坐标系，使用WGS-84坐标系
         
         Args:
             lat: 纬度
             lon: 经度
             
         Returns:
-            bool: 是否在中国境外
+            bool: 是否在GCJ-02适用区域之外（True表示不需要进行坐标转换）
         """
-        return not (73.66 < lon < 135.05 and 3.86 < lat < 53.55)
+        # 基本范围判断：不在中国经纬度范围内
+        if not (73.66 < lon < 135.05 and 3.86 < lat < 53.55):
+            return True
+        
+        # 台湾地区 (119.3°E-124.6°E, 21.9°N-25.3°N)
+        if 119.3 < lon < 124.6 and 21.9 < lat < 25.3:
+            return True
+        
+        # 香港地区 (113.8°E-114.5°E, 22.1°N-22.6°N)
+        if 113.8 < lon < 114.5 and 22.1 < lat < 22.6:
+            return True
+        
+        # 澳门地区 (113.5°E-113.6°E, 22.1°N-22.2°N)
+        if 113.5 < lon < 113.6 and 22.1 < lat < 22.2:
+            return True
+        
+        return False
     
     @staticmethod
     def transform_route_points(points: List[Tuple[float, float]], transform_func) -> List[Tuple[float, float]]:
