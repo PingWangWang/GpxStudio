@@ -493,9 +493,11 @@ class GaodeRoutingService(IRoutingService):
             # 添加途经点（如果有）
             if len(points) > 2:
                 waypoints = points[1:-1]
-                waypoints_str = "|".join([f"{lon},{lat}" for lat, lon in waypoints])
+                # 高德地图API要求多个途经点使用英文分号分隔
+                waypoints_str = ";".join([f"{lon},{lat}" for lat, lon in waypoints])
                 params['waypoints'] = waypoints_str
                 log_cb("DEBUG", f"规划路线: {start} -> {waypoints} -> {end}")
+                log_cb("DEBUG", f"途经点字符串: {waypoints_str}")
             else:
                 log_cb("DEBUG", f"规划路线: {start} -> {end}")
 
