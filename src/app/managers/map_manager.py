@@ -1141,6 +1141,34 @@ class MapManager:
             map_source=map_source
         )
 
+        # 添加已选择的点（起点、终点、途径点）
+        self._add_selected_points_to_map(m)
+
+        # 如果有路线数据，添加路线到地图
+        if hasattr(self.data_manager, 'route_points') and self.data_manager.route_points:
+            # 处理坐标转换：根据地图源和路线来源决定是否需要转换
+            route_points_to_render = self.data_manager.route_points
+
+            # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+            if map_source == 'gaode':
+                # 当前地图源是高德地图
+                has_original_gcj02 = False
+                if is_route_planned:
+                    # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            has_original_gcj02 = True
+                    except (IndexError, KeyError):
+                        pass
+
+            # 添加路线到地图
+            MapRenderer.add_route(m, route_points_to_render)
+
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
 

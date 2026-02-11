@@ -809,6 +809,30 @@ class GpxStudio(QMainWindow):
         """)
         right_buttons_layout.addWidget(self.locate_button)
 
+        # 创建ZOOM按钮（倒数第二个位置）
+        self.zoom_fit_button = QPushButton()
+        self.zoom_fit_button.setText("⏺️")
+        self.zoom_fit_button.setToolTip("自动缩放以显示所有元素")
+        print(f"[调试] ZOOM按钮: {self.zoom_fit_button}")
+        self.zoom_fit_button.clicked.connect(self.on_zoom_fit_clicked)
+        self.zoom_fit_button.setFixedSize(control_height, control_height)
+        self.zoom_fit_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
+        right_buttons_layout.addWidget(self.zoom_fit_button)
+
         # 创建加载进度按钮（使用emoji样式）
         self.loading_button = QPushButton()
         self.loading_button.setText("")  # 空文本，避免父类绘制重复图标
@@ -1904,6 +1928,84 @@ class GpxStudio(QMainWindow):
         """定位按钮点击"""
         self.start_loading_animation()  # 启动加载动画
         self.location_manager.get_current_location()
+
+    def on_zoom_fit_clicked(self):
+        """ZOOM按钮点击，自动缩放以显示所有元素"""
+        self.logger.info("[缩放] ZOOM按钮点击，开始计算边界框")
+        
+        # 收集所有需要显示的点
+        all_points = []
+        
+        # 添加起点、终点、途径点
+        if hasattr(self, 'data_manager'):
+            # 添加起点
+            if hasattr(self.data_manager, 'start_coords') and self.data_manager.start_coords:
+                all_points.append(self.data_manager.start_coords)
+            
+            # 添加终点
+            if hasattr(self.data_manager, 'end_coords') and self.data_manager.end_coords:
+                all_points.append(self.data_manager.end_coords)
+            
+            # 添加途径点
+            if hasattr(self.data_manager, 'waypoints_coords') and self.data_manager.waypoints_coords:
+                all_points.extend(self.data_manager.waypoints_coords)
+            
+            # 添加路线点
+            if hasattr(self.data_manager, 'route_points') and self.data_manager.route_points:
+                # 过滤掉None值
+                route_points = [p for p in self.data_manager.route_points if p is not None]
+                all_points.extend(route_points)
+        
+        # 如果没有点，保持现状
+        if not all_points:
+            self.logger.warning("[缩放] 没有找到地图元素，保持现状")
+            # 不执行任何操作，保持地图现状
+            return
+        
+        # 计算边界框
+        lats = [p[0] for p in all_points]
+        lons = [p[1] for p in all_points]
+        
+        min_lat = min(lats)
+        max_lat = max(lats)
+        min_lon = min(lons)
+        max_lon = max(lons)
+        
+        # 计算中心点
+        center_lat = (min_lat + max_lat) / 2
+        center_lon = (min_lon + max_lon) / 2
+        center = [center_lat, center_lon]
+        
+        # 计算边界框的宽度和高度（以度为单位）
+        lat_range = max_lat - min_lat
+        lon_range = max_lon - min_lon
+        
+        # 计算合适的缩放级别
+        # 简单的缩放级别计算，基于边界框大小
+        # 这里使用一个经验公式，实际应用中可能需要更复杂的计算
+        import math
+        
+        # 计算边界框的对角线长度（以度为单位）
+        diagonal = math.sqrt(lat_range**2 + lon_range**2)
+        
+        # 根据对角线长度计算缩放级别
+        # 这里使用一个简单的映射，实际应用中可能需要根据地图投影进行调整
+        if diagonal == 0:
+            # 只有一个点，使用默认缩放级别
+            zoom = 15
+        else:
+            # 经验公式：对角线长度越大，缩放级别越小
+            zoom = int(10 - math.log(diagonal, 2))
+            # 限制缩放级别的范围
+            zoom = max(2, min(18, zoom))
+        
+        self.logger.info(f"[缩放] 计算完成：中心点={center}，缩放级别={zoom}")
+        
+        # 更新地图显示
+        if hasattr(self, 'map_manager'):
+            self.map_manager.show_map(center=center, zoom=zoom, title="地图")
+        else:
+            self.logger.warning("[缩放] 地图管理器不存在")
 
     def on_map_mode_toggled(self, checked):
         """地图模式切换按钮点击事件"""
