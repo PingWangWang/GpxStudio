@@ -99,9 +99,10 @@ class MapServer:
         
         # 共享的Session对象，复用TCP连接，显著提升下载性能
         self.session = requests.Session()
+        # 设置通用的User-Agent，不包含特定的Referer
+        # 具体的Referer将在请求时根据瓦片源动态设置
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.amap.com/',
+            'User-Agent': 'GPX Studio/2.0.10 (Windows; contact: 1341783770@qq.com)',
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
             'Connection': 'keep-alive'
         })
@@ -340,9 +341,17 @@ class MapServer:
                         if attempt > 0:
                             time.sleep(0.2 * attempt)
                         
-                        # 使用共享的session下载
-                        # 移除单次request的header设置，因为已经配置在session中
-                        response = server_instance.session.get(url, timeout=5)
+                        # 根据URL判断瓦片源，设置合适的Referer
+                        headers = {}
+                        if 'openstreetmap.org' in url:
+                            # OpenStreetMap要求有效的Referer
+                            headers['Referer'] = 'https://www.openstreetmap.org/'
+                        elif 'autonavi.com' in url or 'amap.com' in url:
+                            # 高德地图
+                            headers['Referer'] = 'https://www.amap.com/'
+                        
+                        # 使用共享的session下载，传入特定的headers
+                        response = server_instance.session.get(url, headers=headers, timeout=5)
                         
                         if response.status_code == 200:
                             # 写入临时文件再改名，保证原子性

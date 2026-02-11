@@ -263,9 +263,18 @@ class MapRenderer:
                     control=False
                 ).add_to(m)
         else:
-            # 使用OSM地图瓦片
+            # 使用OSM地图瓦片（通过代理服务器缓存）
+            from .http_server import get_map_server
+            server = get_map_server()
+            server.start()
+            port = server.port
+            
+            # 使用本地代理URL，实现OSM瓦片缓存
+            # 格式: http://127.0.0.1:{port}/tiles/{source}/{style}/{z}/{x}/{y}
+            proxy_url_base = f'http://127.0.0.1:{port}/tiles/osm'
+            
             osm_tile_urls = {
-                'roadmap': 'OpenStreetMap',
+                'roadmap': f'{proxy_url_base}/roadmap/{{z}}/{{x}}/{{y}}',
                 'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 'hybrid': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             }
