@@ -119,7 +119,7 @@ from services.config.map_config import map_config
 from core.logging_setup import clean_logs, open_log_directory, get_log_size, set_log_level
 from services.config import about_config
 import os
-from app.data_paths import get_geo_info_file, get_route_history_file
+from app.data_paths import get_geo_info_file, get_route_history_file, get_cache_dir
 
 
 class CustomArrowButton(QPushButton):
@@ -984,7 +984,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 220)
+        self.setFixedSize(300, 250)
         self._init_ui()
         self.load_current_config()
 
@@ -993,6 +993,17 @@ class LogSettingsPopup(BaseSettingsPopup):
         if os.path.exists(file_path):
             return os.path.getsize(file_path) / (1024 * 1024)
         return 0.0
+    
+    def get_directory_size(self, directory):
+        """获取目录大小（MB）"""
+        total_size = 0
+        if os.path.exists(directory):
+            for dirpath, dirnames, filenames in os.walk(directory):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    if os.path.exists(filepath):
+                        total_size += os.path.getsize(filepath)
+        return total_size / (1024 * 1024)
 
     def show_popup(self, button_widget):
         """
@@ -1291,6 +1302,50 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         content_layout.addLayout(row4_layout)
 
+        # 缓存文件大小和清理按钮
+        row5_layout = QHBoxLayout()
+        row5_layout.setSpacing(6)
+
+        cache_size = self.get_directory_size(get_cache_dir())
+        self.cache_size_text = QLineEdit()
+        self.cache_size_text.setReadOnly(True)
+        self.cache_size_text.setFixedHeight(30)
+        self.cache_size_text.setText(f"缓存文件大小: {cache_size:.2f} MB")
+        self.cache_size_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row5_layout.addWidget(self.cache_size_text, 3)
+
+        self.clean_cache_btn = QPushButton("清理缓存")
+        self.clean_cache_btn.clicked.connect(self.on_clean_cache)
+        self.clean_cache_btn.setFixedHeight(30)
+        self.clean_cache_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        row5_layout.addWidget(self.clean_cache_btn, 0)
+
+        content_layout.addLayout(row5_layout)
+
         main_layout.addLayout(content_layout)
 
     def load_current_config(self):
@@ -1363,6 +1418,27 @@ class LogSettingsPopup(BaseSettingsPopup):
                 self.load_current_config()
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"清理路线历史文件失败: {str(e)}")
+    
+    def on_clean_cache(self):
+        """清理缓存文件"""
+        reply = QMessageBox.question(self, "确认", "确定要清理所有缓存文件吗？",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                import shutil
+                cache_dir = get_cache_dir()
+                if os.path.exists(cache_dir):
+                    for item in os.listdir(cache_dir):
+                        item_path = os.path.join(cache_dir, item)
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                        elif os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
+                QMessageBox.information(self, "成功", "缓存文件已清理")
+                self._init_ui()
+                self.load_current_config()
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"清理缓存文件失败: {str(e)}")
 
 
 class AboutPopup(BaseSettingsPopup):

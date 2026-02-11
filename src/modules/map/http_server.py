@@ -4,13 +4,18 @@ import socketserver
 import threading
 import os
 import tempfile
+from app.data_paths import get_cache_dir
 
 class MapServer:
     def __init__(self):
         self.port = 8000
         self.httpd = None
         self.thread = None
-        self.base_dir = tempfile.mkdtemp(prefix='gpx_studio_map_')
+        # 创建应用程序缓存目录下的temp子目录
+        cache_temp_dir = os.path.join(get_cache_dir(), 'Temp')
+        os.makedirs(cache_temp_dir, exist_ok=True)
+        # 在应用程序缓存目录下创建临时目录
+        self.base_dir = tempfile.mkdtemp(prefix='gpx_studio_map_', dir=cache_temp_dir)
         self.server_address = ('', self.port)
 
         # 保存当前实例的引用
@@ -63,7 +68,9 @@ class MapServer:
             if not self.port:
                 logger.error("HTTP服务器端口未设置")
                 # 回退到临时文件方式
-                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                cache_temp_dir = os.path.join(get_cache_dir(), 'temp')
+                os.makedirs(cache_temp_dir, exist_ok=True)
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html', dir=cache_temp_dir)
                 temp_path = html_file.name
                 html_file.close()
                 map_obj.save(temp_path)
@@ -79,7 +86,9 @@ class MapServer:
             if not os.path.exists(file_path):
                 logger.error(f"地图文件创建失败: {file_path}")
                 # 回退到临时文件方式
-                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+                cache_temp_dir = os.path.join(get_cache_dir(), 'temp')
+                os.makedirs(cache_temp_dir, exist_ok=True)
+                html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html', dir=cache_temp_dir)
                 temp_path = html_file.name
                 html_file.close()
                 map_obj.save(temp_path)
@@ -93,7 +102,9 @@ class MapServer:
         except Exception as e:
             logger.error(f"保存地图到HTTP服务器失败: {str(e)}")
             # 出错时回退到临时文件方式
-            html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html')
+            cache_temp_dir = os.path.join(get_cache_dir(), 'temp')
+            os.makedirs(cache_temp_dir, exist_ok=True)
+            html_file = tempfile.NamedTemporaryFile(delete=False, suffix='.html', dir=cache_temp_dir)
             temp_path = html_file.name
             html_file.close()
             map_obj.save(temp_path)
