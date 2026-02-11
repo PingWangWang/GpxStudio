@@ -119,7 +119,7 @@ from services.config.map_config import map_config
 from core.logging_setup import clean_logs, open_log_directory, get_log_size, set_log_level
 from services.config import about_config
 import os
-from app.data_paths import get_geo_info_file, get_route_history_file, get_cache_dir
+from app.data_paths import get_geo_info_file, get_route_history_file, get_cache_dir, get_gaode_cache_dir, get_osm_cache_dir
 
 
 class CustomArrowButton(QPushButton):
@@ -251,7 +251,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 240)  # 设置宽度为300px
+        self.setFixedSize(300, 250)  # 减少高度
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -565,6 +565,44 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         status_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # 关闭动作选择
+        self.close_action_combo = QComboBox()
+        self.close_action_combo.addItem("直接退出程序", "exit")
+        self.close_action_combo.addItem("最小化到系统托盘", "hide")
+        self.close_action_combo.setFixedHeight(30)
+        self.close_action_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.close_action_combo.setStyleSheet(self.map_source_combo.styleSheet())
+        
+        # 创建关闭动作容器（为了保持布局一致性）
+        close_action_container = QWidget()
+        close_action_layout = QHBoxLayout(close_action_container)
+        close_action_layout.setContentsMargins(0, 0, 0, 0)
+        close_action_layout.addWidget(self.close_action_combo)
+        
+        # 添加占位按钮保持对齐
+        close_action_placeholder = QPushButton()
+        close_action_placeholder.setFixedSize(30, 30)
+        close_action_placeholder.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
+        close_action_placeholder.setEnabled(False)
+        close_action_layout.addWidget(close_action_placeholder)
+        close_action_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # 关闭动作行
+        close_action_row = QHBoxLayout()
+        close_action_label = QLabel("关闭时:")
+        close_action_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        close_action_label.setFixedWidth(80)
+        close_action_label.setFixedHeight(30)
+        close_action_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        close_action_row.addWidget(close_action_label)
+        close_action_row.addSpacing(10)
+        close_action_row.addWidget(close_action_container)
+        close_action_row.setContentsMargins(0, 0, 0, 0)
+        close_action_row.setSpacing(0)
+        close_action_row.setStretch(0, 0)
+        close_action_row.setStretch(1, 0)
+        close_action_row.setStretch(2, 1)
+
         # 配置表单
         config_layout = QVBoxLayout()
         config_layout.setSpacing(-1)  # 设置为-1表示尽可能小的间距
@@ -588,6 +626,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         config_layout.addLayout(source_row)
 
         # API Key行
+        api_key_row = QHBoxLayout()
         api_key_row = QHBoxLayout()
         api_key_label = QLabel("API Key:")
         api_key_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
@@ -615,7 +654,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         api_key_row.setStretch(2, 1)  # 确保容器拉伸
         config_layout.addLayout(api_key_row)
 
-        # 安全密钥行
+        # 安全密钥行 (当前版本暂不支持，隐藏)
         security_key_row = QHBoxLayout()
         security_key_label = QLabel("安全密钥:")
         security_key_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
@@ -641,7 +680,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         security_key_row.setStretch(0, 0)  # 确保标签不拉伸
         security_key_row.setStretch(1, 0)  # 确保间距不拉伸
         security_key_row.setStretch(2, 1)  # 确保容器拉伸
-        config_layout.addLayout(security_key_row)
+        # config_layout.addLayout(security_key_row)
 
         # 配置状态行
         status_row = QHBoxLayout()
@@ -656,6 +695,15 @@ class MapSettingsPopup(BaseSettingsPopup):
         status_row.setContentsMargins(0, 0, 0, 0)  # 清除行布局的边距
         status_row.setSpacing(0)  # 清除行内间距
         config_layout.addLayout(status_row)
+
+        # 分隔线
+        line_close = QFrame()
+        line_close.setFrameShape(QFrame.HLine)
+        line_close.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 2px 0;")
+        config_layout.addWidget(line_close)
+        
+        # 添加关闭动作行
+        config_layout.addLayout(close_action_row)
 
         main_layout.addLayout(config_layout)
 
@@ -774,7 +822,7 @@ class MapSettingsPopup(BaseSettingsPopup):
             self.security_key_edit.setEnabled(True)
             self.security_key_eye_btn.setEnabled(True)
             self.test_btn.setEnabled(True)
-            self.save_btn.setEnabled(False)  # 切换到高德地图时，保存按钮禁用
+            self.save_btn.setEnabled(True)  # 切换到高德地图时，保存按钮保持可用
             self.connection_tested = False  # 重置测试连接状态
             # 恢复占位符文本
             self.api_key_edit.setPlaceholderText("请输入高德地图API Key")
@@ -845,6 +893,15 @@ class MapSettingsPopup(BaseSettingsPopup):
     def load_current_config(self):
         """加载当前配置"""
         map_source = map_config.get_map_source()
+        
+        # 加载关闭动作配置
+        close_action = map_config.get_close_action()
+        index = self.close_action_combo.findData(close_action)
+        if index >= 0:
+            self.close_action_combo.setCurrentIndex(index)
+        else:
+            self.close_action_combo.setCurrentIndex(0) # 默认直接退出
+
         if not map_source:
             self.map_source_combo.setCurrentIndex(0)
         elif map_source == "gaode":
@@ -879,13 +936,11 @@ class MapSettingsPopup(BaseSettingsPopup):
             # 使用自定义消息提示框
             msg_box = CustomMessageBox(self, "成功", f"连接测试成功！\n找到 {len(result)} 个结果")
             msg_box.show_message()
-            self.save_btn.setEnabled(True)  # 测试成功后，启用保存按钮
             self.connection_tested = True  # 设置测试连接状态为成功
         else:
             # 使用自定义消息提示框
             msg_box = CustomMessageBox(self, "失败", "连接测试失败，请检查API Key是否正确")
             msg_box.show_message()
-            self.save_btn.setEnabled(False)  # 测试失败后，保持保存按钮禁用
             self.connection_tested = False  # 设置测试连接状态为失败
 
     def save_config(self):
@@ -897,6 +952,10 @@ class MapSettingsPopup(BaseSettingsPopup):
             map_source = "gaode"
         else:
             map_source = "osm"
+            
+        # 获取关闭动作
+        close_action = self.close_action_combo.currentData()
+        print(f"[MapSettings] 保存配置 - 关闭动作: {close_action}")
 
         # 获取API Key和安全密钥
         if map_source == "osm":
@@ -916,6 +975,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         config = {
             "map_source": map_source,
+            "close_action": close_action,
             "api_key": api_key,
             "security_key": security_key
         }
@@ -970,7 +1030,6 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 只有当当前地图源是高德地图时，才需要重置测试连接状态
         if self.map_source_combo.currentIndex() == 2:
             self.connection_tested = False
-            self.save_btn.setEnabled(False)
 
     def hide(self):
         """隐藏弹出面板并发出关闭信号"""
@@ -1152,7 +1211,7 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_level_combo.currentIndexChanged.connect(self.on_log_level_changed)
         row1_layout.addWidget(self.log_level_combo, 1)
 
-        self.open_log_btn = QPushButton("打开日志目录")
+        self.open_log_btn = QPushButton("打开目录")
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
         self.open_log_btn.setFixedHeight(30)
         self.open_log_btn.setStyleSheet("""
@@ -1306,11 +1365,13 @@ class LogSettingsPopup(BaseSettingsPopup):
         row5_layout = QHBoxLayout()
         row5_layout.setSpacing(6)
 
-        cache_size = self.get_directory_size(get_cache_dir())
+        # 只计算Temp目录的大小
+        temp_cache_dir = os.path.join(get_cache_dir(), 'Temp')
+        cache_size = self.get_directory_size(temp_cache_dir)
         self.cache_size_text = QLineEdit()
         self.cache_size_text.setReadOnly(True)
         self.cache_size_text.setFixedHeight(30)
-        self.cache_size_text.setText(f"缓存文件大小: {cache_size:.2f} MB")
+        self.cache_size_text.setText(f"界面渲染缓存大小: {cache_size:.2f} MB")
         self.cache_size_text.setStyleSheet("""
             QLineEdit {
                 padding: 0px 8px;
@@ -1345,6 +1406,53 @@ class LogSettingsPopup(BaseSettingsPopup):
         row5_layout.addWidget(self.clean_cache_btn, 0)
 
         content_layout.addLayout(row5_layout)
+
+        # 地图瓦片缓存
+        row6_layout = QHBoxLayout()
+        row6_layout.setSpacing(6)
+        
+        gaode_size = self.get_directory_size(get_gaode_cache_dir())
+        osm_size = self.get_directory_size(get_osm_cache_dir())
+        tiles_size = gaode_size + osm_size
+        
+        self.tiles_size_text = QLineEdit()
+        self.tiles_size_text.setReadOnly(True)
+        self.tiles_size_text.setFixedHeight(30)
+        self.tiles_size_text.setText(f"地图瓦片缓存大小: {tiles_size:.2f} MB")
+        self.tiles_size_text.setStyleSheet("""
+            QLineEdit {
+                padding: 0px 8px;
+                border: none;
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.9);
+                font-size: 12px;
+                color: #333333;
+                min-height: 30px;
+                max-height: 30px;
+            }
+        """)
+        row6_layout.addWidget(self.tiles_size_text, 3)
+
+        self.clean_tiles_btn = QPushButton("清理瓦片")
+        self.clean_tiles_btn.clicked.connect(self.on_clean_map_tiles)
+        self.clean_tiles_btn.setFixedHeight(30)
+        self.clean_tiles_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        row6_layout.addWidget(self.clean_tiles_btn, 0)
+        
+        content_layout.addLayout(row6_layout)
 
         main_layout.addLayout(content_layout)
 
@@ -1420,25 +1528,51 @@ class LogSettingsPopup(BaseSettingsPopup):
                 QMessageBox.critical(self, "错误", f"清理路线历史文件失败: {str(e)}")
     
     def on_clean_cache(self):
-        """清理缓存文件"""
-        reply = QMessageBox.question(self, "确认", "确定要清理所有缓存文件吗？",
+        """清理界面渲染缓存文件"""
+        reply = QMessageBox.question(self, "确认", "确定要清理界面渲染缓存文件吗？",
                                      QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             try:
                 import shutil
-                cache_dir = get_cache_dir()
+                # 只清理Temp目录
+                cache_dir = os.path.join(get_cache_dir(), 'Temp')
                 if os.path.exists(cache_dir):
-                    for item in os.listdir(cache_dir):
-                        item_path = os.path.join(cache_dir, item)
-                        if os.path.isfile(item_path):
-                            os.remove(item_path)
-                        elif os.path.isdir(item_path):
-                            shutil.rmtree(item_path)
-                QMessageBox.information(self, "成功", "缓存文件已清理")
+                    # 删除整个Temp目录及其内容
+                    shutil.rmtree(cache_dir)
+                    # 重新创建空目录
+                    os.makedirs(cache_dir, exist_ok=True)
+                
+                QMessageBox.information(self, "成功", "界面渲染缓存已清理")
                 self._init_ui()
                 self.load_current_config()
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"清理缓存文件失败: {str(e)}")
+
+    def on_clean_map_tiles(self):
+        """清理地图瓦片缓存"""
+        reply = QMessageBox.question(self, "确认", "确定要清理所有地图瓦片缓存吗？\n这会删除已下载的高德和OSM地图瓦片。",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                import shutil
+                
+                # 清理高德地图缓存
+                gaode_dir = get_gaode_cache_dir()
+                if os.path.exists(gaode_dir):
+                    shutil.rmtree(gaode_dir)
+                    os.makedirs(gaode_dir, exist_ok=True)
+                
+                # 清理OSM地图缓存
+                osm_dir = get_osm_cache_dir()
+                if os.path.exists(osm_dir):
+                    shutil.rmtree(osm_dir)
+                    os.makedirs(osm_dir, exist_ok=True)
+                
+                QMessageBox.information(self, "成功", "地图瓦片缓存已清理")
+                self._init_ui()
+                self.load_current_config()
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"清理地图瓦片缓存失败: {str(e)}")
 
 
 class AboutPopup(BaseSettingsPopup):

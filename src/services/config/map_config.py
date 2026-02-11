@@ -41,6 +41,11 @@ class MapConfig(IConfigService):
             self._config_data['map_mode'] = "roadmap"
             config_updated = True
 
+        # 确保包含关闭动作配置
+        if 'close_action' not in self._config_data:
+            self._config_data['close_action'] = "exit"  # 默认为直接退出
+            config_updated = True
+
         # 确保包含高德地图配置
         if 'gaode' not in self._config_data:
             self._config_data['gaode'] = {
@@ -251,6 +256,18 @@ class MapConfig(IConfigService):
         """设置地图模式"""
         try:
             self._config_data['map_mode'] = map_mode
+            return self.save_config(self._config_data)
+        except Exception:
+            return False
+
+    def get_close_action(self) -> str:
+        """获取关闭动作"""
+        return self._config_data.get('close_action', 'exit')
+
+    def set_close_action(self, action: str) -> bool:
+        """设置关闭动作"""
+        try:
+            self._config_data['close_action'] = action
             return self.save_config(self._config_data)
         except Exception:
             return False

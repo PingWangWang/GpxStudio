@@ -7,6 +7,7 @@ import os
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon
 from core.resource_path import get_icon_path
+from modules.map.http_server import get_map_server
 
 
 class WindowManager:
@@ -167,17 +168,41 @@ class WindowManager:
         
         隐藏托盘图标并退出应用程序。
         """
+        print("[WindowManager] Closing application...")
+        
+        # 停止地图服务
+        try:
+            get_map_server().stop()
+        except Exception as e:
+            print(f"[WindowManager] Error stopping map server: {e}")
+            
         if self.tray_icon:
             self.tray_icon.hide()
+            
+        print("[WindowManager] Quitting QApplication...")
         QApplication.quit()
 
     def handle_close_event(self, event):
         """处理关闭事件
         
-        当用户点击窗口关闭按钮时，直接退出应用程序。
+        当用户点击窗口关闭按钮时，根据配置决定是退出还是隐藏到托盘。
         
         参数:
             event: 关闭事件对象
         """
-        # 直接接受关闭事件，退出应用程序
-        event.accept()
+        from services.config.map_config import map_config
+        
+        close_action = map_config.get_close_action()
+        print(f"[WindowManager] 处理关闭事件 - 配置动作: {close_action}")
+        
+        if close_action == 'hide' and QSystemTrayIcon.isSystemTrayAvailable():
+            # 隐藏窗口而不是退出
+            event.ignore()
+            self.main_window.hide()
+            # 可以选择性显示气泡提示
+            # self.tray_icon.showMessage("GPX Studio", "应用程序已最小化到系统托盘", QSystemTrayIcon.Information, 2000)
+        else:
+            # 直接接受关闭事件，退出应用程序
+            event.accept()
+            # 显式调用退出函数，确保完全退出（包括销毁托盘、停止后台线程等）
+            self.close_application()

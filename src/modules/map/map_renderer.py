@@ -221,11 +221,20 @@ class MapRenderer:
         )
 
         if map_source == 'gaode':
-            # 使用高德地图瓦片
+            # 确保服务器已启动以获取端口
+            from .http_server import get_map_server
+            server = get_map_server()
+            server.start()
+            port = server.port
+            
+            # 使用本地代理URL
+            # 格式: http://127.0.0.1:{port}/tiles/{source}/{style}/{z}/{x}/{y}
+            proxy_url_base = f'http://127.0.0.1:{port}/tiles/gaode'
+            
             tile_urls = {
-                'roadmap': 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-                'satellite': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
-                'hybrid': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+                'roadmap': f'{proxy_url_base}/roadmap/{{z}}/{{x}}/{{y}}',
+                'satellite': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}',
+                'hybrid': f'{proxy_url_base}/hybrid/{{z}}/{{x}}/{{y}}'
             }
 
             tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
@@ -240,8 +249,13 @@ class MapRenderer:
             ).add_to(m)
             
             # 如果是卫星地图或混合地图，添加标注图层
+            # 注意：混合图的标注也需要走代理，但目前先只代理底图，标注暂不处理或者也走hybrid
             if map_type in ['satellite', 'hybrid']:
+                # 标注层通常是透明png，也可以缓存，这里假设它使用hybrid样式
+                # 高德webst01其实包含标注，或者用专门的标注服务。这里为了简化，暂不走缓存代理避免复杂
+                # 或者，简单地也指向代理
                 folium.TileLayer(
+                    # 使用直连，或者可以配置为 proxy_url_base + '/roadmap/...' (高德标注通常和路网类似)
                     tiles='https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
                     attr='© 高德地图',
                     name='高德地图标注',
@@ -435,6 +449,70 @@ class MapRenderer:
                     var lon = e.latlng.lng;
                     console.log('[地图右键] 右键点击位置: ' + lat + ', ' + lon);
                     console.log('右键点击:' + lat + ',' + lon);
+                });
+
+                // 4. 设置移动结束监听
+                map.on('moveend', function() {
+                    var center = map.getCenter();
+                    var bounds = map.getBounds();
+                    // 只记录小数点后4位，足够精确
+                    console.log('[地图移动] 移动结束，中心点: [' + center.lat.toFixed(4) + ', ' + center.lng.toFixed(4) + ']');
+                    console.log('[地图移动] 视口范围: SW[' + bounds.getSouthWest().lat.toFixed(4) + ',' + bounds.getSouthWest().lng.toFixed(4) + 
+                                '] - NE[' + bounds.getNorthEast().lat.toFixed(4) + ',' + bounds.getNorthEast().lng.toFixed(4) + ']');
+                                
+                    // 发送视口信息到后端HTTP服务器
+                    var sw = bounds.getSouthWest();
+                    var ne = bounds.getNorthEast();
+                    var port = window.location.port;
+                    if (port) {
+                        var url = 'http://127.0.0.1:' + port + '/update_viewport?sw_lat=' + sw.lat + '&sw_lon=' + sw.lng + '&ne_lat=' + ne.lat + '&ne_lon=' + ne.lng + '&zoom=' + map.getZoom();
+                        fetch(url).catch(err => console.error('Failed to update viewport:', err));
+                    }
+                });
+
+                // 首次加载也发送一次
+                setTimeout(function() {
+                    var bounds = map.getBounds();
+                    var sw = bounds.getSouthWest();
+                    var ne = bounds.getNorthEast();
+                    var port = window.location.port;
+                    if (port) {
+                        var url = 'http://127.0.0.1:' + port + '/update_viewport?sw_lat=' + sw.lat + '&sw_lon=' + sw.lng + '&ne_lat=' + ne.lat + '&ne_lon=' + ne.lng + '&zoom=' + map.getZoom();
+                        fetch(url).catch(err => console.error('Failed to update viewport:', err));
+                    }
+                }, 1000);
+
+                // 5. 设置瓦片加载监听 (针对所有TileLayer)
+                map.eachLayer(function(layer) {
+                     if (layer instanceof L.TileLayer) {
+                         // 避免重复绑定
+                         if (layer._gpx_listeners_attached) return;
+                         
+                         layer.on('tileloadstart', function(e) {
+                             // 计算瓦片坐标 (z/x/y)
+                             if (e.coords) {
+                                 console.log('[地图瓦片] 开始加载瓦片: z=' + e.coords.z + ', x=' + e.coords.x + ', y=' + e.coords.y);
+                             }
+                         });
+                         
+                         layer.on('load', function(e) {
+                             console.log('[地图瓦片] 当前视口瓦片加载完成');
+                         });
+
+                         layer._gpx_listeners_attached = true;
+                     }
+                });
+
+                // 监听新添加的图层，也加上瓦片监听
+                map.on('layeradd', function(e) {
+                    if (e.layer instanceof L.TileLayer && !e.layer._gpx_listeners_attached) {
+                         e.layer.on('tileloadstart', function(ev) {
+                             if (ev.coords) {
+                                 console.log('[地图瓦片] 开始加载瓦片: z=' + ev.coords.z + ', x=' + ev.coords.x + ', y=' + ev.coords.y);
+                             }
+                         });
+                         e.layer._gpx_listeners_attached = true;
+                    }
                 });
 
                 console.log('[地图交互] 地图监听器设置完成');

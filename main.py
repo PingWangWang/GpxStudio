@@ -37,6 +37,9 @@ def main():
 
     # 创建应用程序实例
     app = QApplication(sys.argv)
+    
+    # 禁止最后一个窗口关闭时自动退出程序（为了支持最小化到托盘功能）
+    app.setQuitOnLastWindowClosed(False)
 
     # 第二步：立即导入并显示启动画面（轻量级，不依赖重模块）
     from ui.dialogs.splash_screen import SplashScreen

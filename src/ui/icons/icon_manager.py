@@ -26,43 +26,45 @@ class IconManager:
     
     def _register_default_icons(self):
         """注册默认图标"""
+        pass
+        # 由于当前程序中使用Emoji作为图标，屏蔽冗余的SVG/PNG注册逻辑
         # 旋转动画图标 (SVG)
-        self.register_icon('MapSetting', 'res/icons/MapSetting.svg', '地图设置', 'rotation')
+        # self.register_icon('MapSetting', 'res/icons/MapSetting.svg', '地图设置', 'rotation')
         
         # 滑块动画图标 (Slider)
-        self.register_icon('RouteSetting', 'res/icons/RouteSetting.svg', '路线设置', 'slider')
+        # self.register_icon('RouteSetting', 'res/icons/RouteSetting.svg', '路线设置', 'slider')
         
         # 路径绘制动画图标 (PathDraw)
-        self.register_icon('Cancel', 'res/icons/Cancel.svg', '取消', 'path_draw')
-        self.register_icon('Yes', 'res/icons/Yes.svg', '确认', 'path_draw')
-        self.register_icon('Route', 'res/icons/Route.svg', '路线', 'path_draw')
-        self.register_icon('Delete', 'res/icons/Delete.svg', '删除', 'path_draw')
+        # self.register_icon('Cancel', 'res/icons/Cancel.svg', '取消', 'path_draw')
+        # self.register_icon('Yes', 'res/icons/Yes.svg', '确认', 'path_draw')
+        # self.register_icon('Route', 'res/icons/Route.svg', '路线', 'path_draw')
+        # self.register_icon('Delete', 'res/icons/Delete.svg', '删除', 'path_draw')
         
         # 变换动画图标 (Transform)
-        self.register_icon('Search', 'res/icons/Search.svg', '搜索', 'transform')
-        self.register_icon('ZoomBig', 'res/icons/ZoomBig.svg', '放大', 'transform')
-        self.register_icon('ZoomSmall', 'res/icons/ZoomSmall.svg', '缩小', 'transform')
-        self.register_icon('Loading', 'res/icons/Loading.svg', '加载', 'rotation')
-        self.register_icon('Add', 'res/icons/Add.svg', '添加', 'transform')
+        # self.register_icon('Search', 'res/icons/Search.svg', '搜索', 'transform')
+        # self.register_icon('ZoomBig', 'res/icons/ZoomBig.svg', '放大', 'transform')
+        # self.register_icon('ZoomSmall', 'res/icons/ZoomSmall.svg', '缩小', 'transform')
+        # self.register_icon('Loading', 'res/icons/Loading.svg', '加载', 'rotation')
+        # self.register_icon('Add', 'res/icons/Add.svg', '添加', 'transform')
         
         # 位置动画图标 (Location)
-        self.register_icon('Location', 'res/icons/Location.svg', '位置', 'location')
+        # self.register_icon('Location', 'res/icons/Location.svg', '位置', 'location')
         
         # 复杂动画图标 (Complex)
-        self.register_icon('History', 'res/icons/History.svg', '历史', 'complex')
+        # self.register_icon('History', 'res/icons/History.svg', '历史', 'complex')
         
         # 简单SVG图标 (无特殊动画，但支持悬停效果)
-        self.register_icon('Download', 'res/icons/Download.svg', '下载', 'simple')
-        self.register_icon('Eye', 'res/icons/Eye.svg', '显示', 'simple')
-        self.register_icon('EyeOff', 'res/icons/EyeOff.svg', '隐藏', 'simple')
-        self.register_icon('Log', 'res/icons/Log.svg', '日志', 'simple')
-        self.register_icon('About', 'res/icons/About.svg', '关于', 'simple')
-        self.register_icon('OutPut', 'res/icons/OutPut.svg', '导出', 'output')
+        # self.register_icon('Download', 'res/icons/Download.svg', '下载', 'simple')
+        # self.register_icon('Eye', 'res/icons/Eye.svg', '显示', 'simple')
+        # self.register_icon('EyeOff', 'res/icons/EyeOff.svg', '隐藏', 'simple')
+        # self.register_icon('Log', 'res/icons/Log.svg', '日志', 'simple')
+        # self.register_icon('About', 'res/icons/About.svg', '关于', 'simple')
+        # self.register_icon('OutPut', 'res/icons/OutPut.svg', '导出', 'output')
         
         # PNG图标 (使用PNG文件而非SVG)
-        self.register_png_icon('Downloading', 'res/Downloading.png', 'res/Downloading_white.png', '下载中')
-        self.register_png_icon('DownloadingGray', 'res/Downloading_gray.png', 'res/Downloading_gray.png', '下载中(禁用)')
-        self.register_png_icon('Setting', 'res/Setting.png', 'res/Setting_white.png', '设置')
+        # self.register_png_icon('Downloading', 'res/Downloading.png', 'res/Downloading_white.png', '下载中')
+        # self.register_png_icon('DownloadingGray', 'res/Downloading_gray.png', 'res/Downloading_gray.png', '下载中(禁用)')
+        # self.register_png_icon('Setting', 'res/Setting.png', 'res/Setting_white.png', '设置')
     
     def register_icon(self, name: str, svg_path: str, description: str = "", animation_type: str = "simple"):
         """

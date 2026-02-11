@@ -937,16 +937,30 @@ class MapManager:
         route_point_count = len([p for p in self.data_manager.route_points if p is not None])
         self.logger.debug(f"[路线重渲染] 开始更新路线: 路线点数={route_point_count}, 缩放级别={self.data_manager.current_zoom_level}")
 
-        # 构建路线坐标数据（只包含有效点）
-        valid_route_points = [p for p in self.data_manager.route_points if p is not None]
-        route_coords = [[p[0], p[1]] for p in valid_route_points if len(p) >= 2]
+        # 构建路线数据（保留分段结构，支持多段线）
+        route_segments = []
+        current_segment = []
 
-        if not route_coords:
-            self.logger.debug("[路线重渲染] 无有效路线坐标，跳过")
+        for p in self.data_manager.route_points:
+            if p is None:
+                if len(current_segment) > 1:
+                    route_segments.append(current_segment)
+                current_segment = []
+            else:
+                # 提取点的前两个元素（纬度和经度）
+                if len(p) >= 2:
+                    current_segment.append([p[0], p[1]])
+        
+        # 添加最后一段
+        if len(current_segment) > 1:
+            route_segments.append(current_segment)
+
+        if not route_segments:
+            self.logger.debug("[路线重渲染] 无有效路线段，跳过")
             return
 
         # 将坐标数据转换为JavaScript数组字符串
-        coords_js = str(route_coords).replace("'", '"')
+        coords_js = str(route_segments).replace("'", '"')
 
         # 构建JavaScript代码来更新路线
         update_route_js = f"""
@@ -1000,18 +1014,20 @@ class MapManager:
                     map.removeLayer(layer);
                 }});
 
-                // 添加新的路线层
-                var routeCoords = {coords_js};
-                if (!Array.isArray(routeCoords) || routeCoords.length === 0) {{
-                    console.log('[路线更新] 错误: 路线坐标无效');
+                // 添加新的路线层 (支持多段线)
+                var routeSegments = {coords_js};
+                if (!Array.isArray(routeSegments) || routeSegments.length === 0) {{
+                    console.log('[路线更新] 错误: 路线数据无效');
                     return false;
                 }}
 
-                var routeLine = L.polyline(routeCoords, {{
+                // L.polyline 支持传入数组的数组来绘制 MultiPolyline
+                var routeLine = L.polyline(routeSegments, {{
                     color: 'blue',
                     weight: 5,
                     opacity: 0.7,
-                    smoothFactor: 1.0
+                    smoothFactor: 1.5,
+                    noClip: true
                 }});
                 routeLine.addTo(map);
 
@@ -1019,7 +1035,17 @@ class MapManager:
                 map.setView(currentCenter, currentZoom, {{animate: false}});
                 console.log('[路线更新] 已恢复视图位置');
 
-                console.log('[路线更新] ✅ 成功更新路线: ' + routeCoords.length + ' 个点');
+                // 计算总点数便于日志记录
+                var totalPoints = 0;
+                if (routeSegments.length > 0 && Array.isArray(routeSegments[0][0])) {{
+                    // 多段
+                     routeSegments.forEach(function(seg) {{ totalPoints += seg.length; }});
+                }} else {{
+                    // 单段 (其实上面的逻辑产生的routeSegments一定是多段结构，即 [[[lat,lon]...]] )
+                    totalPoints = routeSegments.length;
+                }}
+                
+                console.log('[路线更新] ✅ 成功更新路线: ' + routeSegments.length + ' 段, 共 ' + totalPoints + ' 个点');
                 return true;
             }} catch (e) {{
                 console.log('[路线更新] ❌ 异常: ' + e.name + ' - ' + e.message);
@@ -1133,9 +1159,17 @@ class MapManager:
         # 获取地图源
         map_source = map_config.get_map_source()
 
+        # 渲染用的中心点
+        render_center = center
+        if map_source == 'gaode':
+            # 如果是高德地图，假设输入中心是WGS84，转换为GCJ02用于显示
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            c_lat, c_lon = CoordinateTransform.wgs84_to_gcj02(center[0], center[1])
+            render_center = [c_lat, c_lon]
+
         # 创建地图
         m = MapRenderer.create_base_map(
-            center,
+            render_center,
             zoom_start=zoom,
             map_type=map_mode,
             map_source=map_source
@@ -1163,8 +1197,28 @@ class MapManager:
                             # 使用原始GCJ-02坐标直接渲染，避免双重转换
                             route_points_to_render = selected_route['gcj02_route_points']
                             has_original_gcj02 = True
-                    except (IndexError, KeyError):
+                    except (IndexError, KeyError, AttributeError):
                         pass
+
+                # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            # 提取坐标部分（忽略海拔）
+                            lat, lon = point[0], point[1]
+                            # 转换坐标
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            # 保留原始格式（可能包含海拔）
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
 
             # 添加路线到地图
             MapRenderer.add_route(m, route_points_to_render)
