@@ -25,6 +25,14 @@ TILE_SOURCES = {
     }
 }
 
+# OSM瓦片镜像服务器列表（当主服务器被封禁时的备用方案）
+OSM_TILE_MIRRORS = [
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',  # 官方服务器
+    'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',  # 官方镜像a
+    'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',  # 官方镜像b
+    'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',  # 官方镜像c
+]
+
 class ThreadPoolTCPServer(socketserver.TCPServer):
     """
     使 ThreadPoolExecutor 处理请求的 TCPServer，避免频繁创建销毁线程带来的性能开销
@@ -91,6 +99,12 @@ class MapServer:
         
         self.server_address = ('127.0.0.1', self.port) # 绑定到本地
         self._initialized = True
+        self._is_shutting_down = False  # 关闭标志位，用于阻止新的下载任务
+        
+        # OSM请求限速：记录最后一次OSM请求的时间
+        self.last_osm_request_time = 0
+        self.osm_request_interval = 0.1  # OSM请求间隔（0.1秒 = 100毫秒）
+        self.current_osm_mirror_index = 0  # 当前使用的OSM镜像索引
 
         # 后台下载线程池
         # 增加并发数，提高下载速度
@@ -305,6 +319,13 @@ class MapServer:
             def _get_real_url(self, source, style, z, x, y):
                 """根据配置生成真实URL"""
                 start_time = time.time()
+                
+                # OSM特殊处理：使用镜像服务器
+                if source == 'osm':
+                    mirror_url = OSM_TILE_MIRRORS[server_instance.current_osm_mirror_index]
+                    return mirror_url.format(x=x, y=y, z=z)
+                
+                # 其他源使用配置
                 template = TILE_SOURCES.get(source, {}).get(style)
                 if not template:
                     return None
@@ -330,9 +351,25 @@ class MapServer:
                 import time
                 import random
                 
+                # 如果服务器正在关闭，直接返回，不再进行下载
+                if server_instance._is_shutting_down:
+                    return
+                
+                # OSM请求限速：确保请求间隔不少于设定值
+                is_osm = 'openstreetmap.org' in url
+                if is_osm:
+                    current_time = time.time()
+                    elapsed = current_time - server_instance.last_osm_request_time
+                    if elapsed < server_instance.osm_request_interval:
+                        time.sleep(server_instance.osm_request_interval - elapsed)
+                    server_instance.last_osm_request_time = time.time()
+                
                 # 简单的重试机制
                 max_retries = 3
                 for attempt in range(max_retries):
+                    # 每次重试前检查是否正在关闭
+                    if server_instance._is_shutting_down:
+                        return
                     try:
                         # 确保目录存在
                         os.makedirs(cache_dir, exist_ok=True)
@@ -363,7 +400,24 @@ class MapServer:
                             shutil.move(temp_file, cache_file)
                             # server_instance.logger.info(f"CACHED: {cache_file}")
                             return # 成功，退出重试循环
-                        elif response.status_code in [403, 429, 500, 502, 503, 504]:
+                        elif response.status_code in [403, 418, 429]:
+                            # 403/418/429：OSM封禁或限流，尝试切换镜像
+                            if is_osm and attempt < max_retries - 1:
+                                print(f"[TileCache] OSM返回{response.status_code}，尝试切换镜像服务器...")
+                                # 切换到下一个镜像
+                                server_instance.current_osm_mirror_index = (server_instance.current_osm_mirror_index + 1) % len(OSM_TILE_MIRRORS)
+                                # 重新生成URL
+                                mirror_url = OSM_TILE_MIRRORS[server_instance.current_osm_mirror_index]
+                                # 从原URL提取z/x/y参数
+                                parts = url.split('/')
+                                if len(parts) >= 3:
+                                    z, x, y_with_ext = parts[-3], parts[-2], parts[-1]
+                                    url = mirror_url.format(z=z, x=x, y=y_with_ext.replace('.png', ''))
+                                    print(f"[TileCache] 切换到镜像: {mirror_url[:50]}...")
+                                continue
+                            else:
+                                print(f"[TileCache] Failed to download {url}: Status {response.status_code}")
+                        elif response.status_code in [500, 502, 503, 504]:
                             # 这种错误值得重试
                             if attempt < max_retries - 1:
                                 continue
@@ -550,10 +604,22 @@ class MapServer:
 
     def stop(self):
         print("[MapServer] Stopping server...")
+        
+        # 设置关闭标志，阻止新的下载任务
+        self._is_shutting_down = True
+        
+        # 关闭Session，中断正在进行的HTTP请求
+        if hasattr(self, 'session') and self.session:
+            print("[MapServer] Closing HTTP session...")
+            try:
+                self.session.close()
+            except Exception as e:
+                print(f"[MapServer] Error closing session: {e}")
+        
         if self.download_executor:
-            # 停止下载线程池，不等待未完成的任务，并尝试取消未开始的任务
+            # 停止下载线程池，不等待未完成的任务
             print("[MapServer] Shutting down download executor...")
-            self.download_executor.shutdown(wait=False)
+            self.download_executor.shutdown(wait=False, cancel_futures=True)
             
         if self.httpd:
             print("[MapServer] Shutting down HTTP server...")
