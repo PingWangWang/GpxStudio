@@ -2,11 +2,11 @@
 ; 请先安装 Inno Setup: https://jrsoftware.org/isdl.php
 
 #define MyAppName "GPX Studio"
-#define MyAppVersion "2.0.11"
+#define MyAppVersion "2.0.16"
 #define MyAppPublisher "PingWangWang"
 #define MyAppURL "https://github.com/PingWangWang/GpxStudio"
-#define MyAppExeName "GPXStudio_2.0.11.exe"
-#define MyBuildDir "..\dist\GPXStudio_2.0.11"
+#define MyAppExeName "GPXStudio_2.0.16.exe"
+#define MyBuildDir "..\dist\GPXStudio_2.0.16"
 
 [Code]
 var
@@ -18,6 +18,26 @@ var
   OldVersionDetected: Boolean;
   UninstallOldVersion: Boolean;
   UninstallOldVersionPage: TInputOptionWizardPage;
+
+// Windows API 函数声明
+function FindWindowByCaption(lpClassName, lpWindowName: string): HWND;
+  external 'FindWindowA@user32.dll stdcall';
+function PostMessage(hWnd: HWND; Msg: UINT; wParam, lParam: Integer): BOOL;
+  external 'PostMessageA@user32.dll stdcall';
+function EnumWindows(lpEnumFunc: LongInt; lParam: LongInt): BOOL;
+  external 'EnumWindows@user32.dll stdcall';
+function GetWindowText(hWnd: HWND; lpString: AnsiString; nMaxCount: Integer): Integer;
+  external 'GetWindowTextA@user32.dll stdcall';
+function GetWindowTextLength(hWnd: HWND): Integer;
+  external 'GetWindowTextLengthA@user32.dll stdcall';
+function IsWindowVisible(hWnd: HWND): BOOL;
+  external 'IsWindowVisible@user32.dll stdcall';
+
+const
+  WM_CLOSE = $0010;
+
+// 前向声明
+procedure CustomLog(Msg: string); forward;
 
 // 自定义日志记录函数
 procedure CustomLog(Msg: string);
@@ -42,6 +62,84 @@ begin
       CustomLog('⚠️ Failed to save custom log');
     end;
   end;
+end;
+
+// 检查GPX Studio进程是否正在运行
+function IsGPXStudioRunning(): Boolean;
+var
+  WindowHandle: HWND;
+  WindowTitle: AnsiString;
+  TitleLen: Integer;
+begin
+  Result := False;
+  
+  // 检查主窗口标题
+  WindowHandle := FindWindowByCaption('', 'GPX Studio');
+  if WindowHandle <> 0 then
+  begin
+    if IsWindowVisible(WindowHandle) then
+    begin
+      CustomLog('检测到GPX Studio正在运行（主窗口）');
+      Result := True;
+      Exit;
+    end;
+  end;
+  
+  // 也检查可能包含版本号的窗口标题
+  WindowHandle := FindWindowByCaption('', 'GPX Studio v');
+  if WindowHandle <> 0 then
+  begin
+    if IsWindowVisible(WindowHandle) then
+    begin
+      CustomLog('检测到GPX Studio正在运行（带版本号）');
+      Result := True;
+      Exit;
+    end;
+  end;
+  
+  CustomLog('未检测到GPX Studio运行中');
+end;
+
+// 尝试关闭GPX Studio进程
+function CloseGPXStudio(): Boolean;
+var
+  WindowHandle: HWND;
+  RetryCount: Integer;
+begin
+  Result := False;
+  CustomLog('尝试关闭GPX Studio进程...');
+  
+  // 先尝试通过主窗口标题关闭
+  WindowHandle := FindWindowByCaption('', 'GPX Studio');
+  if WindowHandle <> 0 then
+  begin
+    CustomLog('找到主窗口，发送关闭消息');
+    PostMessage(WindowHandle, WM_CLOSE, 0, 0);
+  end;
+  
+  // 也尝试关闭带版本号的窗口
+  WindowHandle := FindWindowByCaption('', 'GPX Studio v');
+  if WindowHandle <> 0 then
+  begin
+    CustomLog('找到版本窗口，发送关闭消息');
+    PostMessage(WindowHandle, WM_CLOSE, 0, 0);
+  end;
+  
+  // 等待进程关闭，最多等待5秒
+  RetryCount := 0;
+  while (RetryCount < 10) and IsGPXStudioRunning() do
+  begin
+    Sleep(500);
+    RetryCount := RetryCount + 1;
+    CustomLog('等待进程关闭... (' + IntToStr(RetryCount) + '/10)');
+  end;
+  
+  Result := not IsGPXStudioRunning();
+  
+  if Result then
+    CustomLog('✓ GPX Studio进程已成功关闭')
+  else
+    CustomLog('⚠️ GPX Studio进程未能自动关闭');
 end;
 
 // 获取Windows位数
@@ -367,6 +465,7 @@ var
   UninstallKey: string;
   InstallLocation: string;
   BaseDir: string;
+  UserChoice: Integer;
 begin
   Result := True;
   OldVersionDetected := False;
@@ -377,6 +476,50 @@ begin
   
   CustomLog('=== GPX Studio 安装程序初始化 ===');
   CustomLog('安装版本: {#MyAppVersion}');
+  
+  // === 检查GPX Studio是否正在运行 ===
+  CustomLog('=== 检查进程状态 ===');
+  if IsGPXStudioRunning() then
+  begin
+    CustomLog('检测到GPX Studio正在运行');
+    
+    // 询问用户是否关闭
+    UserChoice := MsgBox('检测到 GPX Studio 正在运行。'#13#10#13#10 +
+                         '安装程序需要关闭该程序才能继续。'#13#10#13#10 +
+                         '点击"是"自动关闭程序并继续安装'#13#10 +
+                         '点击"否"取消安装', 
+                         mbConfirmation, MB_YESNO);
+    
+    if UserChoice = IDYES then
+    begin
+      CustomLog('用户选择：自动关闭程序并继续');
+      
+      // 尝试自动关闭
+      if not CloseGPXStudio() then
+      begin
+        // 如果自动关闭失败，再次提示
+        CustomLog('自动关闭失败，提示用户手动关闭');
+        MsgBox('无法自动关闭 GPX Studio。'#13#10#13#10 +
+               '请手动关闭该程序后，重新运行安装程序。', 
+               mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      
+      CustomLog('✓ 程序已关闭，继续安装');
+    end
+    else
+    begin
+      CustomLog('用户选择：取消安装');
+      MsgBox('安装已取消。', mbInformation, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end
+  else
+  begin
+    CustomLog('✓ 未检测到程序运行，可以继续安装');
+  end;
   
   // 方法1：从自定义注册表位置读取旧版本位置（优先级最高）
   CustomLog('=== 开始查找旧版本安装目录 ===');
@@ -1025,6 +1168,62 @@ begin
   end;
 end;
 
+// 卸载初始化函数
+function InitializeUninstall(): Boolean;
+var
+  UserChoice: Integer;
+begin
+  Result := True;
+  
+  Log('=== GPX Studio 卸载程序初始化 ===');
+  
+  // 检查GPX Studio是否正在运行
+  Log('检查进程状态...');
+  if IsGPXStudioRunning() then
+  begin
+    Log('检测到GPX Studio正在运行');
+    
+    // 询问用户是否关闭
+    UserChoice := MsgBox('检测到 GPX Studio 正在运行。'#13#10#13#10 +
+                         '卸载程序需要关闭该程序才能继续。'#13#10#13#10 +
+                         '点击"是"自动关闭程序并继续卸载'#13#10 +
+                         '点击"否"取消卸载', 
+                         mbConfirmation, MB_YESNO);
+    
+    if UserChoice = IDYES then
+    begin
+      Log('用户选择：自动关闭程序并继续');
+      
+      // 尝试自动关闭
+      if not CloseGPXStudio() then
+      begin
+        // 如果自动关闭失败，再次提示
+        Log('自动关闭失败，提示用户手动关闭');
+        MsgBox('无法自动关闭 GPX Studio。'#13#10#13#10 +
+               '请手动关闭该程序后，重新运行卸载程序。', 
+               mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      
+      Log('✓ 程序已关闭，继续卸载');
+    end
+    else
+    begin
+      Log('用户选择：取消卸载');
+      MsgBox('卸载已取消。', mbInformation, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end
+  else
+  begin
+    Log('✓ 未检测到程序运行，可以继续卸载');
+  end;
+  
+  Log('=== 卸载程序初始化完成 ===');
+end;
+
 // 卸载过程中的步骤处理
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
@@ -1116,8 +1315,9 @@ DisableProgramGroupPage=no
 DisableDirPage=no
 ; 启用详细日志记录
 SetupLogging=yes
-; Uncomment the following line to run in non administrative install mode (install for current user only.)
-;PrivilegesRequired=lowest
+; 要求管理员权限进行安装（安装到Program Files需要管理员权限）
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
 ; 当目录已存在时，询问用户
 DirExistsWarning=yes
 OutputDir=..\dist
