@@ -21,14 +21,36 @@ def main():
     主函数，负责启动应用程序
 
     流程：
-    1. 设置Qt属性（必须在创建QApplication之前）
-    2. 创建QApplication实例
-    3. 立即显示启动画面
-    4. 延迟导入重量级模块
-    5. 创建并显示主窗口
-    6. 进入事件循环
+    1. 创建互斥体，检测是否已有实例在运行
+    2. 设置Qt属性（必须在创建QApplication之前）
+    3. 创建QApplication实例
+    4. 立即显示启动画面
+    5. 延迟导入重量级模块
+    6. 创建并显示主窗口
+    7. 进入事件循环
     """
-    # 第一步：导入PyQt5核心模块，并设置必要的Qt属性
+    # 第一步：创建互斥体，检测是否已有实例在运行
+    mutex_name = "GPXStudio_{8E4E6A9B-1D5C-4F9A-8B7E-5D3A8C7B6D5E}"
+    try:
+        import win32api
+        import win32event
+        import win32security
+        
+        # 创建互斥体
+        mutex = win32event.CreateMutex(None, False, mutex_name)
+        
+        # 检查是否已有实例在运行
+        if win32api.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            print("GPX Studio 已在运行中")
+            return
+    except ImportError:
+        # 如果没有安装pywin32，跳过互斥体检测
+        print("警告: pywin32 未安装，跳过实例检测")
+    except Exception as e:
+        # 其他错误，跳过互斥体检测
+        print(f"警告: 互斥体检测失败: {e}")
+
+    # 第二步：导入PyQt5核心模块，并设置必要的Qt属性
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtCore import Qt, QCoreApplication
 

@@ -42,102 +42,138 @@ ICO_FILE = os.path.join(PROJECT_ROOT, "res", "GPXStudio.ico")
 XYZ_SERVICES_DATA = None
 
 
-def find_inno_setup_path():
-    """查找 Inno Setup 的安装路径"""
-    print("[GPXStudio] 查找 Inno Setup 安装路径...")
+
+
+
+def find_nsis_path():
+    """查找 NSIS 的安装路径"""
+    print("[GPXStudio] 查找 NSIS 安装路径...")
     
     # 方法1：从注册表查找
     try:
         # 尝试从 HKLM 读取（64位系统）
         try:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
-                               r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                               r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NSIS",
                                0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
             install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
             winreg.CloseKey(key)
-            print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
+            print(f"[GPXStudio] 从注册表找到 NSIS: {install_location}")
             return install_location
         except Exception:
             # 尝试从 HKLM 读取（32位系统）
             try:
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
-                                   r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                                   r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NSIS",
                                    0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
                 install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
                 winreg.CloseKey(key)
-                print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
+                print(f"[GPXStudio] 从注册表找到 NSIS: {install_location}")
                 return install_location
             except Exception:
-                # 尝试从 HKCU 读取
-                try:
-                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
-                                       r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
-                                       0, winreg.KEY_READ)
-                    install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
-                    winreg.CloseKey(key)
-                    print(f"[GPXStudio] 从注册表找到 Inno Setup: {install_location}")
-                    return install_location
-                except Exception:
-                    pass
+                pass
     except Exception as e:
-        print(f"[GPXStudio] 从注册表查找 Inno Setup 失败: {e}")
+        print(f"[GPXStudio] 从注册表查找 NSIS 失败: {e}")
     
     # 方法2：检查常见安装路径
     common_paths = [
-        r"D:\Program Files (x86)\Inno Setup 6",
-        r"C:\Program Files (x86)\Inno Setup 6",
-        r"C:\Program Files\Inno Setup 6"
+        r"D:\Program Files (x86)\NSIS",
+        r"C:\Program Files (x86)\NSIS",
+        r"C:\Program Files\NSIS"
     ]
     
     for path in common_paths:
         if os.path.exists(path):
-            print(f"[GPXStudio] 从常见路径找到 Inno Setup: {path}")
+            print(f"[GPXStudio] 从常见路径找到 NSIS: {path}")
             return path
     
     # 方法3：检查 PATH 环境变量
     path_env = os.environ.get("PATH", "")
     for path in path_env.split(os.pathsep):
-        if "Inno Setup" in path and os.path.exists(path):
-            print(f"[GPXStudio] 从 PATH 环境变量找到 Inno Setup: {path}")
+        if "NSIS" in path and os.path.exists(path):
+            print(f"[GPXStudio] 从 PATH 环境变量找到 NSIS: {path}")
             return path
     
-    print("[GPXStudio] 找不到 Inno Setup 安装路径")
+    print("[GPXStudio] 找不到 NSIS 安装路径")
     return None
 
 
+def update_nsis_script():
+    """更新 NSIS 脚本中的版本号和文件路径"""
+    nsis_file = os.path.join(SCRIPT_DIR, "gpxstudio.nsi")
+    if not os.path.exists(nsis_file):
+        print(f"[GPXStudio] 警告：找不到 NSIS 脚本: {nsis_file}")
+        return
+
+    print(f"[GPXStudio] 更新 NSIS 脚本版本号: {nsis_file}")
+    
+    lines = []
+    encoding_used = "utf-8"
+    
+    try:
+        # 尝试使用 UTF-8 读取
+        try:
+            with open(nsis_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except UnicodeDecodeError:
+            print(f"[GPXStudio] UTF-8 读取失败，尝试使用 GBK...")
+            encoding_used = "gbk"
+            with open(nsis_file, "r", encoding="gbk") as f:
+                lines = f.readlines()
+            
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith('!define PRODUCT_VERSION'):
+                new_lines.append(f'!define PRODUCT_VERSION "{__version__}"\n')
+            elif line.strip().startswith('!define PRODUCT_EXE'):
+                new_lines.append(f'!define PRODUCT_EXE "GPXStudio_{__version__}.exe"\n')
+            elif line.strip().startswith('!define BUILD_DIR'):
+                new_lines.append(f'!define BUILD_DIR "..\\dist\\GPXStudio_{__version__}"\n')
+            else:
+                new_lines.append(line)
+        
+        # 使用读取时成功的编码写入
+        with open(nsis_file, "w", encoding=encoding_used) as f:
+            f.writelines(new_lines)
+            
+        print(f"[GPXStudio] NSIS 脚本更新完成 (使用编码: {encoding_used})")
+    except Exception as e:
+        print(f"[GPXStudio] 警告：更新 NSIS 脚本失败: {e}")
+
+
 def build_installer():
-    """使用 Inno Setup 构建安装包"""
-    print("[GPXStudio] 开始构建安装包...")
+    """使用 NSIS 构建安装包"""
+    print("[GPXStudio] 开始使用 NSIS 构建安装包...")
     
-    # 查找 Inno Setup 路径
-    inno_path = find_inno_setup_path()
-    if not inno_path:
-        print("[GPXStudio] 错误：找不到 Inno Setup 安装路径，无法构建安装包")
+    # 查找 NSIS 路径
+    nsis_path = find_nsis_path()
+    if not nsis_path:
+        print("[GPXStudio] 错误：找不到 NSIS 安装路径，无法构建安装包")
         return False
     
-    # 构建 iscc.exe 路径
-    iscc_path = os.path.join(inno_path, "iscc.exe")
-    if not os.path.exists(iscc_path):
-        print(f"[GPXStudio] 错误：找不到 iscc.exe: {iscc_path}")
+    # 构建 makensis.exe 路径
+    makensis_path = os.path.join(nsis_path, "makensis.exe")
+    if not os.path.exists(makensis_path):
+        print(f"[GPXStudio] 错误：找不到 makensis.exe: {makensis_path}")
         return False
     
-    # 更新 Inno Setup 脚本
-    update_iss_script()
+    # 更新 NSIS 脚本
+    update_nsis_script()
     
-    # 构建 iss 脚本路径
-    iss_file = os.path.join(SCRIPT_DIR, "create_installer_script.iss")
-    if not os.path.exists(iss_file):
-        print(f"[GPXStudio] 错误：找不到 Inno Setup 脚本: {iss_file}")
+    # 构建 nsi 脚本路径
+    nsi_file = os.path.join(SCRIPT_DIR, "gpxstudio.nsi")
+    if not os.path.exists(nsi_file):
+        print(f"[GPXStudio] 错误：找不到 NSIS 脚本: {nsi_file}")
         return False
     
-    print(f"[GPXStudio] 使用 Inno Setup 构建安装包")
-    print(f"[GPXStudio] Inno Setup 路径: {inno_path}")
-    print(f"[GPXStudio] ISS 脚本: {iss_file}")
+    print(f"[GPXStudio] 使用 NSIS 构建安装包")
+    print(f"[GPXStudio] NSIS 路径: {nsis_path}")
+    print(f"[GPXStudio] NSIS 脚本: {nsi_file}")
     
-    # 执行 Inno Setup 命令
+    # 执行 NSIS 命令
     try:
         # 构建命令
-        command = [iscc_path, iss_file]
+        command = [makensis_path, nsi_file]
         print(f"[GPXStudio] 执行命令: {' '.join(command)}")
         
         # 执行命令
@@ -159,38 +195,6 @@ def build_installer():
     except Exception as e:
         print(f"[GPXStudio] 错误：构建安装包时发生异常: {e}")
         return False
-
-
-def update_iss_script():
-    """更新 Inno Setup 脚本中的版本号和文件路径"""
-    iss_file = os.path.join(SCRIPT_DIR, "create_installer_script.iss")
-    if not os.path.exists(iss_file):
-        print(f"[GPXStudio] 警告：找不到 Inno Setup 脚本: {iss_file}")
-        return
-
-    print(f"[GPXStudio] 更新 Inno Setup 脚本版本号: {iss_file}")
-    
-    try:
-        with open(iss_file, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            
-        new_lines = []
-        for line in lines:
-            if line.strip().startswith('#define MyAppVersion'):
-                new_lines.append(f'#define MyAppVersion "{__version__}"\n')
-            elif line.strip().startswith('#define MyAppExeName'):
-                new_lines.append(f'#define MyAppExeName "{BUILD_NAME}.exe"\n')
-            elif line.strip().startswith('#define MyBuildDir'):
-                new_lines.append(f'#define MyBuildDir "..\\dist\\{BUILD_NAME}"\n')
-            else:
-                new_lines.append(line)
-                
-        with open(iss_file, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
-            
-        print(f"[GPXStudio] Inno Setup 脚本更新完成")
-    except Exception as e:
-        print(f"[GPXStudio] 警告：更新 Inno Setup 脚本失败: {e}")
 
 
 def convert_png_to_ico():
@@ -620,10 +624,13 @@ def main():
             print("[GPXStudio] 发布版本构建成功！")
             
             # 更新安装脚本
-            update_iss_script()
+            update_nsis_script()
             
             # 构建安装包
             print("\n[GPXStudio] 开始构建安装包...")
+            
+            # 使用 NSIS 构建
+            print("\n[GPXStudio] 使用 NSIS 构建安装包...")
             installer_success = build_installer()
             
             # 重命名主程序（如果需要）
@@ -634,11 +641,12 @@ def main():
             print(f"[GPXStudio] 程序目录: {os.path.join(PROJECT_ROOT, 'dist', BUILD_NAME)}")
             print(f"[GPXStudio] 主程序入口: {final_exe_path}")
             
+            # 检查构建结果
             if installer_success:
                 print("[GPXStudio] 构建完成！")
                 print("\n[GPXStudio] 提示: 这是一个目录形式的构建，启动速度快。")
-                print("[GPXStudio] 安装包已自动构建完成")
-                print(f"[GPXStudio] 安装包路径: {os.path.join(PROJECT_ROOT, 'dist', f'GPXStudio_Setup_v{__version__}.exe')}")
+                print("[GPXStudio] NSIS 安装包已构建完成")
+                print(f"[GPXStudio] 安装包路径: {os.path.join(PROJECT_ROOT, 'dist', f'GPXStudio_Setup.exe')}")
             else:
                 print("[GPXStudio] 构建过程中出现错误！")
                 print("[GPXStudio] 程序目录已生成，但安装包构建失败。")

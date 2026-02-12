@@ -18,6 +18,8 @@ build/*
 !build/*.py
 !build/create_installer_script.iss
 !build/innosetup*.exe
+!build/gpxstudio.nsi
+!build/nsis*.exe
 *.egg
 *.nuitka
 *.nuitka-build/
