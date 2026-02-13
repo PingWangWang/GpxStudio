@@ -7,6 +7,7 @@ from typing import List, Tuple, Optional
 from PyQt5.QtCore import QUrl
 from modules.map.map_renderer import MapRenderer
 from services.config.map_config import map_config
+from .map_view_state_manager import MapViewStateManager
 
 
 class MapManager:
@@ -36,6 +37,12 @@ class MapManager:
         self.map_view = map_view  # 地图视图组件
         self.logger = logger  # 日志器
         self._recreate_map_view = recreate_callback  # 重新创建回调
+        
+        # 创建视图状态管理器（使用lambda获取最新的map_view引用）
+        self.view_state_manager = MapViewStateManager(lambda: self.map_view, logger)
+        
+        # 记录当前地图源，用于判断坐标系
+        self._current_map_source = None
 
     def show_initial_map(self):
         """显示初始地图（默认北京中心）"""
@@ -61,6 +68,8 @@ class MapManager:
                 # 保存当前中心和缩放级别
                 self.current_center = [39.9042, 116.4074]
                 self.current_zoom = 10
+                # 记录当前地图源
+                self._current_map_source = map_source
                 self.logger.info("初始地图已加载")
             else:
                 self.logger.error("地图视图为None，无法加载地图")
@@ -75,6 +84,8 @@ class MapManager:
                     # 保存当前中心和缩放级别
                     self.current_center = [39.9042, 116.4074]
                     self.current_zoom = 10
+                    # 记录当前地图源
+                    self._current_map_source = map_source
                     self.logger.info("重新创建地图视图成功，初始地图已加载")
                 except RuntimeError as e2:
                     self.logger.error(f"重新创建的地图视图也被删除: {e2}")
@@ -242,6 +253,8 @@ class MapManager:
                 # 保存当前中心和缩放级别
                 self.current_center = [center_lat, center_lon]
                 self.current_zoom = zoom_level if len(locations) == 1 else 12
+                # 记录当前地图源
+                self._current_map_source = map_source
                 self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法显示搜索结果")
@@ -394,133 +407,142 @@ class MapManager:
                 # 保存当前中心和缩放级别
                 self.current_center = [center_lat, center_lon]
                 self.current_zoom = calculated_zoom_level
+                # 记录当前地图源
+                self._current_map_source = map_source
                 self.logger.debug(f"[地图] 保存当前视图 - 中心: {self.current_center}, 缩放: {self.current_zoom}")
             else:
                 self.logger.error("地图视图为None，无法更新地图预览")
         except RuntimeError as e:
             self.logger.error(f"地图视图已被删除，无法更新地图预览: {e}")
 
-    def clear_map_and_keep_view(self):
-        """清空地图上的所有元素（路线、起止点、途径点等），但保持当前显示区域和缩放级别"""
-        # 尝试从JavaScript获取当前地图的实时中心点和缩放级别
-        js_code = """
-        (function() {
-            try {
-                // 查找地图对象
-                var map = null;
-                for (var key in window) {
-                    if (key.startsWith('map_') && window[key] && 
-                        typeof window[key].getCenter === 'function' && 
-                        typeof window[key].getZoom === 'function') {
-                        map = window[key];
-                        break;
-                    }
-                }
-                
-                if (!map) {
-                    console.log('[清空地图] 未找到地图对象');
-                    return null;
-                }
-                
-                // 获取当前地图的中心点和缩放级别
-                var center = map.getCenter();
-                var zoom = map.getZoom();
-                
-                console.log('[清空地图] 获取当前视图 - 中心: [' + center.lat.toFixed(6) + ', ' + center.lng.toFixed(6) + '], 缩放: ' + zoom);
-                
-                return {
-                    lat: center.lat,
-                    lon: center.lng,
-                    zoom: zoom
-                };
-            } catch(e) {
-                console.error('[清空地图] 获取视图失败:', e);
-                return null;
-            }
-        })();
+    def reload_map(self, keep_view=True, keep_route=True, keep_points=True, keep_search_results=True):
         """
+        统一的地图刷新方法
         
-        # 用于存储JavaScript返回的结果
-        result_received = [False]  # 使用列表以便在闭包中修改
-        view_info = [None]  # 存储视图信息
+        Args:
+            keep_view: 是否保持当前视图（中心点和缩放级别）
+            keep_route: 是否保留路线
+            keep_points: 是否保留起点、终点、途径点
+            keep_search_results: 是否保留搜索结果
+        """
+        self.logger.info(f"[重载地图] ========== 开始重载地图 ==========")
+        self.logger.info(f"[重载地图] 参数: keep_view={keep_view}, keep_route={keep_route}, "
+                        f"keep_points={keep_points}, keep_search_results={keep_search_results}")
         
-        def on_view_result(result):
-            """处理JavaScript返回的视图信息"""
-            result_received[0] = True
-            if result and isinstance(result, dict):
-                view_info[0] = {
-                    'lat': result.get('lat', 39.9042),
-                    'lon': result.get('lon', 116.4074),
-                    'zoom': result.get('zoom', 10)
-                }
-                self.logger.info(f"[清空地图] 从JS获取视图 - 中心: [{view_info[0]['lat']}, {view_info[0]['lon']}], 缩放: {view_info[0]['zoom']}")
-            else:
-                self.logger.warning("[清空地图] JavaScript未返回有效视图信息")
-        
-        # 执行JavaScript获取当前视图
-        try:
-            if self.map_view:
-                self.map_view.page().runJavaScript(js_code, on_view_result)
-                
-                # 等待JavaScript执行完成（最多150ms）
-                from PyQt5.QtCore import QEventLoop, QTimer
-                loop = QEventLoop()
-                
-                # 设置超时
-                timeout_timer = QTimer()
-                timeout_timer.setSingleShot(True)
-                timeout_timer.timeout.connect(loop.quit)
-                timeout_timer.start(150)
-                
-                # 也可以通过结果接收来提前退出
-                check_timer = QTimer()
-                check_timer.setInterval(10)
-                check_timer.timeout.connect(lambda: loop.quit() if result_received[0] else None)
-                check_timer.start()
-                
-                loop.exec_()
-                
-                timeout_timer.stop()
-                check_timer.stop()
-        except Exception as e:
-            self.logger.warning(f"[清空地图] 获取JS视图信息失败: {e}")
-        
-        # 确定最终使用的中心点和缩放级别
-        if view_info[0]:
-            center = [view_info[0]['lat'], view_info[0]['lon']]
-            zoom = view_info[0]['zoom']
-        elif hasattr(self, 'current_center') and hasattr(self, 'current_zoom'):
-            center = self.current_center
-            zoom = self.current_zoom
-        else:
-            # 如果都没有，使用默认值（北京）
-            center = [39.9042, 116.4074]
-            zoom = 10
-            
-        self.logger.info(f"[清空地图] 使用视图 - 中心: {center}, 缩放: {zoom}")
-        
-        # 获取当前配置的地图数据源和模式
+        # 1. 获取地图配置
         map_source = map_config.get_map_source()
         map_mode = map_config.get_map_mode()
+        self.logger.info(f"[重载地图] 目标配置: map_source={map_source}, map_mode={map_mode}")
+        self.logger.info(f"[重载地图] 当前地图源: {self._current_map_source}")
         
-        # 创建一个空白地图，只显示基础地图，不添加任何标记或路线
-        m = MapRenderer.create_base_map(center, zoom_start=zoom, map_type=map_mode, map_source=map_source)
+        # 2. 获取视图状态
+        if keep_view:
+            view_state = self.view_state_manager.get_current_view()
+            center = view_state['center']
+            zoom = view_state['zoom']
+            self.logger.info(f"[重载地图] 保持视图: center={center}, zoom={zoom}, source={view_state['source']}")
+            
+            # 关键：判断JavaScript返回坐标的坐标系
+            # JavaScript返回的坐标系 = 当前显示的地图源的坐标系（切换前的）
+            # 而不是目标地图源的坐标系（切换后的）
+            if self._current_map_source == 'gaode':
+                # 当前是高德地图，JavaScript返回的是GCJ-02坐标
+                coord_system = 'GCJ-02'
+                self.logger.debug(f"[重载地图] JavaScript返回坐标系: GCJ-02 (当前是高德地图)")
+            elif self._current_map_source == 'osm':
+                # 当前是OSM地图，JavaScript返回的是WGS-84坐标
+                coord_system = 'WGS-84'
+                self.logger.debug(f"[重载地图] JavaScript返回坐标系: WGS-84 (当前是OSM地图)")
+            else:
+                # 首次加载或未知，根据目标地图源推测
+                coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+                self.logger.warning(f"[重载地图] 无法确定当前坐标系，根据目标地图源推测: {coord_system}")
+        else:
+            # 不保持视图，使用默认中心点
+            center = [39.9042, 116.4074]
+            zoom = 10
+            coord_system = 'WGS-84'  # 默认使用WGS-84
+            self.logger.info(f"[重载地图] 使用默认视图: center={center}, zoom={zoom}")
         
-        # 保存地图并获取URL
+        # 3. 创建基础地图（传入正确的坐标系信息）
+        # MapRenderer会根据coord_system和map_source自动进行必要的坐标转换
+        m = MapRenderer.create_base_map(center, zoom_start=zoom, map_type=map_mode, 
+                                       map_source=map_source, coord_system=coord_system)
+        
+        # 4. 添加元素
+        if keep_points:
+            self._add_selected_points_to_map(m)
+        
+        if keep_search_results:
+            # 添加调试日志，确认搜索结果状态
+            has_search_results = hasattr(self.data_manager, 'search_results') and self.data_manager.search_results
+            self.logger.info(f"[重载地图] keep_search_results=True, 实际有搜索结果: {has_search_results}")
+            if has_search_results:
+                self.logger.info(f"[重载地图] 搜索结果数量: {len(self.data_manager.search_results)}")
+                self.logger.info(f"[重载地图] 第一个搜索结果: {self.data_manager.search_results[0]}")
+            self._add_search_results_to_map(m)
+        
+        if keep_route and self.data_manager.route_points:
+            # 处理坐标转换
+            route_points_to_render = self.data_manager.route_points
+            
+            # 检查路线来源
+            is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+            
+            if map_source == 'gaode':
+                has_original_gcj02 = False
+                if is_route_planned:
+                    try:
+                        selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                        if selected_route and 'gcj02_route_points' in selected_route:
+                            route_points_to_render = selected_route['gcj02_route_points']
+                            has_original_gcj02 = True
+                    except (IndexError, AttributeError):
+                        pass
+                
+                if not has_original_gcj02:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    transformed_route_points = []
+                    for point in route_points_to_render:
+                        if point is not None:
+                            lat, lon = point[0], point[1]
+                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            if len(point) > 2:
+                                transformed_point = (gcj_lat, gcj_lon, point[2])
+                            else:
+                                transformed_point = (gcj_lat, gcj_lon)
+                            transformed_route_points.append(transformed_point)
+                        else:
+                            transformed_route_points.append(None)
+                    route_points_to_render = transformed_route_points
+            
+            MapRenderer.add_route(m, route_points_to_render, color='#4CAF50', weight=3, opacity=0.6)
+        
+        # 5. 保存并加载地图
         url = MapRenderer.save_and_get_url(m)
         
-        # 在地图视图中加载地图
         try:
             if self.map_view:
+                self.logger.info(f"[重载地图] 开始加载地图到浏览器")
                 self.map_view.setUrl(url)
-                # 保持当前中心和缩放级别
+                # 更新视图状态管理器的缓存
+                self.view_state_manager.set_cache(center, zoom)
+                # 保持旧属性以兼容旧代码
                 self.current_center = center
                 self.current_zoom = zoom
-                self.logger.info("[清空地图] 地图已清空，视图保持不变")
+                # 记录当前地图源，用于下次判断坐标系
+                self._current_map_source = map_source
+                self.logger.info(f"[重载地图] ========== 地图已成功重新加载 ==========")
             else:
-                self.logger.error("地图视图为None，无法清空地图")
+                self.logger.error("[重载地图] 地图视图为None")
         except RuntimeError as e:
-            self.logger.error(f"地图视图已被删除，无法清空地图: {e}")
+            self.logger.error(f"[重载地图] 地图视图已被删除: {e}")
+
+    def clear_map_and_keep_view(self):
+        """清空地图上的所有元素（路线、起止点、途径点等），但保持当前显示区域和缩放级别"""
+        self.logger.info("[清空地图] 使用统一刷新方法清空地图并保持视图")
+        # 使用统一的刷新方法，不保留任何元素但保持视图
+        self.reload_map(keep_view=True, keep_route=False, keep_points=False, keep_search_results=False)
 
     def update_map_preview_simple(self, center_coords: Tuple[float, float], zoom_level: int = 13):
         """简单更新地图预览，不改变缩放级别
@@ -649,6 +671,27 @@ class MapManager:
             'radius': radius,
             'coord_system': coord_system  # 保存坐标系统信息
         }
+        
+        # 【关键修复】确保 search_results 中包含当前预览的结果
+        # 这样切换地图模式时才能保留标识
+        if not self.data_manager.search_results:
+            # 如果 search_results 为空，自动创建一个
+            search_result = {
+                'name': name,
+                'address': name,
+                'lat': coords[0],
+                'lon': coords[1],
+                'level': level,
+                'type': type_info,
+                'radius': radius,
+                'coord_system': coord_system,
+                'data_source': 'preview'
+            }
+            self.data_manager.search_results = [search_result]
+            self.data_manager.selected_search_result_coords = coords
+            self.logger.warning(f"[地图预览] search_results 为空，自动创建: {name}")
+        else:
+            self.logger.debug(f"[地图预览] search_results 已存在，长度: {len(self.data_manager.search_results)}")
 
         # 根据地点级别、类型和实际范围计算缩放级别
         zoom_level = MapRenderer.get_zoom_by_level(level, type_info, radius)
@@ -1035,7 +1078,9 @@ class MapManager:
             map_obj: 地图对象
             preview_coords: 预览坐标（如果指定，则该坐标的标记会被跳过，因为已经用高亮样式显示）
         """
-        if not self.data_manager.search_results or not self.data_manager.searching_for:
+        # 修改条件：只要有搜索结果就添加，不强制要求 searching_for
+        # 这样历史记录、定位结果等都可以正确保留
+        if not self.data_manager.search_results:
             return
 
         for i, location in enumerate(self.data_manager.search_results):
@@ -1434,6 +1479,8 @@ class MapManager:
                 # 保存当前中心和缩放级别
                 self.current_center = center
                 self.current_zoom = zoom
+                # 记录当前地图源
+                self._current_map_source = map_source
             else:
                 self.logger.error("地图视图为None，无法显示地图")
         except RuntimeError as e:

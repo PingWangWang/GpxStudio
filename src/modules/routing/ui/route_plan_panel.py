@@ -495,6 +495,7 @@ class RoutePlanPanel(QWidget):
     history_selected = pyqtSignal(dict)  # 选择历史记录
     address_selected = pyqtSignal(dict, str, bool)  # 地址选中：(地址数据, 类型: start/end/waypoint, 是否缩放地图)
     clear_route_clicked = pyqtSignal()  # 清除路线按钮点击
+    switch_start_end_clicked = pyqtSignal()  # 切换起止点按钮点击
     route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击：(路线数据, 按钮实例, 条目实例)
     history_export_gpx_clicked = pyqtSignal(dict, object, object)  # 历史记录导出GPX按钮点击：(历史记录数据, 按钮实例, 条目实例)
@@ -1342,12 +1343,35 @@ class RoutePlanPanel(QWidget):
             self.end_spacer.show()
 
     def _switch_start_end(self):
-        """切换起点和终点"""
+        """切换起点和终点，并反转途径点顺序"""
         start_text = self.start_input.text()
         end_text = self.end_input.text()
 
         self.start_input.setText(end_text)
         self.end_input.setText(start_text)
+        
+        # 同时交换坐标数据
+        self.start_coords, self.end_coords = self.end_coords, self.start_coords
+        
+        # 如果有途径点，反转途径点顺序
+        if self.waypoint_widgets:
+            # 收集途径点的文本和坐标
+            waypoint_texts = [widget_dict['input'].text() for widget_dict in self.waypoint_widgets]
+            waypoint_coords = self.waypoint_coords[:]
+            
+            # 反转顺序
+            waypoint_texts.reverse()
+            waypoint_coords.reverse()
+            
+            # 更新UI中的途径点文本
+            for i, widget_dict in enumerate(self.waypoint_widgets):
+                widget_dict['input'].setText(waypoint_texts[i])
+            
+            # 更新途径点坐标
+            self.waypoint_coords = waypoint_coords
+        
+        # 发送信号，通知外部更新数据管理器和地图
+        self.switch_start_end_clicked.emit()
 
     def _add_waypoint(self):
         """添加途径点"""

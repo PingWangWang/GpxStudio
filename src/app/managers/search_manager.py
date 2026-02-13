@@ -402,6 +402,28 @@ class SearchManager(QObject):
         radius = record.get('radius', None)
 
         coords = (lat, lon)
+        
+        # 重要：将历史记录设置为搜索结果，这样在切换地图模式时才能保留标识
+        # 创建一个搜索结果对象
+        search_result = {
+            'name': name,
+            'address': record.get('address', name),
+            'lat': lat,
+            'lon': lon,
+            'level': level,
+            'type': type_info,
+            'radius': radius,
+            'coord_system': record.get('coord_system', 'WGS-84'),
+            'data_source': record.get('data_source', 'history')
+        }
+        
+        # 设置搜索结果（单个结果）
+        self.data_manager.search_results = [search_result]
+        self.data_manager.searching_for = 'start'  # 默认设置为起点搜索
+        self.data_manager.selected_search_result_coords = coords
+        
+        self.logger.info(f"[搜索历史] ✅ 已设置 search_results，长度: {len(self.data_manager.search_results)}")
+        self.logger.debug(f"[搜索历史] search_results 内容: {self.data_manager.search_results}")
 
         # 直接在地图上预览（不需要搜索）
         self.ui_updater['preview_search_result'](coords, name, level, type_info, radius)

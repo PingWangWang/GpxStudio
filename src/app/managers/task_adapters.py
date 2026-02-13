@@ -295,10 +295,13 @@ class MapRenderTaskAdapter:
             # 确定地图中心
             center = data_manager.start_coords or valid_points[0]
 
+            # 获取地图模式
+            map_mode = map_config.get_map_mode()
+
             # 创建基础地图
             map_create_start = time.time()
-            log_callback("DEBUG", f"创建地图，中心: {center}")
-            m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source, coord_system=coord_system)
+            log_callback("DEBUG", f"创建地图，中心: {center}，地图模式: {map_mode}")
+            m = MapRenderer.create_base_map(center, zoom_start=12, map_type=map_mode, map_source=map_source, coord_system=coord_system)
             map_create_time = (time.time() - map_create_start) * 1000
 
             progress_callback(40, "正在添加地图标记...")

@@ -280,6 +280,7 @@ class GpxStudio(QMainWindow):
             self.route_plan_panel.cancel_clicked.connect(self._on_route_panel_cancel)
             self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)  # 修正信号名称
             self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)  # 修正信号名称
+            self.route_plan_panel.switch_start_end_clicked.connect(self._on_route_switch_start_end)  # 切换起止点信号
             self.route_plan_panel.search_location_clicked.connect(self._on_route_location_search)  # 修正信号名称
             self.route_plan_panel.address_selected.connect(self._on_route_address_selected)
             self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
@@ -2084,57 +2085,9 @@ class GpxStudio(QMainWindow):
         else:  # 街道模式
             self.road_overlay_button.hide()
         
-        # 重新加载地图，使用新的地图模式
+        # 重新加载地图，保持当前视图和所有元素
         if hasattr(self, 'map_manager'):
-            # 尝试从HTTP服务器获取当前实时视口状态
-            from modules.map.http_server import get_map_server
-            from modules.geolocation.coordinate_transform import CoordinateTransform
-            
-            current_center = None
-            current_zoom = None
-            
-            try:
-                # 优先从HTTP服务器获取实时视口中心和缩放
-                map_server = get_map_server()
-                viewport_center = map_server.get_current_viewport_center()
-                viewport_zoom = map_server.get_current_zoom()
-                
-                if viewport_center and viewport_zoom:
-                    # HTTP服务器返回的坐标是浏览器中Leaflet地图的实际显示坐标
-                    # 需要判断当前地图源来确定坐标系统
-                    current_map_source = map_config.get_map_source()
-                    
-                    # 直接使用视口坐标，并告知其坐标系统（避免不必要的转换）
-                    if current_map_source == 'gaode':
-                        # 当前是高德地图，视口坐标是GCJ-02
-                        current_center = viewport_center
-                        viewport_coord_system = 'GCJ-02'
-                        self.logger.debug(f"[地图切换] 视口中心(GCJ-02): {current_center}")
-                    else:
-                        # 当前是OSM地图，视口坐标是WGS-84
-                        current_center = viewport_center
-                        viewport_coord_system = 'WGS-84'
-                        self.logger.debug(f"[地图切换] 视口中心(WGS-84): {current_center}")
-                    
-                    current_zoom = viewport_zoom
-                    self.logger.debug(f"[地图切换] 从HTTP服务器获取视口 - 缩放: {current_zoom}, 坐标系: {viewport_coord_system}")
-                else:
-                    # 如果HTTP服务器没有视口信息，使用map_manager保存的状态
-                    current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
-                    current_zoom = getattr(self.map_manager, 'current_zoom', 10)
-                    self.logger.debug(f"[地图切换] HTTP服务器无视口信息，使用map_manager - 中心: {current_center}, 缩放: {current_zoom}")
-            except Exception as e:
-                self.logger.warning(f"[地图切换] 获取视口状态失败: {e}，使用默认值")
-                current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
-                current_zoom = getattr(self.map_manager, 'current_zoom', 10)
-            
-            # 重新显示地图（传递坐标系统信息，避免不必要的转换）
-            self.map_manager.show_map(
-                center=current_center,
-                zoom=current_zoom,
-                title="地图",
-                coord_system=viewport_coord_system if viewport_center and viewport_zoom else 'WGS-84'
-            )
+            self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True)
             
             # 同步路网按钮状态
             self._sync_road_button_state()
@@ -2405,8 +2358,8 @@ class GpxStudio(QMainWindow):
         # 重新初始化服务（使用新的API Key）
         self.service_manager.initialize_services()
 
-        # 重新加载地图
-        self._show_initial_map()
+        # 重新加载地图，保持当前视图和所有元素
+        self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True)
 
     def _on_map_settings_popup_closed(self):
         """地图设置弹出面板关闭时的处理"""
@@ -3136,6 +3089,34 @@ class GpxStudio(QMainWindow):
         self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
 
         self.logger.info("[路线面板] 路线已清除")
+
+    def _on_route_switch_start_end(self):
+        """切换起止点按钮点击，并反转途径点顺序"""
+        self.logger.info("[路线面板] 切换起止点")
+
+        # 交换 data_manager 中的起止点数据
+        temp_coords = self.data_manager.start_coords
+        temp_name = self.data_manager.start_name
+        temp_level = self.data_manager.start_level
+
+        self.data_manager.start_coords = self.data_manager.end_coords
+        self.data_manager.start_name = self.data_manager.end_name
+        self.data_manager.start_level = self.data_manager.end_level
+
+        self.data_manager.end_coords = temp_coords
+        self.data_manager.end_name = temp_name
+        self.data_manager.end_level = temp_level
+
+        # 如果有途径点，反转途径点顺序
+        if self.data_manager.waypoints_coords:
+            self.data_manager.waypoints_coords.reverse()
+            self.data_manager.waypoints_names.reverse()
+            self.logger.info(f"[路线面板] 途径点已反转，数量: {len(self.data_manager.waypoints_coords)}")
+
+        # 更新地图显示，刷新起止点标记
+        self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
+
+        self.logger.info(f"[路线面板] 起止点已交换: 起点={self.data_manager.start_name}, 终点={self.data_manager.end_name}")
 
     def _on_route_location_search(self, search_text: str, location_type: str):
         """路线面板中的地点搜索"""
