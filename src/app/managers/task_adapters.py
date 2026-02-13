@@ -321,7 +321,7 @@ class MapRenderTaskAdapter:
 
             for i, wp in enumerate(data_manager.waypoints_coords):
                 wp_name = data_manager.waypoints_names[i] if i < len(data_manager.waypoints_names) else f"途径点{i+1}"
-                MapRenderer.add_marker(m, wp, wp_name, 'blue', 'info-sign', map_source, coord_system=coord_system)
+                MapRenderer.add_marker(m, wp, wp_name, 'blue', 'info-sign', map_source, coord_system=coord_system, number=i + 1)
             markers_time = (time.time() - markers_start) * 1000
 
             progress_callback(60, "正在绘制路线...")

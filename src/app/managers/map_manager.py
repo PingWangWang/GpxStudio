@@ -1055,7 +1055,8 @@ class MapManager:
                 map_obj, waypoint, display_name,
                 color=COLOR_INFO, icon=ICON_INFO,
                 map_source=map_source,
-                coord_system=waypoint_coord_system
+                coord_system=waypoint_coord_system,
+                number=i + 1  # 添加序号显示
             )
 
         # 添加终点（红色标记）

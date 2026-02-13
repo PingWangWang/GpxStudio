@@ -600,7 +600,7 @@ class MapRenderer:
         return m
 
     @staticmethod
-    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign', map_source='gaode', coord_system='WGS-84'):
+    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign', map_source='gaode', coord_system='WGS-84', number=None):
         """
         添加标记点
 
@@ -612,6 +612,7 @@ class MapRenderer:
             icon: 图标
             map_source: 地图数据源
             coord_system: 输入坐标系统 ('WGS-84', 'GCJ-02')
+            number: 标记序号（可选），用于在标记上显示数字
         """
         # 只在坐标系统不匹配时进行转换
         marker_location = location
@@ -627,10 +628,33 @@ class MapRenderer:
             marker_location = [wgs_lat, wgs_lon]
         # 否则直接使用（坐标系统匹配）
         
+        # 如果提供了序号，使用自定义DivIcon显示带序号的标记
+        if number is not None:
+            # 蓝色圆形标记，白色数字
+            html = f'''
+            <div style="
+                background-color: #007bff;
+                border: 2px solid white;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                color: white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            ">{number}</div>
+            '''
+            marker_icon = folium.DivIcon(html=html)
+        else:
+            marker_icon = folium.Icon(color=color, icon=icon)
+        
         folium.Marker(
             location=marker_location,
             popup=popup_text,
-            icon=folium.Icon(color=color, icon=icon)
+            icon=marker_icon
         ).add_to(map_obj)
 
     @staticmethod
