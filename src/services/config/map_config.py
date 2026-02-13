@@ -163,8 +163,30 @@ class MapConfig(IConfigService):
 
                 # 处理API Key和安全密钥的保存
                 map_source = merged_config.get('map_source', '')
-                api_key = merged_config.get('api_key', '')
-                security_key = merged_config.get('security_key', '')
+                
+                # 关键修复：如果传入的config_data中没有api_key和security_key，
+                # 则从现有配置的gaode/osm子对象中获取，避免覆盖丢失
+                if 'api_key' in config_data:
+                    api_key = merged_config.get('api_key', '')
+                else:
+                    # 从现有配置中获取对应地图源的API Key
+                    if map_source == 'gaode':
+                        api_key = merged_config.get('gaode', {}).get('api_key', '')
+                    elif map_source == 'osm':
+                        api_key = merged_config.get('osm', {}).get('api_key', '')
+                    else:
+                        api_key = ''
+                
+                if 'security_key' in config_data:
+                    security_key = merged_config.get('security_key', '')
+                else:
+                    # 从现有配置中获取对应地图源的Security Key
+                    if map_source == 'gaode':
+                        security_key = merged_config.get('gaode', {}).get('security_key', '')
+                    elif map_source == 'osm':
+                        security_key = merged_config.get('osm', {}).get('security_key', '')
+                    else:
+                        security_key = ''
 
                 # 打印保存前的配置数据
                 print(f"[地图配置] 📝 保存配置 - map_source: {map_source}, api_key: {api_key[:10] if api_key else '(空)'}...")
@@ -290,8 +312,8 @@ class MapConfig(IConfigService):
     def set_map_mode(self, map_mode: str) -> bool:
         """设置地图模式"""
         try:
-            self._config_data['map_mode'] = map_mode
-            return self.save_config(self._config_data)
+            # 只传递需要修改的字段，避免覆盖API Key等其他配置
+            return self.save_config({'map_mode': map_mode})
         except Exception:
             return False
 
@@ -302,8 +324,8 @@ class MapConfig(IConfigService):
     def set_satellite_show_roads(self, show: bool) -> bool:
         """设置卫星地图是否显示路网"""
         try:
-            self._config_data['satellite_show_roads'] = show
-            return self.save_config(self._config_data)
+            # 只传递需要修改的字段，避免覆盖API Key等其他配置
+            return self.save_config({'satellite_show_roads': show})
         except Exception:
             return False
 
@@ -314,8 +336,8 @@ class MapConfig(IConfigService):
     def set_close_action(self, action: str) -> bool:
         """设置关闭动作"""
         try:
-            self._config_data['close_action'] = action
-            return self.save_config(self._config_data)
+            # 只传递需要修改的字段，避免覆盖API Key等其他配置
+            return self.save_config({'close_action': action})
         except Exception:
             return False
 

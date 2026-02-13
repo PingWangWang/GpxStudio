@@ -536,6 +536,7 @@ class RoutePlanPanel(QWidget):
         self.geo_info_storage = GeoInfoStorage()
         self.location_history_popup = None  # 延迟创建
         self.is_selecting_from_history = False  # 标志位：正在从历史记录选择
+        self.is_searching = False  # 标志位：正在执行搜索操作
         
         # 初始化UI
         self._init_ui()
@@ -723,6 +724,9 @@ class RoutePlanPanel(QWidget):
         self.start_input.setPlaceholderText("请输入起点")
         self.start_input.returnPressed.connect(lambda: self._on_search_location("start"))
         self.start_input.focusInEvent = lambda e: self._on_input_focus_in(e, "start", self.start_input)
+        self.start_input.focusOutEvent = lambda e: self._on_input_focus_out(e, self.start_input)
+        # 文本改变时隐藏历史记录弹出窗口，允许用户正常输入
+        self.start_input.textChanged.connect(self._on_input_text_changed)
         self.start_layout.addWidget(self.start_input)
 
         # 起点右侧占位符（用于保持输入框宽度一致）
@@ -768,6 +772,9 @@ class RoutePlanPanel(QWidget):
         self.end_input.setPlaceholderText("请输入终点")
         self.end_input.returnPressed.connect(lambda: self._on_search_location("end"))
         self.end_input.focusInEvent = lambda e: self._on_input_focus_in(e, "end", self.end_input)
+        self.end_input.focusOutEvent = lambda e: self._on_input_focus_out(e, self.end_input)
+        # 文本改变时隐藏历史记录弹出窗口，允许用户正常输入
+        self.end_input.textChanged.connect(self._on_input_text_changed)
         self.end_layout.addWidget(self.end_input)
 
         # 终点右侧占位符（用于保持输入框宽度一致）
@@ -1212,6 +1219,9 @@ class RoutePlanPanel(QWidget):
 
     def show_search_error(self, location_type: str):
         """显示搜索失败提示"""
+        # 清除搜索标志位（搜索失败时也要清除）
+        self.is_searching = False
+        
         if location_type == "start":
             input_widget = self.start_input
         elif location_type == "end":
@@ -1413,6 +1423,9 @@ class RoutePlanPanel(QWidget):
         waypoint_input.setPlaceholderText(f"请输入途径点{len(self.waypoint_widgets) + 1}")
         waypoint_input.returnPressed.connect(lambda: self._on_search_location("waypoint"))
         waypoint_input.focusInEvent = lambda e: self._on_input_focus_in(e, "waypoint", waypoint_input)
+        waypoint_input.focusOutEvent = lambda e: self._on_input_focus_out(e, waypoint_input)
+        # 文本改变时隐藏历史记录弹出窗口，允许用户正常输入
+        waypoint_input.textChanged.connect(self._on_input_text_changed)
         waypoint_layout.addWidget(waypoint_input)
 
         # 删除按钮
@@ -1581,6 +1594,13 @@ class RoutePlanPanel(QWidget):
             return
 
         if text:
+            # 关键修复：关闭历史记录面板，避免焦点重复获取导致程序卡死
+            if self.location_history_popup and self.location_history_popup.isVisible():
+                self.location_history_popup.hide()
+            
+            # 设置搜索标志位，防止在搜索过程中焦点事件触发历史面板
+            self.is_searching = True
+
             # 保存当前搜索文本（用于后续保存历史记录）
             self._current_search_text = text
 
@@ -1738,6 +1758,11 @@ class RoutePlanPanel(QWidget):
             QLineEdit.focusInEvent(input_widget, event)
             return
         
+        # 关键修复：如果正在搜索，跳过焦点处理，避免重复显示历史面板导致焦点循环
+        if self.is_searching:
+            QLineEdit.focusInEvent(input_widget, event)
+            return
+        
         # 如果之前有正在搜索的输入框，且不是当前输入框，则确认之前的选择
         if self.current_search_input and self.current_search_input != input_widget:
             self._confirm_current_selection()
@@ -1802,6 +1827,60 @@ class RoutePlanPanel(QWidget):
         finally:
             # 重置标志位
             self.is_selecting_from_history = False
+    
+    def _on_input_text_changed(self, text: str):
+        """输入框文本改变时的处理
+        
+        当用户开始输入时，自动隐藏历史记录弹出窗口，
+        确保用户可以正常使用键盘（退格键、回车键等）
+        """
+        # 如果正在从历史记录选择，不隐藏弹出窗口
+        if self.is_selecting_from_history:
+            return
+        
+        # 用户开始输入，隐藏历史记录弹出窗口
+        if self.location_history_popup and self.location_history_popup.isVisible():
+            self.location_history_popup.hide()
+    
+    def _on_input_focus_out(self, event, input_widget):
+        """输入框失去焦点时的处理
+        
+        延迟关闭历史记录弹出窗口，给用户时间点击历史记录项
+        """
+        # 如果正在从历史记录选择，不关闭弹出窗口
+        if self.is_selecting_from_history:
+            QLineEdit.focusOutEvent(input_widget, event)
+            return
+        
+        # 使用QTimer延迟关闭，给用户时间点击历史记录面板
+        # 如果用户点击的是历史记录面板，面板会在点击处理中自己关闭
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(150, self._delayed_hide_history_popup)
+        
+        # 调用原始的focusOutEvent
+        QLineEdit.focusOutEvent(input_widget, event)
+    
+    def _delayed_hide_history_popup(self):
+        """延迟隐藏历史记录弹出窗口
+        
+        检查鼠标是否在历史记录弹出窗口内，如果不在则关闭
+        """
+        if not self.location_history_popup or not self.location_history_popup.isVisible():
+            return
+        
+        # 获取鼠标当前位置
+        from PyQt5.QtGui import QCursor
+        cursor_pos = QCursor.pos()
+        
+        # 检查鼠标是否在历史记录弹出窗口内
+        popup_rect = self.location_history_popup.rect()
+        popup_global_pos = self.location_history_popup.mapToGlobal(popup_rect.topLeft())
+        from PyQt5.QtCore import QRect
+        popup_global_rect = QRect(popup_global_pos, popup_rect.size())
+        
+        # 如果鼠标不在弹出窗口内，关闭它
+        if not popup_global_rect.contains(cursor_pos):
+            self.location_history_popup.hide()
     
     def _on_clear_location_history(self):
         """清空地点搜索历史"""
@@ -1938,11 +2017,16 @@ class RoutePlanPanel(QWidget):
         # 默认选中第一项
         if self.address_suggestions_list.count() > 0:
             self.address_suggestions_list.setCurrentRow(0)
+        
+        # 清除搜索标志位，搜索结果已显示
+        self.is_searching = False
 
     def hide_address_suggestions_and_show_history(self):
         """隐藏地址待选列表，显示历史记录"""
         self._hide_address_suggestions()
         self.history_container.setVisible(True)
+        # 清除搜索标志位（搜索失败或无结果时也要清除）
+        self.is_searching = False
 
     def get_current_search_type(self):
         """获取当前正在搜索的类型"""

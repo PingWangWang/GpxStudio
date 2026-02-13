@@ -83,8 +83,9 @@ class LocationHistoryPopup(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # 设置窗口标志 - 弹出窗口，无边框
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        # 设置窗口标志 - 使用Tool而非Popup，避免捕获所有键盘事件导致输入框无法使用
+        # Qt.Popup会捕获所有事件，导致输入框的退格键、回车键等按键无法工作
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         
         # 历史记录列表
@@ -263,3 +264,20 @@ class LocationHistoryPopup(QWidget):
         self.move(global_pos)
         self.show()
         self.raise_()
+    
+    def keyPressEvent(self, event):
+        """处理键盘事件"""
+        # 按ESC键关闭弹出窗口
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+            event.accept()
+        else:
+            # 其他按键不处理，让事件继续传递
+            event.ignore()
+    
+    def hideEvent(self, event):
+        """窗口隐藏事件"""
+        super().hideEvent(event)
+        # 清除选择状态
+        if hasattr(self, 'history_list'):
+            self.history_list.clearSelection()

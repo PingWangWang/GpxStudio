@@ -3113,6 +3113,18 @@ class GpxStudio(QMainWindow):
             self.data_manager.waypoints_names.reverse()
             self.logger.info(f"[路线面板] 途径点已反转，数量: {len(self.data_manager.waypoints_coords)}")
 
+        # 关键修复：更新 _current_route_info，确保后续规划使用新的途径点信息
+        if hasattr(self, '_current_route_info') and self._current_route_info:
+            # 更新起止点信息
+            self._current_route_info['start'] = self.data_manager.start_name
+            self._current_route_info['end'] = self.data_manager.end_name
+            self._current_route_info['start_coords'] = self.data_manager.start_coords
+            self._current_route_info['end_coords'] = self.data_manager.end_coords
+            # 更新途径点信息（已反转）
+            self._current_route_info['waypoints'] = self.data_manager.waypoints_names[:]
+            self._current_route_info['waypoint_coords'] = self.data_manager.waypoints_coords[:]
+            self.logger.info(f"[路线面板] 已更新_current_route_info: 途径点数量={len(self._current_route_info['waypoints'])}")
+
         # 更新地图显示，刷新起止点标记
         self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
 
