@@ -290,8 +290,8 @@ class MapRenderer:
             
             osm_tile_urls = {
                 'roadmap': f'{proxy_url_base}/roadmap/{{z}}/{{x}}/{{y}}',
-                'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                'hybrid': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                'satellite': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}',
+                'hybrid': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}'  # hybrid使用satellite瓦片
             }
             
             tile_url = osm_tile_urls.get(map_type, osm_tile_urls['roadmap'])
@@ -563,6 +563,10 @@ class MapRenderer:
                              }
                          });
                          
+                         layer.on('tileerror', function(e) {
+                             console.error('[地图瓦片] 瓦片加载失败:', e.coords, e.error);
+                         });
+                         
                          layer.on('load', function(e) {
                              console.log('[地图瓦片] 当前视口瓦片加载完成');
                          });
@@ -578,6 +582,9 @@ class MapRenderer:
                              if (ev.coords) {
                                  console.log('[地图瓦片] 开始加载瓦片: z=' + ev.coords.z + ', x=' + ev.coords.x + ', y=' + ev.coords.y);
                              }
+                         });
+                         e.layer.on('tileerror', function(ev) {
+                             console.error('[地图瓦片] 瓦片加载失败:', ev.coords, ev.error);
                          });
                          e.layer._gpx_listeners_attached = true;
                     }

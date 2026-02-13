@@ -21,7 +21,8 @@ TILE_SOURCES = {
     },
     'osm': {
         'roadmap': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        # OSM其他源根据需要添加，这里主要支持roadmap作为示例
+        'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        # 注意：ArcGIS的URL格式是 {z}/{y}/{x}，与OSM的 {z}/{x}/{y} 不同
     }
 }
 
@@ -180,13 +181,21 @@ class MapServer:
                 try:
                     # 路径格式: /tiles/gaode/roadmap/10/32/45
                     parts = self.path.strip('/').split('/')
-                    if len(parts) < 5:
+                    
+                    # 添加调试信息
+                    print(f"[TileCache] 收到瓦片请求: {self.path}, parts数量={len(parts)}")
+                    
+                    if len(parts) < 6:  # 修复：需要至少6个部分（tiles/source/style/z/x/y）
+                        print(f"[TileCache] 无效的瓦片请求格式: {self.path}, parts={parts}")
+                        server_instance.logger.warning(f"[瓦片缓存] 无效的瓦片请求格式: {self.path}, parts={parts}")
                         self.send_error(400, "Invalid tile request format")
                         return
                     
                     source = parts[1]
                     style = parts[2]
                     z, x, y = parts[3], parts[4], parts[5]
+                    
+                    print(f"[TileCache] 解析瓦片参数: source={source}, style={style}, z={z}, x={x}, y={y}")
                     
                     # 选择正确的缓存根目录
                     if source == 'gaode':
@@ -201,8 +210,11 @@ class MapServer:
                     cache_subdir = os.path.join(base_path, style, z, x)
                     cache_file = os.path.join(cache_subdir, y) # 文件名为y
                     
+                    print(f"[TileCache] 缓存路径: {cache_file}")
+                    
                     # 1. 检查缓存
                     if os.path.exists(cache_file):
+                        print(f"[TileCache] 缓存文件存在: {cache_file}")
                         # 检查有效期 (30天 = 30 * 24 * 3600 秒)
                         mtime = os.path.getmtime(cache_file)
                         if time.time() - mtime < 2592000:
@@ -231,6 +243,8 @@ class MapServer:
                                     # 之前的"视口完整性检查"会导致部分缓存时也强制走网络，造成地图灰白加载慢
                                     # 恢复为标准缓存策略：有则用，无则下
                                     
+                                    server_instance.logger.debug(f"[瓦片缓存] 缓存命中: {cache_file}")
+                                    
                                     self.send_response(200)
                                     self.send_header('Content-Type', 'image/png')
                                     self.send_header('Content-Length', str(len(content)))
@@ -250,6 +264,9 @@ class MapServer:
                     if not real_url:
                         self.send_error(404, "Tile source not found")
                         return
+
+                    # 记录缓存未命中，准备下载
+                    server_instance.logger.debug(f"[瓦片缓存] 缓存未命中，准备下载: source={source}, style={style}, z={z}, x={x}, y={y}")
 
                     # 3. 同步下载并代理返回 (Proxy Mode)
                     # 放弃Redirect模式，改为直接作为代理服务器
@@ -320,10 +337,17 @@ class MapServer:
                 """根据配置生成真实URL"""
                 start_time = time.time()
                 
-                # OSM特殊处理：使用镜像服务器
+                # OSM特殊处理
                 if source == 'osm':
-                    mirror_url = OSM_TILE_MIRRORS[server_instance.current_osm_mirror_index]
-                    return mirror_url.format(x=x, y=y, z=z)
+                    if style == 'roadmap':
+                        # roadmap使用镜像服务器
+                        mirror_url = OSM_TILE_MIRRORS[server_instance.current_osm_mirror_index]
+                        return mirror_url.format(x=x, y=y, z=z)
+                    elif style == 'satellite':
+                        # satellite使用ArcGIS，注意URL格式是 {z}/{y}/{x}
+                        template = TILE_SOURCES.get(source, {}).get(style)
+                        if template:
+                            return template.format(z=z, y=y, x=x)  # 注意：y和x的顺序
                 
                 # 其他源使用配置
                 template = TILE_SOURCES.get(source, {}).get(style)
@@ -398,7 +422,8 @@ class MapServer:
                             
                             # 移动/覆盖原文件
                             shutil.move(temp_file, cache_file)
-                            # server_instance.logger.info(f"CACHED: {cache_file}")
+                            # 添加缓存成功日志
+                            server_instance.logger.info(f"[瓦片缓存] 瓦片已缓存到: {cache_file}")
                             return # 成功，退出重试循环
                         elif response.status_code in [403, 418, 429]:
                             # 403/418/429：OSM封禁或限流，尝试切换镜像
