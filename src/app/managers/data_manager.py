@@ -233,7 +233,7 @@ class DataManager:
         import traceback
         import logging
         logger = logging.getLogger('GpxStudio')
-        logger.warning(f"[数据管理器] ⚠️ search_results 被清空")
+        logger.debug(f"[数据管理器] search_results 被清空")
         logger.debug(f"[数据管理器] 调用堆栈:\n{''.join(traceback.format_stack()[-5:-1])}")
         self.search_results = []
         self.searching_for = None

@@ -619,10 +619,18 @@ class MapManager:
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
 
+        # 推断坐标系：右键菜单传入的坐标与当前地图源一致
+        # 高德地图：GCJ-02，OSM地图：WGS-84
+        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+
         # 获取地图模式
         map_mode = map_config.get_map_mode()
-        # 创建基础地图，使用指定的缩放级别
-        m = MapRenderer.create_base_map([center_coords[0], center_coords[1]], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
+        # 创建基础地图，使用指定的缩放级别和坐标系
+        m = MapRenderer.create_base_map([center_coords[0], center_coords[1]], 
+                                       zoom_start=zoom_level, 
+                                       map_type=map_mode, 
+                                       map_source=map_source,
+                                       coord_system=coord_system)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)

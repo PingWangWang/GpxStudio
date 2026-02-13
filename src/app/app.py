@@ -221,6 +221,9 @@ class GpxStudio(QMainWindow):
         # 初始化设置相关的弹出面板
         self._init_settings_popups()
 
+        # 初始化位置信息弹出面板
+        self._init_location_info_popup()
+
         # 初始化路线规划面板
         self._init_route_plan_panel()
 
@@ -265,6 +268,20 @@ class GpxStudio(QMainWindow):
                 self.logger.error(f"无法导入设置弹出面板: {e}")
             else:
                 print(f"无法导入设置弹出面板: {e}")
+
+    def _init_location_info_popup(self):
+        """初始化位置信息弹出面板"""
+        try:
+            from ui.popups.location_info_popup import LocationInfoPopup
+
+            # 创建位置信息弹出面板
+            self.location_info_popup = LocationInfoPopup(self)
+
+        except ImportError as e:
+            if hasattr(self, 'logger'):
+                self.logger.error(f"无法导入位置信息弹出面板: {e}")
+            else:
+                print(f"无法导入位置信息弹出面板: {e}")
 
     def _init_route_plan_panel(self):
         """初始化路线规划面板"""
@@ -2514,6 +2531,9 @@ class GpxStudio(QMainWindow):
         # 获取鼠标当前位置
         from PyQt5.QtGui import QCursor
         cursor_pos = QCursor.pos()
+        
+        # 保存右键点击位置，供"这是哪儿"等功能使用
+        self._context_menu_click_pos = cursor_pos
 
         # 显示菜单
         self.map_context_menu.show_menu(cursor_pos, location_info['lat'], location_info['lon'])
@@ -4390,6 +4410,12 @@ class GpxStudio(QMainWindow):
         # 保存起点信息到数据管理器（用于在地图上显示标记）
         self.data_manager.set_start_location((lat, lon), address_name)
         self.data_manager.start_level = level
+        
+        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
+        # 高德地图：GCJ-02，OSM地图：WGS-84
+        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        self.data_manager.start_coord_system = current_coord_system
+        self.logger.debug(f"[右键菜单] 保存起点坐标系: {current_coord_system}")
 
         # 清除搜索结果（数据和UI）
         self.search_manager.clear_search_results()
@@ -4472,6 +4498,13 @@ class GpxStudio(QMainWindow):
         if not hasattr(self.data_manager, 'waypoints_level'):
             self.data_manager.waypoints_level = []
         self.data_manager.waypoints_level.append(level)
+        
+        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
+        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        if not hasattr(self.data_manager, 'waypoint_coord_systems'):
+            self.data_manager.waypoint_coord_systems = []
+        self.data_manager.waypoint_coord_systems.append(current_coord_system)
+        self.logger.debug(f"[右键菜单] 保存途径点坐标系: {current_coord_system}")
 
         # 清除搜索结果（数据和UI）
         self.search_manager.clear_search_results()
@@ -4537,6 +4570,11 @@ class GpxStudio(QMainWindow):
         # 保存终点信息到数据管理器（用于在地图上显示标记）
         self.data_manager.set_end_location((lat, lon), address_name)
         self.data_manager.end_level = level
+        
+        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
+        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        self.data_manager.end_coord_system = current_coord_system
+        self.logger.debug(f"[右键菜单] 保存终点坐标系: {current_coord_system}")
 
         # 清除搜索结果（数据和UI）
         self.search_manager.clear_search_results()
@@ -4555,8 +4593,83 @@ class GpxStudio(QMainWindow):
     def _on_context_menu_query_here(self, lat: float, lon: float):
         """右键菜单：这是哪儿"""
         self.logger.info(f"[右键菜单] 这是哪儿: ({lat}, {lon})")
-        # TODO: 实现显示位置详细信息的功能
-        pass
+        
+        # 验证坐标有效性（经度范围：-180到180，纬度范围：-90到90）
+        if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+            self.logger.warning(f"[右键菜单] 无效的坐标: lat={lat}, lon={lon}")
+            # 显示错误信息
+            location_data = {
+                'name': '无效坐标',
+                'address': f'坐标值超出有效范围',
+                'lat': lat,
+                'lon': lon,
+                'type': ''
+            }
+            # 获取鼠标当前位置
+            from PyQt5.QtGui import QCursor
+            cursor_pos = QCursor.pos()
+            
+            # 显示位置信息面板
+            if hasattr(self, 'location_info_popup'):
+                self.location_info_popup.show_location_info(location_data, cursor_pos)
+            return
+        
+        # 获取当前地图源
+        map_source = map_config.get_map_source()
+        
+        # 获取地理编码服务
+        geocoding_service = self.service_manager.get_geocoding_service(map_source)
+        
+        # 默认位置数据
+        location_data = {
+            'name': f'位置 ({lat:.6f}, {lon:.6f})',
+            'address': '',
+            'lat': lat,
+            'lon': lon,
+            'type': ''
+        }
+        
+        if geocoding_service:
+            try:
+                # 执行逆地理编码查询
+                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
+                result = geocoding_service.reverse_geocode(lat, lon)
+                
+                if result:
+                    # 获取地址名称和详细信息
+                    full_address = result.get('full_address', '')
+                    name = result.get('name', full_address)
+                    type_info = result.get('type', '')
+                    
+                    if name:
+                        location_data['name'] = name
+                    if full_address:
+                        location_data['address'] = full_address
+                    if type_info:
+                        location_data['type'] = type_info
+                    
+                    self.logger.info(f"[右键菜单] 逆地理编码成功: {name}")
+                else:
+                    self.logger.warning(f"[右键菜单] 逆地理编码未返回结果")
+                    
+            except Exception as e:
+                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
+        else:
+            self.logger.warning("[右键菜单] 地理编码服务不可用")
+        
+        # 使用保存的右键点击位置，而不是当前鼠标位置
+        # 这样面板会出现在右键点击的位置
+        click_pos = getattr(self, '_context_menu_click_pos', None)
+        if click_pos is None:
+            # 如果没有保存的位置，使用当前鼠标位置作为后备
+            from PyQt5.QtGui import QCursor
+            click_pos = QCursor.pos()
+        
+        # 显示位置信息面板
+        if hasattr(self, 'location_info_popup'):
+            self.location_info_popup.show_location_info(location_data, click_pos)
+        else:
+            self.logger.error("[右键菜单] 位置信息面板不存在")
 
     def _on_context_menu_set_center(self, lat: float, lon: float):
         """右键菜单：设为地图中心点（仅平移，显示箭头标记）"""
