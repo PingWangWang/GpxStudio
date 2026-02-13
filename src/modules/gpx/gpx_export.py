@@ -55,7 +55,7 @@ class GpxExportService:
                 self.logger("WARNING", f"时区检测失败: {str(e)}，使用东八区")
             return timezone(timedelta(hours=8))
 
-    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None, total_distance_meters=None):
         """
         导出路线为GPX文件
 
@@ -67,6 +67,7 @@ class GpxExportService:
             end_name: 终点名称
             export_elevation: 是否导出海拔数据
             total_duration_seconds: 路线预估总时长（秒），用于计算每个点的时间。如果为None，则使用默认的10秒间隔
+            total_distance_meters: 路线总距离（米），用于添加到GPX文件的extensions中
 
         Returns:
             bool: 是否成功
@@ -126,6 +127,13 @@ class GpxExportService:
             gpx_track = GPXTrack()
             gpx_track.name = track_name
             gpx.tracks.append(gpx_track)
+
+            # 如果提供了总距离，添加到轨迹的extensions中
+            if total_distance_meters is not None:
+                # gpxpy的Track对象支持extensions
+                if not hasattr(gpx_track, 'extensions'):
+                    gpx_track.extensions = {}
+                log_cb("INFO", f"添加路线总距离: {total_distance_meters}米")
 
             # 创建轨迹段
             gpx_segment = GPXTrackSegment()
@@ -234,6 +242,16 @@ class GpxExportService:
             import re
             # 替换所有的Z结尾时间戳为+00:00格式
             xml_output = re.sub(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z', r'\1+00:00', xml_output)
+
+            # 添加totalDistance到轨迹的extensions中
+            if total_distance_meters is not None:
+                # 查找<trk>标签后面的位置，插入extensions
+                trk_name_match = re.search(r'(<trk>\s*<name>.*?</name>)', xml_output, re.DOTALL)
+                if trk_name_match:
+                    insert_pos = trk_name_match.end()
+                    extensions_xml = f'\n    <extensions>\n      <totalDistance>{int(total_distance_meters)}</totalDistance>\n    </extensions>'
+                    xml_output = xml_output[:insert_pos] + extensions_xml + xml_output[insert_pos:]
+                    log_cb("DEBUG", f"已在XML中添加totalDistance: {int(total_distance_meters)}米")
 
             # 替换XML头部，添加完整的元数据
             import re

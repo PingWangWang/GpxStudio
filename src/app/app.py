@@ -3833,13 +3833,16 @@ class GpxStudio(QMainWindow):
             # 获取预估总时长
             total_duration_seconds = route_data.get('duration', None)
 
+            # 获取路线总距离（米）
+            total_distance_meters = route_data.get('distance', None)
+
             # 创建导出线程
             class ExportThread(QThread):
                 """导出线程"""
                 progress_updated = pyqtSignal(int, str)
                 export_completed = pyqtSignal(bool, str)
 
-                def __init__(self, parent, route_points, start_time, file_path, start_name, end_name, export_elevation, total_duration_seconds):
+                def __init__(self, parent, route_points, start_time, file_path, start_name, end_name, export_elevation, total_duration_seconds, total_distance_meters=None, route_history_storage=None, route_data=None):
                     super().__init__(parent)
                     self.route_points = route_points
                     self.start_time = start_time
@@ -3848,6 +3851,9 @@ class GpxStudio(QMainWindow):
                     self.end_name = end_name
                     self.export_elevation = export_elevation
                     self.total_duration_seconds = total_duration_seconds
+                    self.total_distance_meters = total_distance_meters
+                    self.route_history_storage = route_history_storage
+                    self.route_data = route_data
 
                 def run(self):
                     """线程运行"""
@@ -3860,23 +3866,43 @@ class GpxStudio(QMainWindow):
                         gpx_service = GpxExportService(logger=log_callback)
 
                         # 如果需要导出海拔数据，先获取海拔数据
+                        elevation_data_obtained = False  # 标记是否成功获取了新的海拔数据
                         if self.export_elevation:
-                            self.progress_updated.emit(20, "正在获取海拔数据...")
+                            # 先检查历史记录中是否已有海拔数据
+                            has_cached_elevation = False
+                            if self.route_history_storage and self.route_data:
+                                # 检查当前route_points中是否已有海拔数据（第三个元素）
+                                if self.route_points and len(self.route_points) > 0:
+                                    # 检查第一个有效点是否包含海拔数据
+                                    for point in self.route_points:
+                                        if point is not None and len(point) >= 3:
+                                            has_cached_elevation = True
+                                            self.parent().logger.info(f"[GPX导出] 使用历史记录中缓存的海拔数据")
+                                            self.progress_updated.emit(30, "使用缓存的海拔数据...")
+                                            break
+                            
+                            if not has_cached_elevation:
+                                # 没有缓存的海拔数据，需要重新获取
+                                self.progress_updated.emit(20, "正在获取海拔数据...")
 
-                            # 获取海拔数据
-                            from services.config.map_config import map_config
-                            map_source = map_config.get_map_source()
-                            if map_source:
-                                routing_service = self.parent().service_manager.get_routing_service(map_source)
-                                if hasattr(routing_service, '_get_elevation'):
-                                    # 获取海拔数据
-                                    route_points_with_elevation = routing_service._get_elevation(self.route_points)
-                                    self.route_points = route_points_with_elevation
-                                    self.progress_updated.emit(50, "海拔数据获取完成，正在导出GPX文件...")
+                                # 获取海拔数据
+                                from services.config.map_config import map_config
+                                map_source = map_config.get_map_source()
+                                if map_source:
+                                    routing_service = self.parent().service_manager.get_routing_service(map_source)
+                                    if hasattr(routing_service, '_get_elevation'):
+                                        # 获取海拔数据
+                                        route_points_with_elevation = routing_service._get_elevation(self.route_points)
+                                        self.route_points = route_points_with_elevation
+                                        elevation_data_obtained = True  # 标记成功获取了新的海拔数据
+                                        self.progress_updated.emit(50, "海拔数据获取完成，正在导出GPX文件...")
+                                        self.parent().logger.info(f"[GPX导出] 海拔数据获取成功")
+                                    else:
+                                        self.progress_updated.emit(50, "当前地图服务不支持海拔数据获取，正在导出GPX文件...")
                                 else:
-                                    self.progress_updated.emit(50, "当前地图服务不支持海拔数据获取，正在导出GPX文件...")
+                                    self.progress_updated.emit(50, "未设置地图服务，正在导出GPX文件...")
                             else:
-                                self.progress_updated.emit(50, "未设置地图服务，正在导出GPX文件...")
+                                self.progress_updated.emit(50, "正在导出GPX文件...")
                         else:
                             self.progress_updated.emit(50, "正在导出GPX文件...")
 
@@ -3888,8 +3914,40 @@ class GpxStudio(QMainWindow):
                             start_name=self.start_name,
                             end_name=self.end_name,
                             export_elevation=self.export_elevation,
-                            total_duration_seconds=self.total_duration_seconds
+                            total_duration_seconds=self.total_duration_seconds,
+                            total_distance_meters=self.total_distance_meters
                         )
+
+                        # 如果成功获取了新的海拔数据，更新到历史记录
+                        if success and elevation_data_obtained and self.route_history_storage and self.route_data:
+                            try:
+                                # 获取路线的起点和终点信息用于查找历史记录
+                                start_name = self.route_data.get('start_name') or self.start_name
+                                end_name = self.route_data.get('end_name') or self.end_name
+                                
+                                # 获取交通方式（从data_manager或route_data）
+                                mode = self.route_data.get('mode', 'driving')
+                                
+                                # 更新历史记录中的route_points（包含海拔数据）
+                                # 使用add_record方法，它会自动更新现有记录
+                                self.route_history_storage.add_record(
+                                    start=start_name,
+                                    end=end_name,
+                                    mode=mode,
+                                    waypoints=self.route_data.get('waypoints', []),
+                                    start_coords=self.route_data.get('start_coords'),
+                                    end_coords=self.route_data.get('end_coords'),
+                                    waypoint_coords=self.route_data.get('waypoint_coords', []),
+                                    distance=self.route_data.get('distance'),
+                                    duration=self.route_data.get('duration'),
+                                    route_points=self.route_points,  # 包含海拔数据的路线点
+                                    start_coord_system=self.route_data.get('start_coord_system'),
+                                    end_coord_system=self.route_data.get('end_coord_system'),
+                                    waypoint_coord_systems=self.route_data.get('waypoint_coord_systems', [])
+                                )
+                                self.parent().logger.info(f"[GPX导出] 已将海拔数据缓存到历史记录: {start_name} → {end_name}")
+                            except Exception as e:
+                                self.parent().logger.warning(f"[GPX导出] 缓存海拔数据到历史记录失败: {e}")
 
                         self.progress_updated.emit(100, "导出完成")
                         self.export_completed.emit(success, self.file_path)
@@ -3899,8 +3957,36 @@ class GpxStudio(QMainWindow):
                         self.progress_updated.emit(0, error_msg)
                         self.export_completed.emit(False, str(e))
 
+            # 准备传递给导出线程的完整路线数据（用于缓存海拔数据）
+            from services.config.map_config import map_config
+            current_map_source = map_config.get_map_source()
+            coord_system = 'GCJ-02' if current_map_source == 'gaode' else 'WGS-84'
+            
+            # 优先使用route_data中的信息（历史记录导出时已包含完整信息）
+            # 如果route_data中没有，再从data_manager获取（当前路线导出）
+            enhanced_route_data = {
+                'start_name': start_name,
+                'end_name': end_name,
+                'mode': route_data.get('mode') or (self.route_plan_panel.get_transport_mode() if hasattr(self, 'route_plan_panel') else 'driving'),
+                'waypoints': route_data.get('waypoints') or (self.data_manager.waypoints_names if hasattr(self, 'data_manager') else []),
+                'start_coords': route_data.get('start_coords') or (self.data_manager.start_coords if hasattr(self, 'data_manager') else None),
+                'end_coords': route_data.get('end_coords') or (self.data_manager.end_coords if hasattr(self, 'data_manager') else None),
+                'waypoint_coords': route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if hasattr(self, 'data_manager') else []),
+                'distance': route_data.get('distance'),
+                'duration': route_data.get('duration'),
+                'start_coord_system': route_data.get('start_coord_system') or coord_system,
+                'end_coord_system': route_data.get('end_coord_system') or coord_system,
+                'waypoint_coord_systems': route_data.get('waypoint_coord_systems') or [coord_system for _ in (route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if hasattr(self, 'data_manager') else []))]
+            }
+
+            # 获取路线历史存储实例
+            route_history_storage = None
+            if hasattr(self, 'route_manager') and hasattr(self.route_manager, 'route_history_storage'):
+                route_history_storage = self.route_manager.route_history_storage
+
             # 创建并启动导出线程
-            export_thread = ExportThread(self, route_points, start_time, file_path, start_name, end_name, export_elevation, total_duration_seconds)
+            export_thread = ExportThread(self, route_points, start_time, file_path, start_name, end_name, export_elevation, 
+                                       total_duration_seconds, total_distance_meters, route_history_storage, enhanced_route_data)
 
             # 连接信号
             def on_progress_updated(value, message):
@@ -3945,7 +4031,16 @@ class GpxStudio(QMainWindow):
                     'route_points': route_points,
                     'start_name': history_data.get('start', '起点'),
                     'end_name': history_data.get('end', '终点'),
-                    'timestamp': history_data.get('timestamp')  # 添加历史记录的时间戳
+                    'timestamp': history_data.get('timestamp'),  # 添加历史记录的时间戳
+                    # 添加历史记录的完整信息，用于正确匹配和更新记录
+                    'mode': history_data.get('mode', 'driving'),
+                    'waypoints': history_data.get('waypoints', []),
+                    'start_coords': history_data.get('start_coords'),
+                    'end_coords': history_data.get('end_coords'),
+                    'waypoint_coords': history_data.get('waypoint_coords', []),
+                    'start_coord_system': history_data.get('start_coord_system'),
+                    'end_coord_system': history_data.get('end_coord_system'),
+                    'waypoint_coord_systems': history_data.get('waypoint_coord_systems', [])
                 }
                 self._show_gpx_export_popup(route_data, button, item)
             else:

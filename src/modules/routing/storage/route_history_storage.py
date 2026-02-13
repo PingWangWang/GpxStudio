@@ -89,11 +89,16 @@ class RouteHistoryStorage:
         Returns:
             bool: 是否保存成功
         """
-        # 检查是否已存在相同记录（起点、终点、交通方式相同）
+        # 检查是否已存在相同记录（起点、终点、交通方式、途径点都相同）
         for record in self.history_records:
+            # 比较途径点列表（处理None和空列表的情况）
+            record_waypoints = record.get('waypoints') or []
+            current_waypoints = waypoints or []
+            
             if (record.get('start') == start and
                 record.get('end') == end and
-                record.get('mode') == mode):
+                record.get('mode') == mode and
+                record_waypoints == current_waypoints):
                 # 更新时间戳和搜索次数
                 record['timestamp'] = datetime.now().isoformat()
                 record['search_count'] = record.get('search_count', 1) + 1

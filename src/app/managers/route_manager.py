@@ -717,6 +717,13 @@ class RouteManager(QObject):
             # 获取预估总时长
             total_duration_seconds = self.data_manager.estimated_duration_seconds
 
+            # 获取路线总距离（从当前选中的路线方案中获取）
+            total_distance_meters = None
+            selected_route = self.data_manager.get_selected_route()
+            if selected_route:
+                total_distance_meters = selected_route.get('distance')
+                self.logger.debug(f"从路线方案获取总距离: {total_distance_meters}米")
+
             # 执行GPX导出
             success = self.service_manager.gpx_service.export_to_gpx(
                 self.data_manager.route_points,  # 路线点
@@ -725,7 +732,8 @@ class RouteManager(QObject):
                 start_name=start_city,  # 起点名称
                 end_name=end_city,  # 终点名称
                 export_elevation=False,  # 默认为False，因为route_manager直接调用时没有用户界面设置
-                total_duration_seconds=total_duration_seconds  # 预估总时长，用于计算每个点的时间
+                total_duration_seconds=total_duration_seconds,  # 预估总时长，用于计算每个点的时间
+                total_distance_meters=total_distance_meters  # 路线总距离（米）
             )
 
             # 更新UI显示导出完成
