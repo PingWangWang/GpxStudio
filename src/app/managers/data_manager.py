@@ -53,6 +53,9 @@ class DataManager:
 
         # 当前位置
         self.current_location: Optional[Tuple[float, float]] = None  # 当前定位位置
+        
+        # 定位标记信息（用于在地图上显示"我的位置"）
+        self.location_marker: Optional[dict] = None  # {'lat': float, 'lon': float, 'popup_text': str}
 
         # 最后选中的位置信息
         self.last_selected_coords: Optional[Tuple[float, float]] = None  # 最后选中的坐标

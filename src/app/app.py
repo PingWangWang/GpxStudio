@@ -2087,7 +2087,7 @@ class GpxStudio(QMainWindow):
         
         # 重新加载地图，保持当前视图和所有元素
         if hasattr(self, 'map_manager'):
-            self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True)
+            self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True, keep_location=True)
             
             # 同步路网按钮状态
             self._sync_road_button_state()
@@ -2359,7 +2359,7 @@ class GpxStudio(QMainWindow):
         self.service_manager.initialize_services()
 
         # 重新加载地图，保持当前视图和所有元素
-        self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True)
+        self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True, keep_location=True)
 
     def _on_map_settings_popup_closed(self):
         """地图设置弹出面板关闭时的处理"""
@@ -3237,16 +3237,56 @@ class GpxStudio(QMainWindow):
         """
         self.logger.info(f"[路线面板] 地址选中: {address_data.get('name', '')}, 类型: {location_type}, 缩放: {should_zoom}")
 
-        # 获取坐标
-        location = address_data.get('location', '')
-        if not location or ',' not in location:
-            self.logger.warning(f"地址缺少坐标信息: {address_data}")
+        # 获取坐标 - 支持两种格式：
+        # 1. location 字段（格式为 "lon,lat"）- 来自搜索结果
+        # 2. lat 和 lon 字段 - 来自历史记录
+        lat_float = None
+        lng_float = None
+        
+        # 优先尝试从 lat/lon 字段获取（历史记录格式）
+        if 'lat' in address_data and 'lon' in address_data:
+            try:
+                lat_float = float(address_data['lat'])
+                lng_float = float(address_data['lon'])
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"无法解析 lat/lon 字段: {e}")
+        
+        # 如果没有 lat/lon 字段，尝试从 location 字段获取（搜索结果格式）
+        if lat_float is None or lng_float is None:
+            location = address_data.get('location', '')
+            if location and ',' in location:
+                try:
+                    lng, lat = location.split(',')
+                    lat_float = float(lat)
+                    lng_float = float(lng)
+                except (ValueError, IndexError) as e:
+                    self.logger.warning(f"无法解析 location 字段: {location}, 错误: {e}")
+        
+        # 检查是否成功获取坐标
+        if lat_float is None or lng_float is None:
+            self.logger.warning(f"地址缺少有效坐标信息: {address_data}")
             return
 
         try:
-            lng, lat = location.split(',')
-            lat_float = float(lat)
-            lng_float = float(lng)
+            # 坐标系转换：根据当前地图源和历史记录的坐标系判断是否需要转换
+            saved_coord_system = address_data.get('coord_system', 'WGS-84')
+            current_map_source = map_config.get_map_source()
+            current_coord_system = 'GCJ-02' if current_map_source == 'gaode' else 'WGS-84'
+            
+            self.logger.debug(f"[坐标系] 历史记录坐标系: {saved_coord_system}, 当前地图坐标系: {current_coord_system}")
+            
+            # 如果坐标系不匹配，需要进行转换
+            if saved_coord_system != current_coord_system:
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                
+                if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
+                    # 高德坐标转OSM坐标
+                    lat_float, lng_float = CoordinateTransform.gcj02_to_wgs84(lat_float, lng_float)
+                    self.logger.info(f"[坐标转换] GCJ-02 -> WGS-84: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
+                elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
+                    # OSM坐标转高德坐标
+                    lat_float, lng_float = CoordinateTransform.wgs84_to_gcj02(lat_float, lng_float)
+                    self.logger.info(f"[坐标转换] WGS-84 -> GCJ-02: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
 
             # 根据地址类型设置到 data_manager
             name = address_data.get('name', '')
@@ -3254,9 +3294,13 @@ class GpxStudio(QMainWindow):
 
             if location_type == "start":
                 self.data_manager.set_start_location((lat_float, lng_float), name, level)
+                # 保存起点坐标系信息（转换后的坐标已经匹配当前地图源）
+                self.data_manager.start_coord_system = current_coord_system
                 self.logger.info(f"[路线面板] 设置起点: {name} ({lat_float}, {lng_float})")
             elif location_type == "end":
                 self.data_manager.set_end_location((lat_float, lng_float), name, level)
+                # 保存终点坐标系信息
+                self.data_manager.end_coord_system = current_coord_system
                 self.logger.info(f"[路线面板] 设置终点: {name} ({lat_float}, {lng_float})")
             elif location_type == "waypoint":
                 # 确保途径点数量与输入框数量匹配
@@ -3266,53 +3310,85 @@ class GpxStudio(QMainWindow):
                 if waypoint_count < input_count:
                     # 添加新途径点
                     self.data_manager.add_waypoint((lat_float, lng_float), name)
+                    # 初始化途径点坐标系列表（如果不存在）
+                    if not hasattr(self.data_manager, 'waypoint_coord_systems'):
+                        self.data_manager.waypoint_coord_systems = []
+                    # 添加坐标系信息
+                    self.data_manager.waypoint_coord_systems.append(current_coord_system)
                     self.logger.info(f"[路线面板] 添加途径点: {name} ({lat_float}, {lng_float})")
                 else:
                     # 更新最后一个途径点
                     self.data_manager.update_waypoint(waypoint_count - 1, (lat_float, lng_float), name)
+                    # 更新坐标系信息
+                    if not hasattr(self.data_manager, 'waypoint_coord_systems'):
+                        self.data_manager.waypoint_coord_systems = []
+                    # 确保列表长度足够
+                    while len(self.data_manager.waypoint_coord_systems) <= waypoint_count - 1:
+                        self.data_manager.waypoint_coord_systems.append(current_coord_system)
+                    # 更新坐标系
+                    self.data_manager.waypoint_coord_systems[waypoint_count - 1] = current_coord_system
                     self.logger.info(f"[路线面板] 更新途径点: {name} ({lat_float}, {lng_float})")
 
-            # 保存到搜索历史记录
-            search_text = address_data.get('_search_text', name)  # 获取原始搜索文本
-            if search_text:
-                # 构建标准格式的结果字典
-                result_dict = {
-                    'name': name,
-                    'address': address_data.get('address', ''),
-                    'lat': lat_float,
-                    'lon': lng_float,
-                    'type': address_data.get('type', ''),
-                    'level': address_data.get('level', ''),
-                    'radius': address_data.get('radius', None),
-                    'coord_system': address_data.get('coord_system', 'WGS-84'),
-                    'data_source': address_data.get('data_source', map_config.get_map_source() or 'unknown')
-                }
-                # 调用搜索管理器保存历史记录
-                self.search_manager._save_to_history(search_text, result_dict)
-                self.logger.info(f"[路线面板] 已保存到搜索历史: {search_text} -> {name}")
+            # 保存到搜索历史记录（只有当数据不是从历史记录来的时候才保存，避免重复）
+            # 如果 address_data 中有 'timestamp' 字段，说明是从历史记录中来的，不需要再次保存
+            is_from_history = 'timestamp' in address_data
+            if not is_from_history:
+                search_text = address_data.get('_search_text', name)  # 获取原始搜索文本
+                if search_text:
+                    # 构建标准格式的结果字典
+                    result_dict = {
+                        'name': name,
+                        'address': address_data.get('address', ''),
+                        'lat': lat_float,
+                        'lon': lng_float,
+                        'type': address_data.get('type', ''),
+                        'level': address_data.get('level', ''),
+                        'radius': address_data.get('radius', None),
+                        'coord_system': address_data.get('coord_system', 'WGS-84'),
+                        'data_source': address_data.get('data_source', map_config.get_map_source() or 'unknown')
+                    }
+                    # 调用搜索管理器保存历史记录
+                    self.search_manager._save_to_history(search_text, result_dict)
+                    self.logger.info(f"[路线面板] 已保存到搜索历史: {search_text} -> {name}")
+            else:
+                self.logger.debug(f"[路线面板] 跳过保存历史（数据来自历史记录）: {name}")
 
-            # 只有在需要缩放时才调用 preview_search_result
+            # 只有在需要缩放时才更新地图显示
             if should_zoom:
-                # 使用 preview_search_result 在地图上标识位置（带箭头标记）
-                # 支持根据级别、类型、半径自动缩放
-                address = address_data.get('address', '')
-                display_name = f"{name}\n{address}" if address else name
-
-                self.map_manager.preview_search_result(
-                    coords=(lat_float, lng_float),
-                    name=display_name,
-                    level=address_data.get('level'),
-                    type_info=address_data.get('type'),
-                    radius=address_data.get('radius'),
-                    result_data=address_data
+                # 从路线面板选择地点时，不使用 preview_search_result（会添加额外的预览标记）
+                # 而是更新地图中心点和选中坐标，然后使用 update_map_preview 刷新地图
+                
+                # 设置地图中心点和选中坐标（无论是起点、终点还是途径点）
+                self.data_manager.last_selected_coords = (lat_float, lng_float)
+                self.data_manager.last_selected_level = address_data.get('level')
+                self.data_manager.last_selected_type = address_data.get('type')
+                self.data_manager.last_map_center = (lat_float, lng_float)
+                
+                # 根据级别、类型、半径自动计算缩放级别
+                from modules.map.map_renderer import MapRenderer
+                zoom_level = MapRenderer.get_zoom_by_level(
+                    address_data.get('level'),
+                    address_data.get('type'),
+                    address_data.get('radius')
                 )
+                
+                # 限制缩放级别：高德地图最大18，OSM最大19
+                max_zoom = 18 if current_map_source == 'gaode' else 19
+                if zoom_level > max_zoom:
+                    zoom_level = max_zoom
+                    self.logger.debug(f"[路线面板] 缩放级别限制为 {max_zoom}（{current_map_source}地图上限）")
+                
+                self.data_manager.last_map_zoom_level = zoom_level
+                
+                # 使用 update_map_preview 刷新地图（keep_zoom=True 使用我们设置的缩放级别）
+                self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
 
-                self.logger.info(f"[路线面板] 地图已缩放到: {name} ({lat_float}, {lng_float})")
+                self.logger.info(f"[路线面板] 地图已缩放到: {name} ({lat_float}, {lng_float}), 缩放级别: {zoom_level}, 类型: {location_type}")
             else:
                 self.logger.info(f"[路线面板] 跳过地图缩放（双击确认）")
 
-        except (ValueError, IndexError) as e:
-            self.logger.error(f"无效的坐标格式: {location}, 错误: {e}")
+        except Exception as e:
+            self.logger.error(f"处理地址选中事件时出错: {e}, 地址数据: {address_data}")
 
     def _on_route_history_selected(self, history_data: dict):
         """选择路线搜索历史"""

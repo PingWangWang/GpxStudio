@@ -297,9 +297,21 @@ class MapManager:
             # 根据中心点的精度级别和类型计算缩放级别
             calculated_zoom_level = MapRenderer.get_zoom_by_level(center_level, center_type)
 
-        # 保存当前地图中心和缩放级别
-        self.data_manager.last_map_center = (center_lat, center_lon)
-        self.data_manager.last_map_zoom_level = calculated_zoom_level
+        # 保存当前地图中心和缩放级别（但不覆盖已经明确设置的值）
+        # 如果 last_map_center 已经被设置且等于当前中心点，说明是外部明确设置的，不要覆盖
+        should_update_state = True
+        if self.data_manager.last_map_center:
+            # 检查是否完全相同（表示是刚设置的）
+            if abs(self.data_manager.last_map_center[0] - center_lat) < 0.0001 and \
+               abs(self.data_manager.last_map_center[1] - center_lon) < 0.0001:
+                # 坐标相同，不要覆盖，使用已设置的缩放级别
+                if self.data_manager.last_map_zoom_level is not None:
+                    calculated_zoom_level = self.data_manager.last_map_zoom_level
+                should_update_state = False
+        
+        if should_update_state:
+            self.data_manager.last_map_center = (center_lat, center_lon)
+            self.data_manager.last_map_zoom_level = calculated_zoom_level
 
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
@@ -308,18 +320,56 @@ class MapManager:
         is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
 
         # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+        # 同时确定最终的坐标系（用于传递给create_base_map，避免二次转换）
+        center_coord_system = 'WGS-84'  # 默认坐标系
+        
         if map_source == 'gaode':
-            # 如果路线是通过路线规划服务获取的，那么中心点坐标已经是GCJ-02坐标，不需要转换
-            # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
-            if not is_route_planned:
+            # 检查坐标系标记：如果已经设置了坐标系且为GCJ-02，说明坐标已经转换过了
+            has_correct_coord_system = False
+            if self.data_manager.last_map_center:
+                # 检查是否从路线规划或已标记的起点/终点/途径点来的坐标
+                if is_route_planned:
+                    has_correct_coord_system = True
+                    center_coord_system = 'GCJ-02'
+                elif hasattr(self.data_manager, 'start_coord_system') and self.data_manager.start_coords == self.data_manager.last_map_center:
+                    # 中心点来自起点，检查起点坐标系
+                    has_correct_coord_system = (self.data_manager.start_coord_system == 'GCJ-02')
+                    center_coord_system = self.data_manager.start_coord_system
+                elif hasattr(self.data_manager, 'end_coord_system') and self.data_manager.end_coords == self.data_manager.last_map_center:
+                    # 中心点来自终点，检查终点坐标系
+                    has_correct_coord_system = (self.data_manager.end_coord_system == 'GCJ-02')
+                    center_coord_system = self.data_manager.end_coord_system
+                else:
+                    # 检查是否来自途径点
+                    if hasattr(self.data_manager, 'waypoint_coord_systems'):
+                        for i, waypoint_coords in enumerate(self.data_manager.waypoints_coords):
+                            if waypoint_coords == self.data_manager.last_map_center:
+                                if i < len(self.data_manager.waypoint_coord_systems):
+                                    has_correct_coord_system = (self.data_manager.waypoint_coord_systems[i] == 'GCJ-02')
+                                    center_coord_system = self.data_manager.waypoint_coord_systems[i]
+                                break
+            
+            # 只有当坐标系不正确时才进行转换
+            if not has_correct_coord_system:
                 from modules.geolocation.coordinate_transform import CoordinateTransform
                 # 转换地图中心点坐标
                 center_lat, center_lon = CoordinateTransform.wgs84_to_gcj02(center_lat, center_lon)
+                center_coord_system = 'GCJ-02'  # 转换后坐标系为GCJ-02
+                self.logger.debug(f"[地图预览] 转换坐标系 WGS-84 -> GCJ-02: ({self.data_manager.last_map_center}) -> ({center_lat}, {center_lon})")
+            else:
+                self.logger.debug(f"[地图预览] 坐标已是GCJ-02，跳过转换")
 
         # 获取地图模式
         map_mode = map_config.get_map_mode()
-        # 创建基础地图
-        m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=calculated_zoom_level, map_type=map_mode, map_source=map_source)
+        
+        # 创建基础地图（传递正确的坐标系信息，避免重复转换）
+        # center_coord_system 表示当前 center_lat, center_lon 的坐标系
+        # 传递给 create_base_map 后，它会根据 map_source 和 coord_system 判断是否需要再次转换
+        m = MapRenderer.create_base_map([center_lat, center_lon], 
+                                       zoom_start=calculated_zoom_level, 
+                                       map_type=map_mode, 
+                                       map_source=map_source,
+                                       coord_system=center_coord_system)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
@@ -415,7 +465,7 @@ class MapManager:
         except RuntimeError as e:
             self.logger.error(f"地图视图已被删除，无法更新地图预览: {e}")
 
-    def reload_map(self, keep_view=True, keep_route=True, keep_points=True, keep_search_results=True):
+    def reload_map(self, keep_view=True, keep_route=True, keep_points=True, keep_search_results=True, keep_location=True):
         """
         统一的地图刷新方法
         
@@ -424,10 +474,11 @@ class MapManager:
             keep_route: 是否保留路线
             keep_points: 是否保留起点、终点、途径点
             keep_search_results: 是否保留搜索结果
+            keep_location: 是否保留定位标记（"我的位置"）
         """
         self.logger.info(f"[重载地图] ========== 开始重载地图 ==========")
         self.logger.info(f"[重载地图] 参数: keep_view={keep_view}, keep_route={keep_route}, "
-                        f"keep_points={keep_points}, keep_search_results={keep_search_results}")
+                        f"keep_points={keep_points}, keep_search_results={keep_search_results}, keep_location={keep_location}")
         
         # 1. 获取地图配置
         map_source = map_config.get_map_source()
@@ -472,6 +523,20 @@ class MapManager:
         # 4. 添加元素
         if keep_points:
             self._add_selected_points_to_map(m)
+        
+        # 添加定位标记（"我的位置"）
+        if keep_location and self.data_manager.location_marker:
+            from app.constants import COLOR_ORANGE, ICON_WARNING
+            marker_info = self.data_manager.location_marker
+            self.logger.info(f"[重载地图] 恢复定位标记: lat={marker_info['lat']}, lon={marker_info['lon']}")
+            MapRenderer.add_marker(
+                m, 
+                [marker_info['lat'], marker_info['lon']], 
+                marker_info['popup_text'],
+                color=COLOR_ORANGE, 
+                icon=ICON_WARNING,
+                map_source=map_source
+            )
         
         if keep_search_results:
             # 添加调试日志，确认搜索结果状态
@@ -542,7 +607,7 @@ class MapManager:
         """清空地图上的所有元素（路线、起止点、途径点等），但保持当前显示区域和缩放级别"""
         self.logger.info("[清空地图] 使用统一刷新方法清空地图并保持视图")
         # 使用统一的刷新方法，不保留任何元素但保持视图
-        self.reload_map(keep_view=True, keep_route=False, keep_points=False, keep_search_results=False)
+        self.reload_map(keep_view=True, keep_route=False, keep_points=False, keep_search_results=False, keep_location=False)
 
     def update_map_preview_simple(self, center_coords: Tuple[float, float], zoom_level: int = 13):
         """简单更新地图预览，不改变缩放级别
@@ -892,6 +957,14 @@ class MapManager:
         from app.constants import COLOR_ORANGE, ICON_WARNING
 
         self.logger.debug(f"[MapManager] 开始在地图上显示位置: {lat}, {lon}")
+        
+        # 保存定位标记信息到 data_manager，以便地图切换时能够恢复
+        self.data_manager.location_marker = {
+            'lat': lat,
+            'lon': lon,
+            'popup_text': popup_text
+        }
+        self.logger.debug(f"[MapManager] 定位标记信息已保存到 data_manager")
 
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
@@ -1046,11 +1119,16 @@ class MapManager:
             self.data_manager.waypoints_names
         )):
             display_name = name if name else f"途径点 {i + 1}"
+            # 优先使用保存的坐标系信息
             wp_coord_systems = getattr(self.data_manager, 'waypoint_coord_systems', None)
             waypoint_coord_system = None
             if wp_coord_systems and i < len(wp_coord_systems):
                 waypoint_coord_system = wp_coord_systems[i]
-            waypoint_coord_system = waypoint_coord_system or infer_coord_system(waypoint)
+            
+            # 如果没有保存的坐标系信息，则推断
+            if not waypoint_coord_system:
+                waypoint_coord_system = infer_coord_system(waypoint)
+            
             MapRenderer.add_marker(
                 map_obj, waypoint, display_name,
                 color=COLOR_INFO, icon=ICON_INFO,

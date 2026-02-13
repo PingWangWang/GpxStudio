@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
+from ui.popups.location_history_popup import LocationHistoryPopup
+from modules.search.storage.geo_info_storage import GeoInfoStorage
 
 
 class RouteHistoryItem(QWidget):
@@ -530,6 +532,11 @@ class RoutePlanPanel(QWidget):
         self.end_coords = None  # 终点坐标 (lat, lon)
         self.waypoint_coords = []  # 途径点坐标列表 [(lat, lon), ...]
 
+        # 地点搜索历史
+        self.geo_info_storage = GeoInfoStorage()
+        self.location_history_popup = None  # 延迟创建
+        self.is_selecting_from_history = False  # 标志位：正在从历史记录选择
+        
         # 初始化UI
         self._init_ui()
 
@@ -1726,6 +1733,11 @@ class RoutePlanPanel(QWidget):
 
     def _on_input_focus_in(self, event, location_type: str, input_widget):
         """输入框获得焦点时的处理"""
+        # 如果正在从历史记录选择，跳过焦点处理，避免循环
+        if self.is_selecting_from_history:
+            QLineEdit.focusInEvent(input_widget, event)
+            return
+        
         # 如果之前有正在搜索的输入框，且不是当前输入框，则确认之前的选择
         if self.current_search_input and self.current_search_input != input_widget:
             self._confirm_current_selection()
@@ -1734,8 +1746,70 @@ class RoutePlanPanel(QWidget):
         self.current_search_type = location_type
         self.current_search_input = input_widget
 
+        # 显示地点搜索历史弹出列表
+        self._show_location_history_popup(input_widget)
+
         # 调用原始的focusInEvent
         QLineEdit.focusInEvent(input_widget, event)
+    
+    def _show_location_history_popup(self, input_widget):
+        """显示地点搜索历史弹出列表
+        
+        Args:
+            input_widget: 目标输入框
+        """
+        # 创建弹出窗口（如果还没创建）
+        if not self.location_history_popup:
+            self.location_history_popup = LocationHistoryPopup(self)
+            self.location_history_popup.location_selected.connect(self._on_history_location_selected)
+            self.location_history_popup.clear_history_clicked.connect(self._on_clear_location_history)
+        
+        # 获取最近的搜索历史（限制10条）
+        recent_history = self.geo_info_storage.get_recent_history(limit=10)
+        
+        # 设置历史记录并显示
+        self.location_history_popup.set_history_items(recent_history)
+        self.location_history_popup.show_at(input_widget)
+    
+    def _on_history_location_selected(self, location_data: dict):
+        """从历史记录中选择了地点
+        
+        Args:
+            location_data: 地点数据，包含 name, address, lat, lon 等字段
+        """
+        if not self.current_search_input or not self.current_search_type:
+            return
+        
+        # 设置标志位，表示正在从历史记录选择
+        self.is_selecting_from_history = True
+        
+        try:
+            # 先隐藏历史弹出窗口
+            if self.location_history_popup:
+                self.location_history_popup.hide()
+            
+            # 将地点名称填入输入框
+            name = location_data.get('name', '')
+            self.current_search_input.setText(name)
+            
+            # 清除输入框焦点，避免再次触发焦点事件
+            self.current_search_input.clearFocus()
+            
+            # 触发地址选中事件（参数：地址数据, 类型, 是否缩放地图）
+            # 从历史记录选择时应该缩放地图，让用户看到地点位置
+            self.address_selected.emit(location_data, self.current_search_type, True)
+            
+        finally:
+            # 重置标志位
+            self.is_selecting_from_history = False
+    
+    def _on_clear_location_history(self):
+        """清空地点搜索历史"""
+        self.geo_info_storage.clear_history()
+        
+        # 更新弹出列表
+        if self.location_history_popup:
+            self.location_history_popup.set_history_items([])
 
     def _confirm_current_selection(self):
         """确认当前的地址选择"""

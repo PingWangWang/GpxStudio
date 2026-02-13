@@ -335,49 +335,56 @@ class LocationManager(QObject):
         """
         self.logger.info(f"[LocationManager] 开始处理浏览器定位成功: {lat}, {lon}, 精度: {accuracy}m")
 
-        # 尝试进行逆地理编码（将坐标转换为可读地址）
-        if map_config.is_gaode_configured():
-            self.logger.debug("[LocationManager] 高德地图已配置，进行逆地理编码...")
+        # 根据当前地图源选择地理编码服务进行逆地理编码（将坐标转换为可读地址）
+        address_info = None
+        map_source = map_config.get_map_source()
+        
+        if map_source == 'gaode' and map_config.is_gaode_configured():
+            self.logger.debug("[LocationManager] 使用高德地图进行逆地理编码...")
             geocoding_service = self.service_manager.gaode_geocoding_service
             address_info = geocoding_service.reverse_geocode(lat, lon)
+        elif map_source == 'osm':
+            self.logger.debug("[LocationManager] 使用 OSM 进行逆地理编码...")
+            geocoding_service = self.service_manager.osm_geocoding_service
+            address_info = geocoding_service.reverse_geocode(lat, lon)
 
-            if address_info:
-                # 解析地址信息
-                city = address_info.get('city', '')  # 城市
-                province = address_info.get('province', '')  # 省份
-                district = address_info.get('district', '')  # 区县
-                formatted_address = address_info.get('formatted_address', '')  # 详细地址
+        if address_info:
+            # 解析地址信息
+            city = address_info.get('city', '')  # 城市
+            province = address_info.get('province', '')  # 省份
+            district = address_info.get('district', '')  # 区县
+            formatted_address = address_info.get('formatted_address', '')  # 详细地址
 
-                # 更新UI显示定位成功信息
-                self.ui_updater['set_progress_complete']()
-                self.ui_updater['clear_results']()
+            # 更新UI显示定位成功信息
+            self.ui_updater['set_progress_complete']()
+            self.ui_updater['clear_results']()
 
-                # 格式化位置信息
-                location_parts = [province, city, district]
-                location_text = "".join([part for part in location_parts if part])
+            # 格式化位置信息
+            location_parts = [province, city, district]
+            location_text = "".join([part for part in location_parts if part])
 
-                # 合并所有信息为一条结果，避免分散显示
-                result_text = "定位成功！\n"
-                result_text += "定位方式: 浏览器Geolocation API\n"
+            # 合并所有信息为一条结果，避免分散显示
+            result_text = "定位成功！\n"
+            result_text += "定位方式: 浏览器Geolocation API\n"
 
-                if location_text:
-                    result_text += f"位置: {location_text}\n"
-                if formatted_address:
-                    result_text += f"详细地址: {formatted_address}\n"
+            if location_text:
+                result_text += f"位置: {location_text}\n"
+            if formatted_address:
+                result_text += f"详细地址: {formatted_address}\n"
 
-                result_text += f"坐标: {lat:.6f}, {lon:.6f}\n"
-                result_text += f"精度: 约{accuracy:.0f}米"
+            result_text += f"坐标: {lat:.6f}, {lon:.6f}\n"
+            result_text += f"精度: 约{accuracy:.0f}米"
 
-                self.ui_updater['add_result'](result_text)
+            self.ui_updater['add_result'](result_text)
 
-                # 准备地图上显示的弹出信息
-                popup_text = f"我的位置\n{location_text}\n{formatted_address}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
-                self.data_manager.current_location = (lat, lon)
-                self.logger.debug(f"[LocationManager] 准备在地图上显示位置: {lat}, {lon}")
-                # 在地图上显示定位结果
-                self.ui_updater['show_location_on_map'](lat, lon, popup_text)
-                self.logger.debug("[LocationManager] 地图显示完成")
-                return
+            # 准备地图上显示的弹出信息
+            popup_text = f"我的位置\n{location_text}\n{formatted_address}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
+            self.data_manager.current_location = (lat, lon)
+            self.logger.debug(f"[LocationManager] 准备在地图上显示位置: {lat}, {lon}")
+            # 在地图上显示定位结果
+            self.ui_updater['show_location_on_map'](lat, lon, popup_text)
+            self.logger.debug("[LocationManager] 地图显示完成")
+            return
 
         # 如果逆地理编码失败，仅显示坐标信息
         self.ui_updater['set_progress_complete']()
@@ -479,10 +486,17 @@ class LocationManager(QObject):
 
         self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}米")
 
-        # 尝试进行逆地理编码（获取地址信息）
+        # 根据当前地图源选择地理编码服务进行逆地理编码（获取地址信息）
         address_info = None
-        if map_config.is_gaode_configured():
+        map_source = map_config.get_map_source()
+        
+        if map_source == 'gaode' and map_config.is_gaode_configured():
+            # 使用高德地理编码服务
             geocoding_service = self.service_manager.gaode_geocoding_service
+            address_info = geocoding_service.reverse_geocode(lat, lon)
+        elif map_source == 'osm':
+            # 使用 OSM 地理编码服务（Nominatim）
+            geocoding_service = self.service_manager.osm_geocoding_service
             address_info = geocoding_service.reverse_geocode(lat, lon)
 
         # 保存当前位置信息
@@ -610,4 +624,18 @@ class LocationManager(QObject):
         province = address_info.get('province', '')  # 省份
         city = address_info.get('city', '')  # 城市
         district = address_info.get('district', '')  # 区县
+        
+        # 确保所有值都是字符串类型
+        if isinstance(province, list):
+            province = province[0] if province else ''
+        if isinstance(city, list):
+            city = city[0] if city else ''
+        if isinstance(district, list):
+            district = district[0] if district else ''
+        
+        # 转换为字符串（处理None等情况）
+        province = str(province) if province else ''
+        city = str(city) if city else ''
+        district = str(district) if district else ''
+        
         return "".join([province, city, district])  # 拼接成完整地址

@@ -117,6 +117,7 @@ class MapConfig(IConfigService):
                         if self.map_source == 'gaode':
                             self.api_key = self._config_data.get('gaode', {}).get('api_key', '')
                             self.security_key = self._config_data.get('gaode', {}).get('security_key', '')
+                            print(f"[地图配置] 🔍 加载高德配置 - API Key: {self.api_key[:10] if self.api_key else '(空)'}... (长度: {len(self.api_key)})")
                         else:
                             self.api_key = self._config_data.get('osm', {}).get('api_key', '')
                             self.security_key = self._config_data.get('osm', {}).get('security_key', '')
@@ -125,6 +126,9 @@ class MapConfig(IConfigService):
                         print(f"[地图配置] 当前配置 - 地图源: {self.map_source}, API配置: {'已配置' if self.api_key else '未配置'}")
                         if self.map_source == 'gaode' and self.api_key:
                             print(f"[地图配置] ✅ 高德API已配置")
+                        elif self.map_source == 'gaode' and not self.api_key:
+                            print(f"[地图配置] ⚠️ 高德地图已选择但API未配置")
+                            print(f"[地图配置] ⚠️ gaode配置内容: {self._config_data.get('gaode', {})}")
                 else:
                     print(f"[地图配置] ⚠ 运行时配置文件不存在，使用空配置")
                     self._config_data = {}
@@ -162,18 +166,23 @@ class MapConfig(IConfigService):
                 api_key = merged_config.get('api_key', '')
                 security_key = merged_config.get('security_key', '')
 
+                # 打印保存前的配置数据
+                print(f"[地图配置] 📝 保存配置 - map_source: {map_source}, api_key: {api_key[:10] if api_key else '(空)'}...")
+                
                 # 根据地图源将API Key和安全密钥保存到对应的配置中
                 if map_source == 'gaode':
                     if 'gaode' not in merged_config:
                         merged_config['gaode'] = {}
                     merged_config['gaode']['api_key'] = api_key
                     merged_config['gaode']['security_key'] = security_key
-                    print(f"[地图配置] 💾 保存高德配置 - API Key: {api_key[:10]}... (已截断)")
+                    print(f"[地图配置] 💾 保存高德配置 - API Key: {api_key[:10] if api_key else '(空)'}... (长度: {len(api_key)})")
+                    print(f"[地图配置] 💾 merged_config['gaode']: {merged_config['gaode']}")
                 elif map_source == 'osm':
                     if 'osm' not in merged_config:
                         merged_config['osm'] = {}
                     merged_config['osm']['api_key'] = api_key
                     merged_config['osm']['security_key'] = security_key
+                    print(f"[地图配置] 💾 保存OSM配置 - API Key: {api_key[:10] if api_key else '(空)'}...")
 
                 # 从顶层移除api_key和security_key，避免混淆
                 if 'api_key' in merged_config:
@@ -182,6 +191,7 @@ class MapConfig(IConfigService):
                     del merged_config['security_key']
 
                 config_file = self._get_config_path()
+                print(f"[地图配置] 💾 保存到文件: {config_file}")
                 with open(config_file, 'w', encoding='utf-8') as f:
                     json.dump(merged_config, f, ensure_ascii=False, indent=2)
 
@@ -190,13 +200,14 @@ class MapConfig(IConfigService):
                 if map_source == 'gaode':
                     self.api_key = merged_config.get('gaode', {}).get('api_key', '')
                     self.security_key = merged_config.get('gaode', {}).get('security_key', '')
+                    print(f"[地图配置] 🔄 内存更新 - self.api_key: {self.api_key[:10] if self.api_key else '(空)'}... (长度: {len(self.api_key)})")
                 else:
                     self.api_key = merged_config.get('osm', {}).get('api_key', '')
                     self.security_key = merged_config.get('osm', {}).get('security_key', '')
                 self.is_configured = True
                 self._config_data = merged_config
                 
-                print(f"[地图配置] ✅ 配置已保存并同步到内存 - 地图源: {map_source}")
+                print(f"[地图配置] ✅ 配置已保存并同步到内存 - 地图源: {map_source}, API已配置: {bool(self.api_key)}")
                 return True
         except Exception as e:
             print(f"[地图配置] ❌ 保存配置失败: {e}")

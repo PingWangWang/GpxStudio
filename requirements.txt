@@ -27,6 +27,8 @@ pytz>=2024.1
 hypothesis>=6.0.0
 
 # Windows Location Service (Windows only)
+winrt-runtime>=2.0.0
+winrt-Windows.Foundation>=2.0.0
 winrt-Windows.Devices.Geolocation>=3.2.1
 
 # Windows API for single instance detection (Windows only)
