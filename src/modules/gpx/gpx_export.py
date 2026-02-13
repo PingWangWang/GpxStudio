@@ -55,7 +55,7 @@ class GpxExportService:
                 self.logger("WARNING", f"时区检测失败: {str(e)}，使用东八区")
             return timezone(timedelta(hours=8))
 
-    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None, total_distance_meters=None):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None, total_distance_meters=None, transport_mode=None, waypoint_names=None, description=None):
         """
         导出路线为GPX文件
 
@@ -68,6 +68,9 @@ class GpxExportService:
             export_elevation: 是否导出海拔数据
             total_duration_seconds: 路线预估总时长（秒），用于计算每个点的时间。如果为None，则使用默认的10秒间隔
             total_distance_meters: 路线总距离（米），用于添加到GPX文件的extensions中
+            transport_mode: 交通方式 (driving/cycling/walking)
+            waypoint_names: 途径点名称列表
+            description: 路线描述
 
         Returns:
             bool: 是否成功
@@ -262,13 +265,80 @@ class GpxExportService:
             if gpx_end > 0:
                 # 构建新的XML头部，包含完整的元数据
                 new_header = xml_output[:gpx_end+1]
+                
+                # 构建交通方式显示名称
+                transport_mode_display = {
+                    'driving': '驾车',
+                    'cycling': '骑行',
+                    'walking': '步行'
+                }.get(transport_mode, transport_mode or '未知')
+                
+                # 构建基本描述 - 使用版本号
+                try:
+                    from version import __version__
+                    desc_text = f"Export from GPX Studio {__version__}"
+                except:
+                    desc_text = "Export from GPX Studio"
+                
+                # 构建关键词（交通方式）
+                keywords = transport_mode_display
+                
+                # 构建扩展信息
+                extensions_parts = []
+                
+                # 添加起点信息（包含国际坐标）
+                if start_name and first_point:
+                    extensions_parts.append(f'    <startPoint>')
+                    extensions_parts.append(f'      <name>{start_name}</name>')
+                    extensions_parts.append(f'      <lat>{first_point[0]:.6f}</lat>')
+                    extensions_parts.append(f'      <lon>{first_point[1]:.6f}</lon>')
+                    extensions_parts.append(f'    </startPoint>')
+                
+                # 添加途径点信息
+                if waypoint_names and len(waypoint_names) > 0:
+                    extensions_parts.append(f'    <waypoints>')
+                    for i, wp_name in enumerate(waypoint_names, 1):
+                        extensions_parts.append(f'      <waypoint>')
+                        extensions_parts.append(f'        <name>{wp_name}</name>')
+                        extensions_parts.append(f'        <index>{i}</index>')
+                        extensions_parts.append(f'      </waypoint>')
+                    extensions_parts.append(f'    </waypoints>')
+                
+                # 添加终点信息（找到最后一个有效点）
+                last_point = None
+                for point in reversed(route_points):
+                    if point is not None and len(point) >= 2:
+                        last_point = point
+                        break
+                if end_name and last_point:
+                    extensions_parts.append(f'    <endPoint>')
+                    extensions_parts.append(f'      <name>{end_name}</name>')
+                    extensions_parts.append(f'      <lat>{last_point[0]:.6f}</lat>')
+                    extensions_parts.append(f'      <lon>{last_point[1]:.6f}</lon>')
+                    extensions_parts.append(f'    </endPoint>')
+                
+                # 添加总时间信息（分钟）
+                if total_duration_seconds is not None:
+                    total_minutes = total_duration_seconds / 60
+                    extensions_parts.append(f'    <totalTime unit="minutes">{total_minutes:.1f}</totalTime>')
+                
+                # 添加交通方式信息
+                if transport_mode:
+                    extensions_parts.append(f'    <transportMode>{transport_mode}</transportMode>')
+                
+                extensions_xml = ''
+                if extensions_parts:
+                    extensions_xml = '\n    <extensions>\n' + '\n'.join(extensions_parts) + '\n    </extensions>'
+                
                 metadata_section = f'''
   <metadata>
     <name>{track_name}</name>
+    <desc>{desc_text}</desc>
+    <keywords>{keywords}</keywords>
     <author>
       <name>gpx.studio</name>
       <link href="https://gpx.studio"/>
-    </author>
+    </author>{extensions_xml}
   </metadata>'''
 
                 # 找到第一个<track>或<trk>标签的开始位置

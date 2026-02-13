@@ -3915,7 +3915,10 @@ class GpxStudio(QMainWindow):
                             end_name=self.end_name,
                             export_elevation=self.export_elevation,
                             total_duration_seconds=self.total_duration_seconds,
-                            total_distance_meters=self.total_distance_meters
+                            total_distance_meters=self.total_distance_meters,
+                            transport_mode=self.route_data.get('mode') if self.route_data else None,
+                            waypoint_names=self.route_data.get('waypoints') if self.route_data else None,
+                            description=f"{self.start_name} → {self.end_name}" if self.start_name and self.end_name else None
                         )
 
                         # 如果成功获取了新的海拔数据，更新到历史记录
