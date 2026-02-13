@@ -3999,8 +3999,16 @@ class GpxStudio(QMainWindow):
                                 if map_source:
                                     routing_service = self.parent().service_manager.get_routing_service(map_source)
                                     if hasattr(routing_service, '_get_elevation'):
-                                        # 获取海拔数据
-                                        route_points_with_elevation = routing_service._get_elevation(self.route_points)
+                                        # 定义进度回调函数
+                                        def elevation_progress_callback(progress, message):
+                                            """海拔数据获取进度回调"""
+                                            self.progress_updated.emit(progress, message)
+                                        
+                                        # 获取海拔数据，传递进度回调
+                                        route_points_with_elevation = routing_service._get_elevation(
+                                            self.route_points, 
+                                            progress_callback=elevation_progress_callback
+                                        )
                                         self.route_points = route_points_with_elevation
                                         elevation_data_obtained = True  # 标记成功获取了新的海拔数据
                                         self.progress_updated.emit(50, "海拔数据获取完成，正在导出GPX文件...")
@@ -4078,7 +4086,7 @@ class GpxStudio(QMainWindow):
             enhanced_route_data = {
                 'start_name': start_name,
                 'end_name': end_name,
-                'mode': route_data.get('mode') or (self.route_plan_panel.get_transport_mode() if hasattr(self, 'route_plan_panel') else 'driving'),
+                'mode': route_data.get('mode') or (self.route_plan_panel.current_transport_mode if hasattr(self, 'route_plan_panel') else 'driving'),
                 'waypoints': route_data.get('waypoints') or (self.data_manager.waypoints_names if hasattr(self, 'data_manager') else []),
                 'start_coords': route_data.get('start_coords') or (self.data_manager.start_coords if hasattr(self, 'data_manager') else None),
                 'end_coords': route_data.get('end_coords') or (self.data_manager.end_coords if hasattr(self, 'data_manager') else None),

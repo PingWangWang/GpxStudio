@@ -117,7 +117,7 @@ class GaodeRoutingService(IRoutingService):
         # 3. 生成MD5签名并返回
         return hashlib.md5(sign_str.encode()).hexdigest()
 
-    def _get_elevation(self, points: List[Tuple[float, float]]) -> List[Tuple[float, float, float]]:
+    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None) -> List[Tuple[float, float, float]]:
         """
         获取多个坐标点的海拔数据
 
@@ -125,6 +125,7 @@ class GaodeRoutingService(IRoutingService):
 
         Args:
             points (List[Tuple[float, float]]): 坐标点列表，格式为 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
+            progress_callback: 进度回调函数，参数为(progress, message)，progress为0-100的进度值
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表，格式为 [(lat, lon, elevation), ...]
@@ -168,6 +169,11 @@ class GaodeRoutingService(IRoutingService):
                     batch_points = points[start_idx:end_idx]
 
                     log_cb("DEBUG", f"处理第 {batch_index + 1}/{total_batches} 批，点数: {len(batch_points)}")
+                    
+                    # 更新进度：20-40% 用于批量获取海拔数据
+                    if progress_callback:
+                        progress_percent = 20 + int((batch_index / total_batches) * 20)
+                        progress_callback(progress_percent, f"正在获取海拔数据... ({batch_index + 1}/{total_batches} 批)")
 
                     # 构建Open-Elevation API请求数据
                     locations = [{"latitude": get_lat_lon(p)[0], "longitude": get_lat_lon(p)[1]} for p in batch_points]
@@ -251,6 +257,11 @@ class GaodeRoutingService(IRoutingService):
                     batch_points = sampled_points[start_idx:end_idx]
 
                     log_cb("DEBUG", f"处理采样点批次 {batch_index + 1}/{total_batches}，点数: {len(batch_points)}")
+                    
+                    # 更新进度：20-35% 用于获取采样点海拔数据
+                    if progress_callback:
+                        progress_percent = 20 + int((batch_index / total_batches) * 15)
+                        progress_callback(progress_percent, f"正在获取采样点海拔数据... ({batch_index + 1}/{total_batches} 批)")
 
                     # 构建Open-Elevation API请求数据
                     locations = [{"latitude": get_lat_lon(p)[0], "longitude": get_lat_lon(p)[1]} for p in batch_points]
@@ -316,8 +327,13 @@ class GaodeRoutingService(IRoutingService):
 
                 # 使用采样点的海拔数据对所有点进行插值计算
                 log_cb("INFO", "使用采样点的海拔数据对所有点进行插值计算")
+                if progress_callback:
+                    progress_callback(35, f"正在插值计算 {len(points)} 个点的海拔...")
                 points_with_elevation = self._interpolate_elevation(points, sampled_points_with_elevation)
                 log_cb("INFO", f"完成所有点的海拔插值计算，总点数: {len(points_with_elevation)}")
+                
+                if progress_callback:
+                    progress_callback(50, f"海拔数据获取完成，共 {len(points_with_elevation)} 个点")
 
                 return points_with_elevation
         except Exception as e:

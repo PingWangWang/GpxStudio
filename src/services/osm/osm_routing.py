@@ -57,7 +57,7 @@ class OsmRoutingService(IRoutingService):
         if self.logger:
             self.logger(level, message)
 
-    def _get_elevation(self, points: List[Tuple[float, float]]) -> List[Tuple[float, float, float]]:
+    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None) -> List[Tuple[float, float, float]]:
         """
         获取多个点的海拔数据
 
@@ -66,6 +66,7 @@ class OsmRoutingService(IRoutingService):
 
         Args:
             points: 坐标点列表 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
+            progress_callback: 进度回调函数，参数为(progress, message)，progress为0-100的进度值
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表 [(lat, lon, elevation), ...]
@@ -98,11 +99,17 @@ class OsmRoutingService(IRoutingService):
                 uncached_points.append(cache_key)
 
         self._log("DEBUG", f"从缓存中获取到 {len(cached_points)} 个点的海拔数据，需要请求 {len(uncached_points)} 个点")
+        
+        # 报告初始进度
+        if progress_callback and uncached_points:
+            progress_callback(20, f"检查缓存完成，需要获取 {len(uncached_points)} 个点的海拔数据...")
 
         # 检查是否所有点都已有缓存的海拔数据
         if len(cached_points) == len(points):
             # 所有点都已有海拔数据，直接返回
             self._log("INFO", "所有点的海拔数据都已在缓存中，直接返回")
+            if progress_callback:
+                progress_callback(100, "使用缓存的海拔数据")
             return cached_points
 
         # 2. 处理未缓存的点
@@ -123,6 +130,11 @@ class OsmRoutingService(IRoutingService):
                 # 2.2 处理每一批点
                 for batch_index, batch in enumerate(batches):
                     self._log("DEBUG", f"处理第 {batch_index + 1}/{len(batches)} 批，点数: {len(batch)}")
+                    
+                    # 更新进度：20-40% 用于批量获取海拔数据
+                    if progress_callback:
+                        progress_percent = 20 + int((batch_index / len(batches)) * 20)
+                        progress_callback(progress_percent, f"正在获取海拔数据... ({batch_index + 1}/{len(batches)} 批)")
 
                     # 2.3 构建Open-Elevation API请求数据
                     locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch]
@@ -199,6 +211,11 @@ class OsmRoutingService(IRoutingService):
                 sampled_points_with_elevation = []
                 for batch_index, batch in enumerate(batches):
                     self._log("DEBUG", f"处理采样点批次 {batch_index + 1}/{len(batches)}，点数: {len(batch)}")
+                    
+                    # 更新进度：20-35% 用于获取采样点海拔数据
+                    if progress_callback:
+                        progress_percent = 20 + int((batch_index / len(batches)) * 15)
+                        progress_callback(progress_percent, f"正在获取采样点海拔数据... ({batch_index + 1}/{len(batches)} 批)")
 
                     # 2.3 构建Open-Elevation API请求数据
                     locations = [{"latitude": lat, "longitude": lon} for lat, lon in batch]
@@ -259,9 +276,13 @@ class OsmRoutingService(IRoutingService):
 
                 # 使用采样点的海拔数据对所有未缓存的点进行插值计算
                 self._log("INFO", "使用采样点的海拔数据对所有未缓存的点进行插值计算")
+                if progress_callback:
+                    progress_callback(35, f"正在插值计算 {len(uncached_points)} 个点的海拔...")
                 interpolated_points = self._interpolate_elevation(uncached_points, sampled_points_with_elevation)
 
                 # 将插值结果添加到缓存和结果列表
+                if progress_callback:
+                    progress_callback(40, "正在保存海拔数据到缓存...")
                 for point_with_elevation in interpolated_points:
                     lat, lon, elevation = point_with_elevation
                     # 保存到缓存
@@ -271,17 +292,24 @@ class OsmRoutingService(IRoutingService):
 
                 self._log("INFO", f"完成所有点的海拔插值计算，总点数: {len(interpolated_points)}")
 
-        # 3. 按原始顺序返回结果
+        # 3. 按原始顺序返回结果（使用字典优化查找性能 O(n²) → O(n)）
+        if progress_callback:
+            progress_callback(45, "正在整理海拔数据...")
+        # 构建坐标到海拔数据的映射字典
+        cached_dict = {(point[0], point[1]): point for point in cached_points}
+        
         result = []
         for point in points:
             # 提取经纬度作为匹配键
             point_lat, point_lon = get_lat_lon(point)
-            for cached_point in cached_points:
-                if (cached_point[0], cached_point[1]) == (point_lat, point_lon):
-                    result.append(cached_point)
-                    break
+            # O(1) 字典查找，替代 O(n) 列表遍历
+            cached_point = cached_dict.get((point_lat, point_lon))
+            if cached_point:
+                result.append(cached_point)
 
         self._log("INFO", f"总共获取 {len(result)} 个点的海拔数据")
+        if progress_callback:
+            progress_callback(50, f"海拔数据获取完成，共 {len(result)} 个点")
         return result
 
     def _sample_points_uniformly(self, points: List[Tuple[float, float]], max_points: int) -> List[Tuple[float, float]]:
