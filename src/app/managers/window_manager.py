@@ -5,6 +5,7 @@
 
 import os
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QIcon
 from core.resource_path import get_icon_path
 from modules.map.http_server import get_map_server
@@ -170,18 +171,98 @@ class WindowManager:
         """
         print("[WindowManager] Closing application...")
         
-        # 停止地图服务
+        # 1. 先关闭所有弹出窗口和面板
+        try:
+            self._close_all_windows_and_panels()
+        except Exception as e:
+            print(f"[WindowManager] Error closing windows: {e}")
+        
+        # 2. 停止地图服务
         try:
             get_map_server().stop()
         except Exception as e:
             print(f"[WindowManager] Error stopping map server: {e}")
             
+        # 3. 隐藏托盘图标
         if self.tray_icon:
             self.tray_icon.hide()
+        
+        # 4. 关闭主窗口
+        try:
+            print("[WindowManager] Closing main window...")
+            self.main_window.close()
+        except Exception as e:
+            print(f"[WindowManager] Error closing main window: {e}")
             
         print("[WindowManager] Quitting QApplication...")
         QApplication.quit()
+        
+        # 5. 确保进程退出（如果QApplication.quit()没有生效）
+        import sys
+        QTimer.singleShot(500, lambda: sys.exit(0))
 
+    def _close_all_windows_and_panels(self):
+        """关闭所有弹出窗口和面板
+        
+        包括：路线规划面板、GPX导出面板、搜索弹出窗口、设置弹出窗口等
+        """
+        print("[WindowManager] Closing all windows and panels...")
+        
+        # 关闭路线规划面板
+        if hasattr(self.main_window, 'route_plan_panel'):
+            try:
+                if self.main_window.route_plan_panel and self.main_window.route_plan_panel.isVisible():
+                    print("[WindowManager] Closing route plan panel...")
+                    self.main_window.route_plan_panel.hide()
+                    self.main_window.route_plan_panel.deleteLater()
+            except Exception as e:
+                print(f"[WindowManager] Error closing route plan panel: {e}")
+        
+        # 关闭GPX导出面板及其子窗口
+        if hasattr(self.main_window, 'gpx_export_popup'):
+            try:
+                if self.main_window.gpx_export_popup and self.main_window.gpx_export_popup.isVisible():
+                    print("[WindowManager] Closing GPX export popup...")
+                    # 先关闭时间日期选择器子窗口
+                    if hasattr(self.main_window.gpx_export_popup, 'picker_popup'):
+                        if self.main_window.gpx_export_popup.picker_popup and self.main_window.gpx_export_popup.picker_popup.isVisible():
+                            print("[WindowManager] Closing datetime picker...")
+                            self.main_window.gpx_export_popup.picker_popup.hide()
+                            self.main_window.gpx_export_popup.picker_popup.deleteLater()
+                    # 再关闭GPX导出面板
+                    self.main_window.gpx_export_popup.hide()
+                    self.main_window.gpx_export_popup.deleteLater()
+            except Exception as e:
+                print(f"[WindowManager] Error closing GPX export popup: {e}")
+        
+        # 关闭所有注册的弹出窗口
+        if hasattr(self.main_window, 'active_popups'):
+            try:
+                for popup in self.main_window.active_popups[:]:
+                    if popup and popup.isVisible():
+                        print(f"[WindowManager] Closing popup: {popup.__class__.__name__}")
+                        popup.hide()
+                        popup.deleteLater()
+            except Exception as e:
+                print(f"[WindowManager] Error closing popups: {e}")
+        
+        # 关闭搜索相关弹出窗口和其他弹出窗口
+        popup_attrs = ['search_history_popup', 'search_results_popup', 
+                       'map_settings_popup', 'log_settings_popup', 'about_popup',
+                       'map_context_menu']
+        for attr in popup_attrs:
+            if hasattr(self.main_window, attr):
+                try:
+                    popup = getattr(self.main_window, attr)
+                    if popup and popup.isVisible():
+                        print(f"[WindowManager] Closing {attr}...")
+                        popup.hide()
+                        popup.deleteLater()
+                except Exception as e:
+                    print(f"[WindowManager] Error closing {attr}: {e}")
+        
+        print("[WindowManager] All windows and panels closed")
+    
     def handle_close_event(self, event):
         """处理关闭事件
         

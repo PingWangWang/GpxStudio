@@ -17,7 +17,7 @@ class MapContextMenuPopup(QWidget):
     set_as_end = pyqtSignal(float, float)  # 纬度, 经度
     query_here = pyqtSignal(float, float)  # 纬度, 经度（这是哪儿）
     set_center = pyqtSignal(float, float)  # 纬度, 经度（设置地图中心点）
-    clear_route = pyqtSignal()  # 清除路线
+    clear_route = pyqtSignal()  # 清空地图
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,7 +54,7 @@ class MapContextMenuPopup(QWidget):
         self._item_spacing = 8
 
         # 菜单项文本列表（用于计算所需最大宽度）
-        texts = ["设为起点", "设为途径点", "设为终点", "这是哪儿", "设置地图中心点", "清除路线"]
+        texts = ["设为起点", "设为途径点", "设为终点", "这是哪儿", "设置地图中心点", "清空地图"]
 
         # 使用字体度量计算宽度
         fm = QFontMetrics(QFont())
@@ -82,7 +82,7 @@ class MapContextMenuPopup(QWidget):
         # 分隔线
         self._create_separator(main_layout)
 
-        self._create_menu_item(main_layout, "清除路线", "🗑️", self._on_clear_route, "#ff4d4f")
+        self._create_menu_item(main_layout, "清空地图", "🗑️", self._on_clear_route, "#ff4d4f")
 
         # 设置固定宽度为计算结果（向上取整一个像素保证不裁切）
         self.setFixedWidth(int(total_width) + 1)
@@ -228,7 +228,7 @@ class MapContextMenuPopup(QWidget):
         self.hide()
 
     def _on_clear_route(self):
-        """清除路线"""
+        """清空地图"""
         self.clear_route.emit()
         self.hide()
 

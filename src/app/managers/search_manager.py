@@ -63,6 +63,20 @@ class SearchManager(QObject):
         if not map_source:
             self.ui_updater['show_warning']("警告", "请先在地图配置中设置地图数据源")
             return
+        
+        # 检查高德地图API配置
+        if map_source == 'gaode' and not map_config.is_gaode_configured():
+            self.logger.warning("高德地图API未配置，无法进行地点搜索")
+            self.ui_updater['show_warning'](
+                "高德地图API未配置", 
+                "使用高德地图搜索需要先配置API密钥。\n\n"
+                "请在【地图设置】中配置高德地图Web服务API密钥。\n\n"
+                "获取方式：\n"
+                "1. 访问高德开放平台：https://lbs.amap.com/\n"
+                "2. 注册并创建应用\n"
+                "3. 获取Web服务API密钥"
+            )
+            return
 
         # 恢复信息展示框标题
         self.ui_updater['set_results_title']("搜索结果")
@@ -108,6 +122,12 @@ class SearchManager(QObject):
         self.ui_updater['set_progress_complete']()
         QApplication.processEvents()
 
+        # 检查是否是API未配置错误
+        if isinstance(result, dict) and result.get('error') == 'api_not_configured':
+            self.logger.warning("高德地图API未配置")
+            self.ui_updater['show_warning']("配置错误", result.get('message', '请配置地图 API'))
+            return
+
         if result is not None and len(result) > 0:
             # 搜索成功 - 通过UI回调显示搜索结果下拉列表
             location_type = self.data_manager.searching_for
@@ -144,7 +164,9 @@ class SearchManager(QObject):
                     'lon': result.get('lon', 0),
                     'type': result.get('type', ''),
                     'level': result.get('level', ''),
-                    'radius': result.get('radius', None)
+                    'radius': result.get('radius', None),
+                    'coord_system': result.get('coord_system', 'WGS-84'),  # 保留坐标系统信息
+                    'data_source': result.get('data_source', 'unknown')     # 保留数据来源信息
                 })
             else:
                 # OSM格式
@@ -155,8 +177,15 @@ class SearchManager(QObject):
                     'lon': result.longitude if hasattr(result, 'longitude') else 0,
                     'type': result.type if hasattr(result, 'type') else '',
                     'level': '',
-                    'radius': None
+                    'radius': None,
+                    'coord_system': 'WGS-84',  # OSM使用WGS-84坐标系统
+                    'data_source': 'osm'       # OSM数据来源
                 })
+        
+        # 添加调试日志
+        if formatted:
+            self.logger.debug(f"[格式化结果] 第一个结果: {formatted[0]}")
+        
         return formatted
 
     @pyqtSlot(str, str)
@@ -310,9 +339,20 @@ class SearchManager(QObject):
             self.ui_updater['add_waypoint_to_list'](clean_name, data, level)
 
         # 预览选中的搜索结果，传递type_info和radius以便根据地址类型和实际范围进行缩放
+        # 构造完整的result_data字典，包含坐标系统信息
+        result_data = {
+            'name': clean_name,
+            'lat': coords[0],
+            'lon': coords[1],
+            'level': level,
+            'type': type_info,
+            'radius': radius,
+            'coord_system': data[6] if len(data) > 6 else 'WGS-84',  # 从元组中提取coord_system
+            'data_source': data[7] if len(data) > 7 else 'unknown'   # 从元组中提取data_source
+        }
         # preview_search_result 方法已经完整渲染并显示了地图，包含选中点和搜索结果
         # 因此不需要再调用 update_map_preview
-        self.ui_updater['preview_search_result'](coords, clean_name, level, type_info, radius)
+        self.ui_updater['preview_search_result'](coords, clean_name, level, type_info, radius, result_data)
 
     def _save_to_history(self, search_text: str, result: dict):
         """
@@ -375,6 +415,8 @@ class SearchManager(QObject):
             search_text: 原始搜索文本
         """
         self.logger.info(f"[搜索结果] 选择搜索结果: {result.get('name')}")
+        self.logger.debug(f"[搜索结果] 完整结果数据: {result}")
+        self.logger.debug(f"[搜索结果] coord_system: {result.get('coord_system', 'NOT_FOUND')}, data_source: {result.get('data_source', 'NOT_FOUND')}")
 
         # 提取数据
         name = result.get('name', '')
@@ -389,8 +431,8 @@ class SearchManager(QObject):
         # 保存到历史记录
         self._save_to_history(search_text, result)
 
-        # 在地图上预览并缩放到对应范围
-        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius)
+        # 在地图上预览并缩放到对应范围，传递完整的result作为result_data
+        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius, result)
 
     def clear_search_results(self):
         """清空搜索结果

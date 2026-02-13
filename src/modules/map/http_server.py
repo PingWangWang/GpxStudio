@@ -478,6 +478,20 @@ class MapServer:
         """更新当前缩放级别"""
         self.viewport['zoom'] = zoom
         # print(f"[MapServer] Zoom updated: {zoom}")
+    
+    def get_current_viewport_center(self):
+        """获取当前视口的中心点坐标"""
+        if self.viewport['sw'] and self.viewport['ne']:
+            sw_lat, sw_lon = self.viewport['sw']
+            ne_lat, ne_lon = self.viewport['ne']
+            center_lat = (sw_lat + ne_lat) / 2
+            center_lon = (sw_lon + ne_lon) / 2
+            return [center_lat, center_lon]
+        return None
+    
+    def get_current_zoom(self):
+        """获取当前缩放级别"""
+        return self.viewport.get('zoom')
 
     def is_viewport_fully_cached(self, source, style, z, base_path):
         """检查当前视口内的所有瓦片是否都已缓存"""

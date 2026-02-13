@@ -154,9 +154,13 @@ class GaodeGeocodingService(IGeocodingService):
 
                 # 处理前5个搜索结果
                 for poi in data['pois'][:5]:
-                    # 解析经纬度信息（格式："lon,lat"）
+                    # 解析经纬度信息（格式："lon,lat"）- 高德API返回GCJ-02坐标
                     location = poi.get('location', '').split(',')
                     if len(location) == 2:
+                        # 保留原始GCJ-02坐标，不进行转换
+                        gcj_lat = float(location[1])
+                        gcj_lon = float(location[0])
+                        
                         # 解析入口坐标（用于计算POI范围）
                         entr_location_str = poi.get('entr_location', '')
                         entr_lat, entr_lon = None, None
@@ -173,16 +177,18 @@ class GaodeGeocodingService(IGeocodingService):
                         poi_radius = None
                         if entr_lat is not None and entr_lon is not None:
                             poi_radius = self._calculate_distance(
-                                float(location[1]), float(location[0]),
+                                gcj_lat, gcj_lon,
                                 entr_lat, entr_lon
                             )
 
-                        # 构造结果字典
+                        # 构造结果字典（保留原始GCJ-02坐标，添加坐标系统标记）
                         results.append({
                             'name': poi.get('name', ''),                      # 地点名称
                             'address': poi.get('address', '') or poi.get('pname', '') + poi.get('city', ''),  # 地点地址
-                            'lat': float(location[1]),                          # 纬度
-                            'lon': float(location[0]),                          # 经度
+                            'lat': gcj_lat,                                    # 纬度 (GCJ-02)
+                            'lon': gcj_lon,                                    # 经度 (GCJ-02)
+                            'coord_system': 'GCJ-02',                          # 坐标系统标记
+                            'data_source': 'gaode',                            # 数据来源标记
                             'type': poi.get('type', ''),                        # 地点类型
                             'level': poi.get('typecode', ''),                   # 地点类型编码
                             'radius': poi_radius                                # POI半径（米）

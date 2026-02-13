@@ -47,6 +47,9 @@ class DataManager:
         self.search_results: List = []  # 搜索结果列表
         self.searching_for: Optional[str] = None  # 当前搜索的类型（起点/终点/途径点）
         self.selected_search_result_coords: Optional[Tuple[float, float]] = None  # 选中的搜索结果坐标
+        
+        # 预览相关 - 保存当前正在预览的地点信息
+        self.preview_location: Optional[dict] = None  # {'coords': (lat, lon), 'name': str, 'level': str, 'type': str, 'radius': float}
 
         # 当前位置
         self.current_location: Optional[Tuple[float, float]] = None  # 当前定位位置

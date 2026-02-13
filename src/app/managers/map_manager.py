@@ -122,6 +122,11 @@ class MapManager:
 
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
+        
+        # 获取坐标系统（从第一个搜索结果提取，所有结果应该使用相同的坐标系统）
+        coord_system = 'WGS-84'  # 默认值
+        if locations and isinstance(locations[0], dict):
+            coord_system = locations[0].get('coord_system', 'WGS-84')
 
         # 根据搜索结果数量决定缩放策略
         if len(locations) == 1:
@@ -148,8 +153,8 @@ class MapManager:
 
             # 获取地图模式
             map_mode = map_config.get_map_mode()
-            # 创建基础地图，使用智能缩放级别
-            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
+            # 创建基础地图，使用智能缩放级别，传递坐标系统
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=zoom_level, map_type=map_mode, map_source=map_source, coord_system=coord_system)
         else:
             # 多个地址：计算中心点，稍后使用fit_bounds自动适应
             center_lat = sum(get_lat(loc) for loc in locations) / len(locations)
@@ -157,17 +162,19 @@ class MapManager:
 
             # 获取地图模式
             map_mode = map_config.get_map_mode()
-            # 创建基础地图，使用默认缩放级别（稍后会被fit_bounds覆盖）
-            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_type=map_mode, map_source=map_source)
+            # 创建基础地图，使用默认缩放级别（稍后会被fit_bounds覆盖），传递坐标系统
+            m = MapRenderer.create_base_map([center_lat, center_lon], zoom_start=12, map_type=map_mode, map_source=map_source, coord_system=coord_system)
             # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
             self.data_manager.last_map_zoom_level = None
 
-        # 为每个搜索结果添加标记，统一使用灰色图标（尚未选中）
+        # 为每个搜索结果添加标记，统一使用灰色图标（尚未选中），传递坐标系统
         for i, location in enumerate(locations):
             MapRenderer.add_marker(
                 m, [get_lat(location), get_lon(location)],
                 get_display_text(location, i+1),
-                color="gray", icon='info-sign'
+                color="gray", icon='info-sign',
+                map_source=map_source,
+                coord_system=coord_system
             )
 
         # 添加已选择的点（起点、终点、途径点）
@@ -393,6 +400,128 @@ class MapManager:
         except RuntimeError as e:
             self.logger.error(f"地图视图已被删除，无法更新地图预览: {e}")
 
+    def clear_map_and_keep_view(self):
+        """清空地图上的所有元素（路线、起止点、途径点等），但保持当前显示区域和缩放级别"""
+        # 尝试从JavaScript获取当前地图的实时中心点和缩放级别
+        js_code = """
+        (function() {
+            try {
+                // 查找地图对象
+                var map = null;
+                for (var key in window) {
+                    if (key.startsWith('map_') && window[key] && 
+                        typeof window[key].getCenter === 'function' && 
+                        typeof window[key].getZoom === 'function') {
+                        map = window[key];
+                        break;
+                    }
+                }
+                
+                if (!map) {
+                    console.log('[清空地图] 未找到地图对象');
+                    return null;
+                }
+                
+                // 获取当前地图的中心点和缩放级别
+                var center = map.getCenter();
+                var zoom = map.getZoom();
+                
+                console.log('[清空地图] 获取当前视图 - 中心: [' + center.lat.toFixed(6) + ', ' + center.lng.toFixed(6) + '], 缩放: ' + zoom);
+                
+                return {
+                    lat: center.lat,
+                    lon: center.lng,
+                    zoom: zoom
+                };
+            } catch(e) {
+                console.error('[清空地图] 获取视图失败:', e);
+                return null;
+            }
+        })();
+        """
+        
+        # 用于存储JavaScript返回的结果
+        result_received = [False]  # 使用列表以便在闭包中修改
+        view_info = [None]  # 存储视图信息
+        
+        def on_view_result(result):
+            """处理JavaScript返回的视图信息"""
+            result_received[0] = True
+            if result and isinstance(result, dict):
+                view_info[0] = {
+                    'lat': result.get('lat', 39.9042),
+                    'lon': result.get('lon', 116.4074),
+                    'zoom': result.get('zoom', 10)
+                }
+                self.logger.info(f"[清空地图] 从JS获取视图 - 中心: [{view_info[0]['lat']}, {view_info[0]['lon']}], 缩放: {view_info[0]['zoom']}")
+            else:
+                self.logger.warning("[清空地图] JavaScript未返回有效视图信息")
+        
+        # 执行JavaScript获取当前视图
+        try:
+            if self.map_view:
+                self.map_view.page().runJavaScript(js_code, on_view_result)
+                
+                # 等待JavaScript执行完成（最多150ms）
+                from PyQt5.QtCore import QEventLoop, QTimer
+                loop = QEventLoop()
+                
+                # 设置超时
+                timeout_timer = QTimer()
+                timeout_timer.setSingleShot(True)
+                timeout_timer.timeout.connect(loop.quit)
+                timeout_timer.start(150)
+                
+                # 也可以通过结果接收来提前退出
+                check_timer = QTimer()
+                check_timer.setInterval(10)
+                check_timer.timeout.connect(lambda: loop.quit() if result_received[0] else None)
+                check_timer.start()
+                
+                loop.exec_()
+                
+                timeout_timer.stop()
+                check_timer.stop()
+        except Exception as e:
+            self.logger.warning(f"[清空地图] 获取JS视图信息失败: {e}")
+        
+        # 确定最终使用的中心点和缩放级别
+        if view_info[0]:
+            center = [view_info[0]['lat'], view_info[0]['lon']]
+            zoom = view_info[0]['zoom']
+        elif hasattr(self, 'current_center') and hasattr(self, 'current_zoom'):
+            center = self.current_center
+            zoom = self.current_zoom
+        else:
+            # 如果都没有，使用默认值（北京）
+            center = [39.9042, 116.4074]
+            zoom = 10
+            
+        self.logger.info(f"[清空地图] 使用视图 - 中心: {center}, 缩放: {zoom}")
+        
+        # 获取当前配置的地图数据源和模式
+        map_source = map_config.get_map_source()
+        map_mode = map_config.get_map_mode()
+        
+        # 创建一个空白地图，只显示基础地图，不添加任何标记或路线
+        m = MapRenderer.create_base_map(center, zoom_start=zoom, map_type=map_mode, map_source=map_source)
+        
+        # 保存地图并获取URL
+        url = MapRenderer.save_and_get_url(m)
+        
+        # 在地图视图中加载地图
+        try:
+            if self.map_view:
+                self.map_view.setUrl(url)
+                # 保持当前中心和缩放级别
+                self.current_center = center
+                self.current_zoom = zoom
+                self.logger.info("[清空地图] 地图已清空，视图保持不变")
+            else:
+                self.logger.error("地图视图为None，无法清空地图")
+        except RuntimeError as e:
+            self.logger.error(f"地图视图已被删除，无法清空地图: {e}")
+
     def update_map_preview_simple(self, center_coords: Tuple[float, float], zoom_level: int = 13):
         """简单更新地图预览，不改变缩放级别
 
@@ -491,7 +620,7 @@ class MapManager:
             coords.append(self.data_manager.end_coords)
         return coords
 
-    def preview_search_result(self, coords: Tuple[float, float], name: str, level: Optional[str] = None, type_info: Optional[str] = None, radius: Optional[float] = None):
+    def preview_search_result(self, coords: Tuple[float, float], name: str, level: Optional[str] = None, type_info: Optional[str] = None, radius: Optional[float] = None, result_data: Optional[dict] = None):
         """
         预览单个搜索结果，高亮显示该结果
 
@@ -501,9 +630,25 @@ class MapManager:
             level: 地点级别（可选）
             type_info: 地点类型信息（可选）
             radius: POI半径（可选，单位：米）
+            result_data: 完整的搜索结果字典，包含coord_system和data_source信息（可选）
         """
         # 导入常量
         from app.constants import COLOR_SUCCESS, ICON_SUCCESS
+        
+        # 提取坐标系统信息（向后兼容：默认为WGS-84）
+        coord_system = 'WGS-84'  # 默认值
+        if result_data and isinstance(result_data, dict):
+            coord_system = result_data.get('coord_system', 'WGS-84')
+        
+        # 保存预览信息到data_manager，以便切换地图模式时能恢复
+        self.data_manager.preview_location = {
+            'coords': coords,
+            'name': name,
+            'level': level,
+            'type': type_info,
+            'radius': radius,
+            'coord_system': coord_system  # 保存坐标系统信息
+        }
 
         # 根据地点级别、类型和实际范围计算缩放级别
         zoom_level = MapRenderer.get_zoom_by_level(level, type_info, radius)
@@ -513,14 +658,22 @@ class MapManager:
 
         # 获取地图模式
         map_mode = map_config.get_map_mode()
-        # 创建地图，聚焦到选中的位置
-        m = MapRenderer.create_base_map([coords[0], coords[1]], zoom_start=zoom_level, map_type=map_mode, map_source=map_source)
+        # 创建地图，聚焦到选中的位置，传递坐标系统信息
+        m = MapRenderer.create_base_map(
+            [coords[0], coords[1]], 
+            zoom_start=zoom_level, 
+            map_type=map_mode, 
+            map_source=map_source,
+            coord_system=coord_system
+        )
 
         # 添加高亮标记（使用绿色颜色和图标表示选中）
         MapRenderer.add_marker(
             m, [coords[0], coords[1]],
             f"<b>已选中: {name}</b>",
-            color=COLOR_SUCCESS, icon=ICON_SUCCESS
+            color=COLOR_SUCCESS, icon=ICON_SUCCESS,
+            map_source=map_source,
+            coord_system=coord_system
         )
 
         # 添加已选择的点（使用普通样式）
@@ -710,7 +863,8 @@ class MapManager:
         # 添加定位标记
         MapRenderer.add_marker(
             m, [lat, lon], popup_text,
-            color=COLOR_ORANGE, icon=ICON_WARNING
+            color=COLOR_ORANGE, icon=ICON_WARNING,
+            map_source=map_source
         )
 
         # 添加已选择的点（起点、终点、途径点）
@@ -804,26 +958,43 @@ class MapManager:
         # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
         is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
 
-        # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
-        def transform_coords(coords):
-            if map_source == 'gaode':
-                # 如果路线是通过路线规划服务获取的，那么起点、终点和途径点的坐标已经是GCJ-02坐标，不需要转换
-                # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
-                if not is_route_planned:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
-                    if coords:
-                        lat, lon = coords
-                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
-                        return (gcj_lat, gcj_lon)
-            return coords
+        # 推断坐标系统：优先使用保存的坐标系统，其次根据路线点判断
+        def infer_coord_system(coords, default='WGS-84'):
+            if not coords or map_source != 'gaode':
+                return default
+            if is_route_planned:
+                return 'GCJ-02'
+            if not self.data_manager.route_points:
+                return default
+            # 使用路线点（WGS-84）与GCJ->WGS转换后距离判断
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+
+            # 取路线起终点作为参考
+            route_points = [p for p in self.data_manager.route_points if p is not None]
+            if not route_points:
+                return default
+            first_point = route_points[0]
+            last_point = route_points[-1]
+
+            def diff(a, b):
+                return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+            raw_min = min(diff(coords, first_point), diff(coords, last_point))
+            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(coords[0], coords[1])
+            conv_min = min(diff((wgs_lat, wgs_lon), first_point), diff((wgs_lat, wgs_lon), last_point))
+
+            return 'GCJ-02' if conv_min + 1e-6 < raw_min else 'WGS-84'
 
         # 添加起点（绿色标记）
         if self.data_manager.start_coords:
             start_name = self.data_manager.start_name or "起点"
-            start_coords_transformed = transform_coords(self.data_manager.start_coords)
+            start_coord_system = getattr(self.data_manager, 'start_coord_system', None)
+            start_coord_system = start_coord_system or infer_coord_system(self.data_manager.start_coords)
             MapRenderer.add_marker(
-                map_obj, start_coords_transformed, start_name,
-                color=COLOR_SUCCESS, icon=ICON_SUCCESS
+                map_obj, self.data_manager.start_coords, start_name,
+                color=COLOR_SUCCESS, icon=ICON_SUCCESS,
+                map_source=map_source,
+                coord_system=start_coord_system
             )
 
         # 添加途径点（蓝色标记）
@@ -832,19 +1003,28 @@ class MapManager:
             self.data_manager.waypoints_names
         )):
             display_name = name if name else f"途径点 {i + 1}"
-            waypoint_transformed = transform_coords(waypoint)
+            wp_coord_systems = getattr(self.data_manager, 'waypoint_coord_systems', None)
+            waypoint_coord_system = None
+            if wp_coord_systems and i < len(wp_coord_systems):
+                waypoint_coord_system = wp_coord_systems[i]
+            waypoint_coord_system = waypoint_coord_system or infer_coord_system(waypoint)
             MapRenderer.add_marker(
-                map_obj, waypoint_transformed, display_name,
-                color=COLOR_INFO, icon=ICON_INFO
+                map_obj, waypoint, display_name,
+                color=COLOR_INFO, icon=ICON_INFO,
+                map_source=map_source,
+                coord_system=waypoint_coord_system
             )
 
         # 添加终点（红色标记）
         if self.data_manager.end_coords:
             end_name = self.data_manager.end_name or "终点"
-            end_coords_transformed = transform_coords(self.data_manager.end_coords)
+            end_coord_system = getattr(self.data_manager, 'end_coord_system', None)
+            end_coord_system = end_coord_system or infer_coord_system(self.data_manager.end_coords)
             MapRenderer.add_marker(
-                map_obj, end_coords_transformed, end_name,
-                color=COLOR_ERROR, icon=ICON_ERROR
+                map_obj, self.data_manager.end_coords, end_name,
+                color=COLOR_ERROR, icon=ICON_ERROR,
+                map_source=map_source,
+                coord_system=end_coord_system
             )
 
     def _add_search_results_to_map(self, map_obj, preview_coords: Optional[Tuple[float, float]] = None):
@@ -892,11 +1072,20 @@ class MapManager:
                 color = "gray"
                 icon = "info-sign"
 
+            # 获取地图数据源
+            from services.config.map_config import map_config
+            map_source = map_config.get_map_source()
+
+            # 获取坐标系统（搜索结果若为字典，优先使用其标记）
+            coord_system = location.get('coord_system', 'WGS-84') if isinstance(location, dict) else 'WGS-84'
+
             # 添加搜索结果标记
             MapRenderer.add_marker(
                 map_obj, [get_lat(location), get_lon(location)],
                 f"{i+1}. {get_address(location)}",
-                color=color, icon=icon
+                color=color, icon=icon,
+                map_source=map_source,
+                coord_system=coord_system
             )
 
     def on_map_zoom_changed(self, new_zoom_level: int):
@@ -1142,7 +1331,7 @@ class MapManager:
         else:
             self.logger.error("[路线重渲染-降级] 地图视图为None")
 
-    def show_map(self, center, zoom=10, title="地图"):
+    def show_map(self, center, zoom=10, title="地图", coord_system='WGS-84'):
         """
         显示地图
 
@@ -1150,6 +1339,7 @@ class MapManager:
             center: 地图中心坐标 [纬度, 经度]
             zoom: 缩放级别
             title: 地图标题
+            coord_system: 传入坐标的坐标系统 ('WGS-84' 或 'GCJ-02')，默认 'WGS-84'
         """
         from modules.map.map_renderer import MapRenderer
         from services.config.map_config import map_config
@@ -1159,24 +1349,35 @@ class MapManager:
         # 获取地图源
         map_source = map_config.get_map_source()
 
-        # 渲染用的中心点
-        render_center = center
-        if map_source == 'gaode':
-            # 如果是高德地图，假设输入中心是WGS84，转换为GCJ02用于显示
-            from modules.geolocation.coordinate_transform import CoordinateTransform
-            c_lat, c_lon = CoordinateTransform.wgs84_to_gcj02(center[0], center[1])
-            render_center = [c_lat, c_lon]
-
-        # 创建地图
+        # 创建地图 - create_base_map内部会根据map_source和coord_system自动处理坐标转换
         m = MapRenderer.create_base_map(
-            render_center,
+            center,
             zoom_start=zoom,
             map_type=map_mode,
-            map_source=map_source
+            map_source=map_source,
+            coord_system=coord_system  # 明确告知传入坐标的坐标系统
         )
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
+        
+        # 如果有预览的地点，添加高亮标记
+        if hasattr(self.data_manager, 'preview_location') and self.data_manager.preview_location:
+            from app.constants import COLOR_SUCCESS, ICON_SUCCESS
+            preview = self.data_manager.preview_location
+            coords = preview['coords']
+            name = preview['name']
+            coord_system = preview.get('coord_system', 'WGS-84')
+            
+            # 添加高亮标记
+            MapRenderer.add_marker(
+                m, [coords[0], coords[1]],
+                f"<b>已选中: {name}</b>",
+                color=COLOR_SUCCESS, icon=ICON_SUCCESS,
+                map_source=map_source,
+                coord_system=coord_system
+            )
+            self.logger.debug(f"[地图切换] 恢复预览标记: {name} at {coords}")
 
         # 如果有路线数据，添加路线到地图
         if hasattr(self.data_manager, 'route_points') and self.data_manager.route_points:

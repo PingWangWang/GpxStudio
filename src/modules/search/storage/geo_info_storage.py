@@ -86,6 +86,8 @@ class GeoInfoStorage:
                 'type': result.get('type', ''),
                 'level': result.get('level', ''),
                 'radius': result.get('radius', None),
+                'coord_system': result.get('coord_system', 'WGS-84'),  # 保存坐标系统信息
+                'data_source': result.get('data_source', 'unknown'),   # 保存数据源信息
                 'timestamp': datetime.now().isoformat()
             }
 

@@ -67,6 +67,20 @@ class RouteManager(QObject):
             self.logger.warning("路线规划失败：未设置地图数据源")
             self.ui_updater['show_warning']("警告", "请先在地图配置中设置地图数据源")
             return
+        
+        # 检查高德地图API配置
+        if map_source == 'gaode' and not map_config.is_gaode_configured():
+            self.logger.warning("高德地图API未配置，无法进行路线规划")
+            self.ui_updater['show_warning'](
+                "高德地图API未配置", 
+                "使用高德地图规划路线需要先配置API密钥。\n\n"
+                "请在【地图设置】中配置高德地图Web服务API密钥。\n\n"
+                "获取方式：\n"
+                "1. 访问高德开放平台：https://lbs.amap.com/\n"
+                "2. 注册并创建应用\n"
+                "3. 获取Web服务API密钥"
+            )
+            return
 
         # 获取所有点（起点+途径点+终点）
         points = self.data_manager.get_all_points()
@@ -114,13 +128,6 @@ class RouteManager(QObject):
 
             # 获取对应的路线规划服务
             routing_service = self.service_manager.get_routing_service(map_source)
-
-            # 检查高德API配置（如果使用高德地图）
-            if map_source == "gaode" and not map_config.is_gaode_configured():
-                self.logger.warning("高德地图API未配置，无法进行路线规划")
-                self.ui_updater['set_progress_complete']()
-                self.ui_updater['show_warning']("错误", "请先在地图配置中配置高德地图API密钥")
-                return
 
             # 执行路线规划（返回多条路线方案）
             # 检查服务是否支持起点终点名称参数
@@ -344,6 +351,8 @@ class RouteManager(QObject):
                             # 这里只执行数据保存，不涉及UI更新
                             # 路线历史存储的add_record方法只涉及文件IO操作
                             if self.route_history_storage:
+                                map_source = map_config.get_map_source()
+                                coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
                                 # 直接调用存储的add_record方法
                                 info = {
                                     'start': self.data_manager.start_name,
@@ -355,7 +364,10 @@ class RouteManager(QObject):
                                     'waypoint_coords': self.data_manager.waypoints_coords,
                                     'distance': selected_route.get('distance'),
                                     'duration': selected_route.get('duration'),
-                                    'route_points': self.data_manager.route_points
+                                    'route_points': self.data_manager.route_points,
+                                    'start_coord_system': coord_system,
+                                    'end_coord_system': coord_system,
+                                    'waypoint_coord_systems': [coord_system for _ in self.data_manager.waypoints_coords]
                                 }
 
                                 # 保存到历史记录
@@ -369,7 +381,10 @@ class RouteManager(QObject):
                                     waypoint_coords=info['waypoint_coords'],
                                     distance=info['distance'],
                                     duration=info['duration'],
-                                    route_points=info['route_points']
+                                    route_points=info['route_points'],
+                                    start_coord_system=info['start_coord_system'],
+                                    end_coord_system=info['end_coord_system'],
+                                    waypoint_coord_systems=info['waypoint_coord_systems']
                                 )
                                 if success:
                                     self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "
@@ -399,6 +414,8 @@ class RouteManager(QObject):
             if selected_route:
                 def save_history():
                     try:
+                        map_source = map_config.get_map_source()
+                        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
                         # 直接调用存储的add_record方法
                         info = {
                             'start': self.data_manager.start_name,
@@ -410,7 +427,10 @@ class RouteManager(QObject):
                             'waypoint_coords': self.data_manager.waypoints_coords,
                             'distance': selected_route.get('distance'),
                             'duration': selected_route.get('duration'),
-                            'route_points': self.data_manager.route_points
+                            'route_points': self.data_manager.route_points,
+                            'start_coord_system': coord_system,
+                            'end_coord_system': coord_system,
+                            'waypoint_coord_systems': [coord_system for _ in self.data_manager.waypoints_coords]
                         }
 
                         # 保存到历史记录
@@ -424,7 +444,10 @@ class RouteManager(QObject):
                             waypoint_coords=info['waypoint_coords'],
                             distance=info['distance'],
                             duration=info['duration'],
-                            route_points=info['route_points']
+                            route_points=info['route_points'],
+                            start_coord_system=info['start_coord_system'],
+                            end_coord_system=info['end_coord_system'],
+                            waypoint_coord_systems=info['waypoint_coord_systems']
                         )
                         if success:
                             self.logger.info(f"[路线面板] 已保存历史记录: {info['start']} → {info['end']}, "

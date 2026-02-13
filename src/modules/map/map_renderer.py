@@ -197,7 +197,7 @@ class MapRenderer:
         return 14
 
     @staticmethod
-    def create_base_map(center, zoom_start=10, map_type='roadmap', map_source='osm'):
+    def create_base_map(center, zoom_start=10, map_type='roadmap', map_source='osm', coord_system='WGS-84'):
         """
         创建基础地图
 
@@ -206,14 +206,29 @@ class MapRenderer:
             zoom_start: 初始缩放级别
             map_type: 地图类型 ('roadmap', 'satellite', 'hybrid')
             map_source: 地图数据源 ('osm', 'gaode')
+            coord_system: 输入坐标系统 ('WGS-84', 'GCJ-02')
 
         Returns:
             folium.Map: 地图对象
         """
+        # 只在坐标系统不匹配时进行转换
+        map_center = center
+        if map_source == 'gaode' and coord_system == 'WGS-84':
+            # 高德地图需要GCJ-02坐标，但输入是WGS-84，需要转换
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(center[0], center[1])
+            map_center = [gcj_lat, gcj_lon]
+        elif map_source == 'osm' and coord_system == 'GCJ-02':
+            # OSM地图需要WGS-84坐标，但输入是GCJ-02，需要转换
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(center[0], center[1])
+            map_center = [wgs_lat, wgs_lon]
+        # 否则直接使用（坐标系统匹配）
+        
         # 使用Canvas renderer实现高性能路线渲染（参考GPXStudio官方）
         # Canvas对大量点的渲染性能远超SVG，能流畅处理数万个点
         m = folium.Map(
-            location=center,
+            location=map_center,
             zoom_start=zoom_start,
             tiles=None,
             zoom_control=False,  # 禁用默认的缩放控件
@@ -248,20 +263,20 @@ class MapRenderer:
                 control=False
             ).add_to(m)
             
-            # 如果是卫星地图或混合地图，添加标注图层
-            # 注意：混合图的标注也需要走代理，但目前先只代理底图，标注暂不处理或者也走hybrid
+            # 如果是卫星地图或混合地图，始终添加标注图层
             if map_type in ['satellite', 'hybrid']:
                 # 标注层通常是透明png，也可以缓存，这里假设它使用hybrid样式
                 # 高德webst01其实包含标注，或者用专门的标注服务。这里为了简化，暂不走缓存代理避免复杂
                 # 或者，简单地也指向代理
-                folium.TileLayer(
+                road_layer = folium.TileLayer(
                     # 使用直连，或者可以配置为 proxy_url_base + '/roadmap/...' (高德标注通常和路网类似)
                     tiles='https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
                     attr='© 高德地图',
                     name='高德地图标注',
                     overlay=True,
                     control=False
-                ).add_to(m)
+                )
+                road_layer.add_to(m)
         else:
             # 使用OSM地图瓦片（通过代理服务器缓存）
             from .http_server import get_map_server
@@ -299,14 +314,15 @@ class MapRenderer:
                     control=False
                 ).add_to(m)
                 
-                # 添加OpenStreetMap标注图层（使用CartoDB的标注服务）
-                folium.TileLayer(
+                # 始终添加OpenStreetMap标注图层
+                road_layer = folium.TileLayer(
                     tiles='https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
                     attr='© OpenStreetMap contributors, © CartoDB',
                     name='OpenStreetMap Labels',
                     overlay=True,
                     control=False
-                ).add_to(m)
+                )
+                road_layer.add_to(m)
 
         scroll_zoom_script = """
         <script>
@@ -327,6 +343,49 @@ class MapRenderer:
                     clearInterval(checkInterval);
                     map.scrollWheelZoom.enable();
                     console.log('[地图] 滚轮缩放已启用');
+                    
+                    // 初始化路网图层的显示状态和缓存
+                    var showRoads = """ + str(map_config.get_satellite_show_roads()).lower() + """;
+                    var roadLayersFound = [];
+                    
+                    // 初始化路网图层缓存
+                    if (!map._roadLayers) {
+                        map._roadLayers = [];
+                    }
+                    
+                    // 遍历所有图层，通过名称和URL识别路网图层
+                    map.eachLayer(function(layer) {
+                        if (layer instanceof L.TileLayer) {
+                            var layerName = layer.options.name || '';
+                            var layerUrl = layer._url || '';
+                            
+                            // 识别路网图层（高德标注或OSM Labels）
+                            if (layerName.indexOf('标注') !== -1 || 
+                                layerName.indexOf('Labels') !== -1 ||
+                                layerUrl.indexOf('style=8') !== -1 ||
+                                layerUrl.indexOf('voyager_only_labels') !== -1) {
+                                
+                                roadLayersFound.push(layer);
+                                map._roadLayers.push(layer);
+                                
+                                if (!showRoads) {
+                                    // 如果配置为不显示路网，移除图层
+                                    if (map.hasLayer(layer)) {
+                                        map.removeLayer(layer);
+                                        console.log('[地图] 初始化：路网图层已隐藏 -', layerName || layerUrl);
+                                    }
+                                } else {
+                                    console.log('[地图] 初始化：路网图层已显示 -', layerName || layerUrl);
+                                }
+                            }
+                        }
+                    });
+                    
+                    if (roadLayersFound.length === 0) {
+                        console.warn('[地图] 初始化：未找到路网图层（可能不是卫星地图模式）');
+                    } else {
+                        console.log('[地图] 初始化：找到并缓存了', roadLayersFound.length, '个路网图层');
+                    }
                 } else if (checkCount >= maxChecks) {
                     clearInterval(checkInterval);
                     console.log('[地图] 滚轮缩放启用超时');
@@ -541,7 +600,7 @@ class MapRenderer:
         return m
 
     @staticmethod
-    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign'):
+    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign', map_source='gaode', coord_system='WGS-84'):
         """
         添加标记点
 
@@ -551,9 +610,25 @@ class MapRenderer:
             popup_text: 弹出文本
             color: 颜色
             icon: 图标
+            map_source: 地图数据源
+            coord_system: 输入坐标系统 ('WGS-84', 'GCJ-02')
         """
+        # 只在坐标系统不匹配时进行转换
+        marker_location = location
+        if map_source == 'gaode' and coord_system == 'WGS-84':
+            # 高德地图需要GCJ-02坐标，但输入是WGS-84，需要转换
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(location[0], location[1])
+            marker_location = [gcj_lat, gcj_lon]
+        elif map_source == 'osm' and coord_system == 'GCJ-02':
+            # OSM地图需要WGS-84坐标，但输入是GCJ-02，需要转换
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(location[0], location[1])
+            marker_location = [wgs_lat, wgs_lon]
+        # 否则直接使用（坐标系统匹配）
+        
         folium.Marker(
-            location=location,
+            location=marker_location,
             popup=popup_text,
             icon=folium.Icon(color=color, icon=icon)
         ).add_to(map_obj)

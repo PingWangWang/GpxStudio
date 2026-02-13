@@ -68,7 +68,9 @@ class RouteHistoryStorage:
                    start_coords: tuple = None, end_coords: tuple = None,
                    waypoint_coords: List[tuple] = None,
                    distance: float = None, duration: int = None,
-                   route_points: List[tuple] = None) -> bool:
+                   route_points: List[tuple] = None,
+                   start_coord_system: str = None, end_coord_system: str = None,
+                   waypoint_coord_systems: List[str] = None) -> bool:
         """
         添加路线搜索记录
 
@@ -116,6 +118,12 @@ class RouteHistoryStorage:
                         list(point) if point and point is not None else None
                         for point in route_points
                     ]
+                if start_coord_system is not None:
+                    record['start_coord_system'] = start_coord_system
+                if end_coord_system is not None:
+                    record['end_coord_system'] = end_coord_system
+                if waypoint_coord_systems is not None:
+                    record['waypoint_coord_systems'] = waypoint_coord_systems
 
                 # 移到列表开头（最近使用）
                 self.history_records.remove(record)
@@ -141,6 +149,9 @@ class RouteHistoryStorage:
                 list(point) if point and point is not None else None
                 for point in (route_points or [])
             ] if route_points else None,
+            'start_coord_system': start_coord_system,
+            'end_coord_system': end_coord_system,
+            'waypoint_coord_systems': waypoint_coord_systems,
             'timestamp': datetime.now().isoformat(),
             'search_count': 1
         }

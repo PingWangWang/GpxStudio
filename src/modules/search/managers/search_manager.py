@@ -144,7 +144,9 @@ class SearchManager(QObject):
                     'lon': result.get('lon', 0),
                     'type': result.get('type', ''),
                     'level': result.get('level', ''),
-                    'radius': result.get('radius', None)
+                    'radius': result.get('radius', None),
+                    'coord_system': result.get('coord_system', 'WGS-84'),
+                    'data_source': result.get('data_source', 'unknown')
                 })
             else:
                 # OSM格式
@@ -155,7 +157,9 @@ class SearchManager(QObject):
                     'lon': result.longitude if hasattr(result, 'longitude') else 0,
                     'type': result.type if hasattr(result, 'type') else '',
                     'level': '',
-                    'radius': None
+                    'radius': None,
+                    'coord_system': 'WGS-84',
+                    'data_source': 'osm'
                 })
         return formatted
 
@@ -360,11 +364,39 @@ class SearchManager(QObject):
         level = record.get('level', None)
         type_info = record.get('type', None)
         radius = record.get('radius', None)
+        
+        # 获取保存时的坐标系统（默认为WGS-84以兼容旧数据）
+        saved_coord_system = record.get('coord_system', 'WGS-84')
 
         coords = (lat, lon)
+        
+        # 检查当前地图源需要的坐标系统
+        from services.config.map_config import map_config
+        current_map_source = map_config.get_map_source()
+        current_coord_system = 'GCJ-02' if current_map_source == 'gaode' else 'WGS-84'
+        
+        # 如果坐标系统不匹配，需要转换
+        if saved_coord_system != current_coord_system:
+            from modules.geolocation.coordinate_transform import CoordinateTransform
+            if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
+                # GCJ-02 → WGS-84
+                lat, lon = CoordinateTransform.gcj02_to_wgs84(lat, lon)
+                coords = (lat, lon)
+                self.logger.info(f"[搜索历史] 坐标已转换: GCJ-02 → WGS-84")
+            elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
+                # WGS-84 → GCJ-02
+                lat, lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                coords = (lat, lon)
+                self.logger.info(f"[搜索历史] 坐标已转换: WGS-84 → GCJ-02")
+        
+        # 更新record中的坐标系统为当前系统
+        updated_record = record.copy()
+        updated_record['coord_system'] = current_coord_system
+        updated_record['lat'] = coords[0]
+        updated_record['lon'] = coords[1]
 
-        # 直接在地图上预览（不需要搜索）
-        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius)
+        # 直接在地图上预览（不需要搜索），传递更新后的记录
+        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius, updated_record)
 
     def select_result_from_dropdown(self, result: dict, search_text: str):
         """
@@ -389,8 +421,8 @@ class SearchManager(QObject):
         # 保存到历史记录
         self._save_to_history(search_text, result)
 
-        # 在地图上预览并缩放到对应范围
-        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius)
+        # 在地图上预览并缩放到对应范围，传递完整结果以保留坐标系统
+        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius, result)
 
     def clear_search_results(self):
         """清空搜索结果

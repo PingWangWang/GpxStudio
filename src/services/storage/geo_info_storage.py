@@ -78,13 +78,15 @@ class GeoInfoStorage:
             if isinstance(lon, str):
                 lon = float(lon) if lon else 0.0
 
-            # 构建存储记录
+            # 构建存储记录（保留坐标系统和数据来源信息）
             record = {
                 'search_text': search_text,
                 'name': result.get('name', ''),
                 'address': result.get('address', ''),
                 'lat': lat,
                 'lon': lon,
+                'coord_system': result.get('coord_system', 'WGS-84'),  # 保存坐标系统
+                'data_source': result.get('data_source', 'unknown'),   # 保存数据来源
                 'type': result.get('type', ''),
                 'level': result.get('level', ''),
                 'radius': result.get('radius', None),

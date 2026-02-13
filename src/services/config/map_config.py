@@ -41,6 +41,11 @@ class MapConfig(IConfigService):
             self._config_data['map_mode'] = "roadmap"
             config_updated = True
 
+        # 确保包含卫星地图路网开关配置
+        if 'satellite_show_roads' not in self._config_data:
+            self._config_data['satellite_show_roads'] = True  # 默认显示路网
+            config_updated = True
+
         # 确保包含关闭动作配置
         if 'close_action' not in self._config_data:
             self._config_data['close_action'] = "exit"  # 默认为直接退出
@@ -256,6 +261,18 @@ class MapConfig(IConfigService):
         """设置地图模式"""
         try:
             self._config_data['map_mode'] = map_mode
+            return self.save_config(self._config_data)
+        except Exception:
+            return False
+
+    def get_satellite_show_roads(self) -> bool:
+        """获取卫星地图是否显示路网"""
+        return self._config_data.get('satellite_show_roads', True)
+
+    def set_satellite_show_roads(self, show: bool) -> bool:
+        """设置卫星地图是否显示路网"""
+        try:
+            self._config_data['satellite_show_roads'] = show
             return self.save_config(self._config_data)
         except Exception:
             return False

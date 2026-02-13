@@ -29,6 +29,9 @@ hypothesis>=6.0.0
 # Windows Location Service (Windows only)
 winrt-Windows.Devices.Geolocation>=3.2.1
 
+# Windows API for single instance detection (Windows only)
+pywin32>=306
+
 # Packaging Tool
 pyinstaller>=6.0.0
 

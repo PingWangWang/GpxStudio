@@ -98,7 +98,7 @@ class SignalManager(QObject):
             },
             'route_clear': {
                 'signal': self.route_clear,
-                'description': '清除路线时发射'
+                'description': '清空地图时发射'
             },
 
             # GPX导出相关信号

@@ -315,6 +315,9 @@ class GpxStudio(QMainWindow):
 
             # 显示地图视图（即使没有添加到布局，也可以尝试加载）
             self.map_view.show()
+            
+            # 同步路网按钮状态
+            self._sync_road_button_state()
 
             self.logger.info(f"成功重新创建地图视图: {id(self.map_view)}")
             return True
@@ -662,7 +665,50 @@ class GpxStudio(QMainWindow):
         from services.config.map_config import map_config
         map_mode = map_config.get_map_mode()
         self.map_mode_button.setChecked(map_mode == 'satellite')
+        
+        # 监听鼠标事件以显示/隐藏路网按钮
+        self.map_mode_button.enterEvent = lambda event: self.on_map_mode_button_enter()
+        self.map_mode_button.leaveEvent = lambda event: self.on_map_mode_button_leave()
+        
         right_buttons_layout.addWidget(self.map_mode_button)
+        
+        # 创建路网控制按钮（使用绝对定位，显示在卫星按钮左侧）
+        self.road_overlay_button = QPushButton(map_container)
+        self.road_overlay_button.setText("🛣️")
+        self.road_overlay_button.setToolTip("路网")
+        self.road_overlay_button.setFixedSize(control_height, control_height)
+        self.road_overlay_button.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                border: 1px solid rgba(0, 0, 0, 0.15);
+                border-radius: 6px;
+                padding: 0px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+            QPushButton:checked {
+                background-color: #e3f2fd;
+                border: 1px solid #2196f3;
+            }
+        """)
+        self.road_overlay_button.setCheckable(True)
+        # 加载路网开关状态
+        show_roads = map_config.get_satellite_show_roads()
+        self.road_overlay_button.setChecked(show_roads)
+        self.road_overlay_button.clicked.connect(self.on_road_overlay_toggled)
+        self.road_overlay_button.hide()  # 初始隐藏
+        
+        # 监听路网按钮的鼠标事件
+        self.road_overlay_button.enterEvent = lambda event: self.on_road_button_enter()
+        self.road_overlay_button.leaveEvent = lambda event: self.on_road_button_leave()
+        
+        # 保存map_container引用用于后续定位
+        self.map_container = map_container
 
         # 创建地图设置按钮
         self.map_settings_button = QPushButton()
@@ -963,6 +1009,8 @@ class GpxStudio(QMainWindow):
         self.search_input.focusInEvent = self._on_search_input_focus_in
         # 失去焦点时隐藏搜索历史（延迟处理以允许点击历史项）
         self.search_input.focusOutEvent = self._on_search_input_focus_out
+        # 鼠标点击时显示搜索历史
+        self.search_input.mousePressEvent = self._on_search_input_mouse_press
         search_layout.addWidget(self.search_input)
 
         # 搜索按钮样式（方形按钮，无边框）
@@ -1278,6 +1326,15 @@ class GpxStudio(QMainWindow):
 
         # 显示搜索历史
         self._show_search_history()
+    
+    def _on_search_input_mouse_press(self, event):
+        """搜索框鼠标点击事件"""
+        # 调用原始的mousePressEvent
+        QLineEdit.mousePressEvent(self.search_input, event)
+        
+        # 点击时显示搜索历史
+        self.logger.debug("[搜索历史] 搜索框被点击，显示历史记录")
+        self._show_search_history()
 
     def _on_search_input_focus_out(self, event):
         """搜索框失去焦点"""
@@ -1289,21 +1346,17 @@ class GpxStudio(QMainWindow):
 
     def _on_search_input_text_changed(self, text: str):
         """搜索框文本改变"""
-        # 当用户开始输入时，自动关闭历史记录列表
-        if text.strip():
-            self.logger.debug("[搜索历史] 用户开始输入，关闭历史记录列表")
-            if hasattr(self, 'search_history_popup'):
-                self.search_history_popup.hide()
+        # 文本改变时不再自动关闭历史，允许用户在输入时仍可选择历史记录
+        pass
 
     def _show_search_history(self):
         """显示搜索历史下拉列表"""
         if not hasattr(self, 'search_history_popup'):
             return
-
-        # 只有当搜索框为空时才显示历史记录
-        if self.search_input.text().strip():
-            self.logger.debug("[搜索历史] 搜索框有文字，不显示历史记录")
-            self.search_history_popup.hide()
+        
+        # 如果设置了抑制标志，不显示历史面板
+        if getattr(self, '_suppress_history_popup', False):
+            self.logger.debug("[搜索历史] 抑制标志已设置，不显示历史记录")
             return
 
         # 获取搜索历史
@@ -1336,6 +1389,9 @@ class GpxStudio(QMainWindow):
         """处理历史记录选择"""
         self.logger.info(f"[搜索历史] 用户选择: {record.get('name')}")
 
+        # 设置标志，防止立即重新打开历史面板
+        self._suppress_history_popup = True
+        
         # 将地址名称回填到搜索框
         name = record.get('name', '')
         if hasattr(self, 'search_input'):
@@ -1348,6 +1404,9 @@ class GpxStudio(QMainWindow):
 
         # 调用搜索管理器处理历史记录选择
         self.search_manager.select_history_result(record)
+        
+        # 延迟清除标志，避免在处理完选择后立即被重新打开
+        QTimer.singleShot(300, lambda: setattr(self, '_suppress_history_popup', False))
 
     def _on_result_selected(self, result: dict):
         """处理搜索结果选择"""
@@ -1794,9 +1853,9 @@ class GpxStudio(QMainWindow):
         """更新地图预览"""
         self.map_manager.update_map_preview()
 
-    def _preview_search_result(self, coords, name, level=None, type_info=None, radius=None):
+    def _preview_search_result(self, coords, name, level=None, type_info=None, radius=None, result_data=None):
         """预览搜索结果"""
-        self.map_manager.preview_search_result(coords, name, level, type_info, radius)
+        self.map_manager.preview_search_result(coords, name, level, type_info, radius, result_data)
 
     def _show_location_on_map(self, lat: float, lon: float, popup_text: str):
         """在地图上显示位置"""
@@ -2018,18 +2077,273 @@ class GpxStudio(QMainWindow):
         from services.config.map_config import map_config
         map_config.set_map_mode(map_mode)
         
+        # 根据地图模式显示/隐藏路网按钮
+        if checked:  # 卫星模式
+            # 卫星模式下才显示路网按钮
+            pass  # 初始不显示,只在鼠标悬停时显示
+        else:  # 街道模式
+            self.road_overlay_button.hide()
+        
         # 重新加载地图，使用新的地图模式
         if hasattr(self, 'map_manager'):
-            # 获取当前地图的中心和缩放级别
-            current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
-            current_zoom = getattr(self.map_manager, 'current_zoom', 10)
+            # 尝试从HTTP服务器获取当前实时视口状态
+            from modules.map.http_server import get_map_server
+            from modules.geolocation.coordinate_transform import CoordinateTransform
             
-            # 重新显示地图
+            current_center = None
+            current_zoom = None
+            
+            try:
+                # 优先从HTTP服务器获取实时视口中心和缩放
+                map_server = get_map_server()
+                viewport_center = map_server.get_current_viewport_center()
+                viewport_zoom = map_server.get_current_zoom()
+                
+                if viewport_center and viewport_zoom:
+                    # HTTP服务器返回的坐标是浏览器中Leaflet地图的实际显示坐标
+                    # 需要判断当前地图源来确定坐标系统
+                    current_map_source = map_config.get_map_source()
+                    
+                    # 直接使用视口坐标，并告知其坐标系统（避免不必要的转换）
+                    if current_map_source == 'gaode':
+                        # 当前是高德地图，视口坐标是GCJ-02
+                        current_center = viewport_center
+                        viewport_coord_system = 'GCJ-02'
+                        self.logger.debug(f"[地图切换] 视口中心(GCJ-02): {current_center}")
+                    else:
+                        # 当前是OSM地图，视口坐标是WGS-84
+                        current_center = viewport_center
+                        viewport_coord_system = 'WGS-84'
+                        self.logger.debug(f"[地图切换] 视口中心(WGS-84): {current_center}")
+                    
+                    current_zoom = viewport_zoom
+                    self.logger.debug(f"[地图切换] 从HTTP服务器获取视口 - 缩放: {current_zoom}, 坐标系: {viewport_coord_system}")
+                else:
+                    # 如果HTTP服务器没有视口信息，使用map_manager保存的状态
+                    current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
+                    current_zoom = getattr(self.map_manager, 'current_zoom', 10)
+                    self.logger.debug(f"[地图切换] HTTP服务器无视口信息，使用map_manager - 中心: {current_center}, 缩放: {current_zoom}")
+            except Exception as e:
+                self.logger.warning(f"[地图切换] 获取视口状态失败: {e}，使用默认值")
+                current_center = getattr(self.map_manager, 'current_center', [39.9042, 116.4074])
+                current_zoom = getattr(self.map_manager, 'current_zoom', 10)
+            
+            # 重新显示地图（传递坐标系统信息，避免不必要的转换）
             self.map_manager.show_map(
                 center=current_center,
                 zoom=current_zoom,
-                title="地图"
+                title="地图",
+                coord_system=viewport_coord_system if viewport_center and viewport_zoom else 'WGS-84'
             )
+            
+            # 同步路网按钮状态
+            self._sync_road_button_state()
+    
+    def _sync_road_button_state(self):
+        """同步路网按钮状态到配置值"""
+        if hasattr(self, 'road_overlay_button'):
+            from services.config.map_config import map_config
+            show_roads = map_config.get_satellite_show_roads()
+            # 阻塞信号，避免触发切换事件
+            self.road_overlay_button.blockSignals(True)
+            self.road_overlay_button.setChecked(show_roads)
+            self.road_overlay_button.blockSignals(False)
+            self.logger.debug(f"[地图] 同步路网按钮状态: {show_roads}")
+    
+    def on_road_overlay_toggled(self, checked):
+        """路网开关按钮点击事件"""
+        self.logger.debug(f"[地图] 路网开关切换: {checked}")
+        
+        # 保存路网开关状态到配置
+        from services.config.map_config import map_config
+        map_config.set_satellite_show_roads(checked)
+        
+        # 使用JavaScript直接控制路网图层的显示/隐藏（不重新加载地图）
+        if hasattr(self, 'map_view') and self.map_view:
+            js_code = f"""
+            (function() {{
+                var map = null;
+                var result = {{
+                    success: false,
+                    message: '',
+                    layerCount: 0,
+                    roadLayerFound: false
+                }};
+                
+                // 查找Leaflet地图实例
+                for (var key in window) {{
+                    if (key.startsWith('map_') && window[key] && window[key]._container) {{
+                        map = window[key];
+                        result.mapFound = true;
+                        console.log('[路网切换] 找到地图实例: ' + key);
+                        break;
+                    }}
+                }}
+                
+                if (!map) {{
+                    console.error('[路网切换] 未找到地图实例');
+                    result.message = '未找到地图实例';
+                    return result;
+                }}
+                
+                var showRoads = {str(checked).lower()};
+                
+                // 初始化路网图层缓存（如果不存在）
+                if (!map._roadLayers) {{
+                    map._roadLayers = [];
+                }}
+                
+                // 首先尝试从缓存中获取路网图层
+                if (map._roadLayers.length > 0) {{
+                    console.log('[路网切换] 从缓存中找到', map._roadLayers.length, '个路网图层');
+                    result.roadLayerFound = true;
+                    
+                    map._roadLayers.forEach(function(layer) {{
+                        var hasLayer = map.hasLayer(layer);
+                        console.log('[路网切换] 缓存图层状态 hasLayer:', hasLayer);
+                        
+                        if (showRoads) {{
+                            if (!hasLayer) {{
+                                map.addLayer(layer);
+                                console.log('[路网切换] 从缓存添加路网图层');
+                            }}
+                        }} else {{
+                            if (hasLayer) {{
+                                map.removeLayer(layer);
+                                console.log('[路网切换] 移除路网图层到缓存');
+                            }}
+                        }}
+                    }});
+                    
+                    result.success = true;
+                    result.message = showRoads ? '路网图层已显示' : '路网图层已隐藏';
+                }} else {{
+                    // 缓存为空，从地图中查找并缓存路网图层
+                    console.log('[路网切换] 缓存为空，开始查找路网图层');
+                    
+                    map.eachLayer(function(layer) {{
+                        result.layerCount++;
+                        
+                        if (layer instanceof L.TileLayer) {{
+                            var layerName = layer.options.name || '';
+                            var layerUrl = layer._url || '';
+                            
+                            // 通过名称或URL识别路网图层
+                            if (layerName.indexOf('标注') !== -1 || 
+                                layerName.indexOf('Labels') !== -1 ||
+                                layerUrl.indexOf('style=8') !== -1 ||
+                                layerUrl.indexOf('voyager_only_labels') !== -1) {{
+                                
+                                console.log('[路网切换] 找到路网图层并加入缓存:', layerName || layerUrl);
+                                map._roadLayers.push(layer);
+                                result.roadLayerFound = true;
+                                
+                                var hasLayer = map.hasLayer(layer);
+                                
+                                if (showRoads) {{
+                                    if (!hasLayer) {{
+                                        map.addLayer(layer);
+                                        console.log('[路网切换] 执行addLayer');
+                                    }}
+                                }} else {{
+                                    if (hasLayer) {{
+                                        map.removeLayer(layer);
+                                        console.log('[路网切换] 执行removeLayer');
+                                    }}
+                                }}
+                                
+                                result.success = true;
+                            }}
+                        }}
+                    }});
+                    
+                    if (result.roadLayerFound) {{
+                        result.message = showRoads ? '路网图层已显示' : '路网图层已隐藏';
+                    }} else {{
+                        result.message = '未找到路网图层（可能当前不是卫星模式）';
+                    }}
+                }}
+                
+                console.log('[路网切换] 操作完成 - 缓存图层数:', map._roadLayers.length);
+                
+                return result;
+            }})();
+            """
+            
+            def on_js_result(result):
+                if result:
+                    self.logger.info(f"[地图-路网切换] JavaScript执行结果: {result}")
+                    if not result.get('success'):
+                        self.logger.warning(f"[地图-路网切换] 操作失败: {result.get('message')}")
+                else:
+                    self.logger.error("[地图-路网切换] JavaScript返回空结果")
+            
+            self.map_view.page().runJavaScript(js_code, on_js_result)
+    
+    def on_map_mode_button_enter(self):
+        """鼠标进入卫星按钮区域"""
+        # 如果是卫星模式，显示路网按钮
+        if self.map_mode_button.isChecked():
+            # 计算路网按钮的位置（紧贴卫星按钮左侧，高度对齐）
+            # 获取卫星按钮在map_container中的全局位置
+            map_button_global = self.map_mode_button.mapToGlobal(self.map_mode_button.rect().topLeft())
+            container_global = self.map_container.mapFromGlobal(map_button_global)
+            
+            # 路网按钮位于卫星按钮左侧，紧贴无间距，高度与卫星按钮对齐
+            road_x = container_global.x() - self.road_overlay_button.width()
+            road_y = container_global.y()
+            
+            self.road_overlay_button.move(road_x, road_y)
+            self.road_overlay_button.show()
+            self.road_overlay_button.raise_()
+    
+    def on_map_mode_button_leave(self):
+        """鼠标离开卫星按钮区域"""
+        # 延迟隐藏,给用户时间移动到路网按钮
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self.check_hide_road_button)
+    
+    def on_road_button_enter(self):
+        """鼠标进入路网按钮区域"""
+        # 保持显示
+        self.road_overlay_button.show()
+    
+    def on_road_button_leave(self):
+        """鼠标离开路网按钮区域"""
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self.check_hide_road_button)
+    
+    def check_hide_road_button(self):
+        """检查是否应该隐藏路网按钮"""
+        # 只有在卫星模式下才可能隐藏
+        if not self.map_mode_button.isChecked():
+            self.road_overlay_button.hide()
+            return
+        
+        # 获取鼠标当前位置
+        from PyQt5.QtGui import QCursor
+        from PyQt5.QtCore import QRect
+        cursor_pos = QCursor.pos()
+        
+        # 检查鼠标是否在卫星按钮区域
+        map_button_rect = self.map_mode_button.rect()
+        map_button_global = self.map_mode_button.mapToGlobal(map_button_rect.topLeft())
+        map_button_global_rect = QRect(map_button_global, map_button_rect.size())
+        
+        # 检查鼠标是否在路网按钮区域
+        road_button_rect = self.road_overlay_button.rect()
+        road_button_global = self.road_overlay_button.mapToGlobal(road_button_rect.topLeft())
+        road_button_global_rect = QRect(road_button_global, road_button_rect.size())
+        
+        # 创建一个合并区域（包含两个按钮之间的间隙）
+        # 扩展区域以覆盖两个按钮之间的空间
+        combined_rect = map_button_global_rect.united(road_button_global_rect)
+        # 额外扩展10px以提供更好的用户体验
+        combined_rect.adjust(-10, -10, 10, 10)
+        
+        # 如果鼠标不在合并区域内，隐藏路网按钮
+        if not combined_rect.contains(cursor_pos):
+            self.road_overlay_button.hide()
 
     def on_map_settings_clicked(self):
         """地图设置按钮点击"""
@@ -2833,6 +3147,22 @@ class GpxStudio(QMainWindow):
         # 获取当前地图源
         map_source = map_config.get_map_source()
 
+        # 检查高德地图API配置
+        if map_source == 'gaode' and not map_config.is_gaode_configured():
+            self.logger.warning("高德地图API未配置，无法进行路线面板地点搜索")
+            self.route_plan_panel.hide_loading()
+            self._show_warning(
+                "高德地图API未配置",
+                "使用高德地图搜索需要先配置API密钥。\n\n"
+                "请在【地图设置】中配置高德地图Web服务API密钥。\n\n"
+                "获取方式：\n"
+                "1. 访问高德开放平台：https://lbs.amap.com/\n"
+                "2. 注册并创建应用\n"
+                "3. 获取Web服务API密钥"
+            )
+            self.route_plan_panel.show_search_error(location_type)
+            return
+
         # 获取对应的地理编码服务
         geocoding_service = self.service_manager.get_geocoding_service(map_source)
 
@@ -2857,6 +3187,10 @@ class GpxStudio(QMainWindow):
                     name = result.get('name', '')
                     address = result.get('address', result.get('formatted_address', ''))
 
+                    # 提取坐标系统与数据来源（用于地图渲染）
+                    coord_system = result.get('coord_system', 'WGS-84')
+                    data_source = result.get('data_source', map_source or 'unknown')
+
                     # 获取坐标
                     if 'location' in result:
                         location = result['location']
@@ -2874,7 +3208,9 @@ class GpxStudio(QMainWindow):
                         'location': location,
                         'level': result.get('level'),
                         'type': result.get('type'),
-                        'radius': result.get('radius')
+                        'radius': result.get('radius'),
+                        'coord_system': coord_system,
+                        'data_source': data_source
                     })
 
                 # 显示搜索结果
@@ -2893,7 +3229,8 @@ class GpxStudio(QMainWindow):
                                 name=f"{first_addr['name']}\n{first_addr['address']}",
                                 level=first_addr.get('level'),
                                 type_info=first_addr.get('type'),
-                                radius=first_addr.get('radius')
+                                radius=first_addr.get('radius'),
+                                result_data=first_addr
                             )
                         except (ValueError, IndexError) as e:
                             self.logger.error(f"无效的坐标格式: {location}, 错误: {e}")
@@ -2965,7 +3302,9 @@ class GpxStudio(QMainWindow):
                     'lon': lng_float,
                     'type': address_data.get('type', ''),
                     'level': address_data.get('level', ''),
-                    'radius': address_data.get('radius', None)
+                    'radius': address_data.get('radius', None),
+                    'coord_system': address_data.get('coord_system', 'WGS-84'),
+                    'data_source': address_data.get('data_source', map_config.get_map_source() or 'unknown')
                 }
                 # 调用搜索管理器保存历史记录
                 self.search_manager._save_to_history(search_text, result_dict)
@@ -2983,7 +3322,8 @@ class GpxStudio(QMainWindow):
                     name=display_name,
                     level=address_data.get('level'),
                     type_info=address_data.get('type'),
-                    radius=address_data.get('radius')
+                    radius=address_data.get('radius'),
+                    result_data=address_data
                 )
 
                 self.logger.info(f"[路线面板] 地图已缩放到: {name} ({lat_float}, {lng_float})")
@@ -3008,6 +3348,9 @@ class GpxStudio(QMainWindow):
             start_coords = history_data.get('start_coords')
             end_coords = history_data.get('end_coords')
             waypoint_coords = history_data.get('waypoint_coords', [])
+            start_coord_system = history_data.get('start_coord_system')
+            end_coord_system = history_data.get('end_coord_system')
+            waypoint_coord_systems = history_data.get('waypoint_coord_systems')
 
             # 获取保存的路线点数据
             route_points = history_data.get('route_points', [])
@@ -3046,26 +3389,97 @@ class GpxStudio(QMainWindow):
                 # 切换交通方式
                 self.route_plan_panel._switch_transport_mode(mode)
 
-            # 如果历史记录中有坐标，直接恢复
+            # 如果历史记录中有坐标，恢复时需要考虑坐标系统转换
             has_coords = False
+            
+            # 获取当前地图源需要的坐标系统
+            from services.config.map_config import map_config
+            current_map_source = map_config.get_map_source()
+            current_coord_system = 'GCJ-02' if current_map_source == 'gaode' else 'WGS-84'
+            
+            # 恢复起点坐标（考虑坐标系统转换）
             if start_coords and isinstance(start_coords, (list, tuple)) and len(start_coords) == 2:
+                # 确定保存时的坐标系统（默认为WGS-84以兼容旧数据）
+                saved_coord_system = start_coord_system or 'WGS-84'
+                
+                # 如果坐标系统不匹配，需要转换
+                if saved_coord_system != current_coord_system:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
+                        # GCJ-02 → WGS-84
+                        lat, lon = CoordinateTransform.gcj02_to_wgs84(start_coords[0], start_coords[1])
+                        start_coords = (lat, lon)
+                        self.logger.info(f"[路线面板] 起点坐标已转换: GCJ-02 → WGS-84")
+                    elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
+                        # WGS-84 → GCJ-02
+                        lat, lon = CoordinateTransform.wgs84_to_gcj02(start_coords[0], start_coords[1])
+                        start_coords = (lat, lon)
+                        self.logger.info(f"[路线面板] 起点坐标已转换: WGS-84 → GCJ-02")
+                
                 self.data_manager.set_start_location(tuple(start_coords), start)
-                self.logger.info(f"[路线面板] 已恢复起点坐标: {start_coords}")
+                # 保存转换后的坐标系统
+                self.data_manager.start_coord_system = current_coord_system
+                self.logger.info(f"[路线面板] 已恢复起点坐标: {start_coords} (坐标系: {current_coord_system})")
                 has_coords = True
 
+            # 恢复终点坐标（考虑坐标系统转换）
             if end_coords and isinstance(end_coords, (list, tuple)) and len(end_coords) == 2:
+                # 确定保存时的坐标系统（默认为WGS-84以兼容旧数据）
+                saved_coord_system = end_coord_system or 'WGS-84'
+                
+                # 如果坐标系统不匹配，需要转换
+                if saved_coord_system != current_coord_system:
+                    from modules.geolocation.coordinate_transform import CoordinateTransform
+                    if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
+                        # GCJ-02 → WGS-84
+                        lat, lon = CoordinateTransform.gcj02_to_wgs84(end_coords[0], end_coords[1])
+                        end_coords = (lat, lon)
+                        self.logger.info(f"[路线面板] 终点坐标已转换: GCJ-02 → WGS-84")
+                    elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
+                        # WGS-84 → GCJ-02
+                        lat, lon = CoordinateTransform.wgs84_to_gcj02(end_coords[0], end_coords[1])
+                        end_coords = (lat, lon)
+                        self.logger.info(f"[路线面板] 终点坐标已转换: WGS-84 → GCJ-02")
+                
                 self.data_manager.set_end_location(tuple(end_coords), end)
-                self.logger.info(f"[路线面板] 已恢复终点坐标: {end_coords}")
+                # 保存转换后的坐标系统
+                self.data_manager.end_coord_system = current_coord_system
+                self.logger.info(f"[路线面板] 已恢复终点坐标: {end_coords} (坐标系: {current_coord_system})")
                 has_coords = has_coords and True
             else:
                 has_coords = False
 
-            # 恢复途径点坐标和UI
+            # 恢复途径点坐标和UI（考虑坐标系统转换）
             if waypoint_coords:
                 waypoints = history_data.get('waypoints', [])
+                self.data_manager.__dict__.setdefault('waypoint_coord_systems', [])
+                
                 for i, coords in enumerate(waypoint_coords):
                     if coords and isinstance(coords, (list, tuple)) and len(coords) == 2:
                         waypoint_name = waypoints[i] if i < len(waypoints) else f"途径点{i+1}"
+                        
+                        # 确定保存时的坐标系统（默认为WGS-84以兼容旧数据）
+                        saved_coord_system = 'WGS-84'
+                        if waypoint_coord_systems and i < len(waypoint_coord_systems):
+                            saved_coord_system = waypoint_coord_systems[i] or 'WGS-84'
+                        
+                        # 如果坐标系统不匹配，需要转换
+                        if saved_coord_system != current_coord_system:
+                            from modules.geolocation.coordinate_transform import CoordinateTransform
+                            if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
+                                # GCJ-02 → WGS-84
+                                lat, lon = CoordinateTransform.gcj02_to_wgs84(coords[0], coords[1])
+                                coords = (lat, lon)
+                                self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: GCJ-02 → WGS-84")
+                            elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
+                                # WGS-84 → GCJ-02
+                                lat, lon = CoordinateTransform.wgs84_to_gcj02(coords[0], coords[1])
+                                coords = (lat, lon)
+                                self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: WGS-84 → GCJ-02")
+                        
+                        # 保存转换后的坐标系统
+                        self.data_manager.waypoint_coord_systems.append(current_coord_system)
+                        
                         # 添加到data_manager
                         self.data_manager.add_waypoint(tuple(coords), waypoint_name)
                         # 添加到UI
@@ -3074,7 +3488,7 @@ class GpxStudio(QMainWindow):
                             # 设置途径点文本
                             if i < len(self.route_plan_panel.waypoint_widgets):
                                 self.route_plan_panel.waypoint_widgets[i]['input'].setText(waypoint_name)
-                        self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords}")
+                        self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords} (坐标系: {current_coord_system})")
 
             # 重新更新交通方式UI（确保选中效果正确）
             if hasattr(self, 'route_plan_panel'):
@@ -4100,8 +4514,8 @@ class GpxStudio(QMainWindow):
             self.logger.warning("[右键菜单] 地图视图或页面不存在")
 
     def _on_context_menu_clear_route(self):
-        """右键菜单：清除路线"""
-        self.logger.info("[右键菜单] 清除路线")
+        """右键菜单：清空地图"""
+        self.logger.info("[右键菜单] 清空地图")
 
         # 清除 data_manager 中的所有路线数据
         self.data_manager.clear_all_route_data()
@@ -4109,10 +4523,10 @@ class GpxStudio(QMainWindow):
         # 清除路线面板中的输入框内容
         self.route_plan_panel.clear_all_inputs()
 
-        # 清除地图上的路线显示，保持地图中心和缩放级别
-        self.map_manager.update_map_preview(auto_fit=False, keep_zoom=True)
+        # 清空地图上的所有元素，但保持当前显示区域和缩放级别
+        self.map_manager.clear_map_and_keep_view()
 
-        self.logger.info("[右键菜单] 路线已清除")
+        self.logger.info("[右键菜单] 地图已清空")
 
     def _on_history_delete_clicked(self, history_data: dict):
         """删除历史记录"""

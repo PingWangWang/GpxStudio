@@ -121,11 +121,6 @@ class SearchTaskAdapter:
             if cancel_check():
                 return None
 
-            # 检查高德API配置
-            if map_source == "gaode" and not map_config.is_gaode_configured():
-                log_callback("WARNING", "高德地图API未配置，无法进行地点搜索")
-                return []
-
             progress_callback(30, "正在查询地理编码服务...")
 
             if cancel_check():
@@ -191,7 +186,8 @@ class RouteTaskAdapter:
             # 检查高德API配置
             if map_source == "gaode" and not map_config.is_gaode_configured():
                 log_callback("WARNING", "高德地图API未配置，无法进行路线规划")
-                return None
+                # 返回特殊标记，让回调函数显示弹窗
+                return {'error': 'api_not_configured', 'message': '请先在地图配置中配置高德地图API密钥'}
 
             progress_callback(20, "正在计算路线...")
             log_callback("DEBUG", "调用路线规划服务...")
@@ -292,13 +288,17 @@ class MapRenderTaskAdapter:
             # 导入MapRenderer
             from modules.map.map_renderer import MapRenderer
 
+            # 确定坐标系统（高德路线规划结果为GCJ-02）
+            is_route_planned = hasattr(data_manager, 'route_alternatives') and data_manager.route_alternatives
+            coord_system = 'GCJ-02' if map_source == 'gaode' and is_route_planned else 'WGS-84'
+
             # 确定地图中心
             center = data_manager.start_coords or valid_points[0]
 
             # 创建基础地图
             map_create_start = time.time()
             log_callback("DEBUG", f"创建地图，中心: {center}")
-            m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source)
+            m = MapRenderer.create_base_map(center, zoom_start=12, map_source=map_source, coord_system=coord_system)
             map_create_time = (time.time() - map_create_start) * 1000
 
             progress_callback(40, "正在添加地图标记...")
@@ -310,15 +310,15 @@ class MapRenderTaskAdapter:
             markers_start = time.time()
             if data_manager.start_coords:
                 start_name = data_manager.start_name or "起点"
-                MapRenderer.add_marker(m, data_manager.start_coords, start_name, 'green', 'play')
+                MapRenderer.add_marker(m, data_manager.start_coords, start_name, 'green', 'play', map_source, coord_system=coord_system)
 
             if data_manager.end_coords:
                 end_name = data_manager.end_name or "终点"
-                MapRenderer.add_marker(m, data_manager.end_coords, end_name, 'red', 'stop')
+                MapRenderer.add_marker(m, data_manager.end_coords, end_name, 'red', 'stop', map_source, coord_system=coord_system)
 
             for i, wp in enumerate(data_manager.waypoints_coords):
                 wp_name = data_manager.waypoints_names[i] if i < len(data_manager.waypoints_names) else f"途径点{i+1}"
-                MapRenderer.add_marker(m, wp, wp_name, 'blue', 'info-sign')
+                MapRenderer.add_marker(m, wp, wp_name, 'blue', 'info-sign', map_source, coord_system=coord_system)
             markers_time = (time.time() - markers_start) * 1000
 
             progress_callback(60, "正在绘制路线...")
@@ -329,19 +329,26 @@ class MapRenderTaskAdapter:
             # 全量渲染：使用所有有效的路线点来渲染路线
             route_start = time.time()
 
-            # 处理坐标转换：根据地图源决定是否需要转换
-            route_points = []
-            if map_source == 'gaode':
+            # 选择路线点来源：高德优先使用原始GCJ-02坐标
+            route_points = valid_points
+            if is_route_planned and map_source == 'gaode':
+                try:
+                    selected_route = data_manager.route_alternatives[data_manager.selected_route_index]
+                    if selected_route and 'gcj02_route_points' in selected_route:
+                        route_points = [p for p in selected_route['gcj02_route_points'] if p is not None]
+                except (IndexError, AttributeError, KeyError):
+                    route_points = valid_points
+
+            # 处理坐标转换：仅当使用高德且路线点为WGS-84时转换
+            if map_source == 'gaode' and coord_system == 'WGS-84':
                 from modules.geolocation.coordinate_transform import CoordinateTransform
                 transformed_route_points = []
-                for point in valid_points:
+                for point in route_points:
                     if point:
                         lat, lon = point
                         gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
                         transformed_route_points.append((gcj_lat, gcj_lon))
                 route_points = transformed_route_points
-            else:
-                route_points = valid_points
 
             # 添加完整路线
             if route_points and len(route_points) > 1:
@@ -357,11 +364,10 @@ class MapRenderTaskAdapter:
             fit_bounds_start = time.time()
 
             # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
-            bounds_points = valid_points
-            if map_source == 'gaode':
-                # 当前地图源是高德地图，所有存储的路线数据都是WGS-84坐标，需要转换为GCJ-02坐标
+            bounds_points = route_points
+            if map_source == 'gaode' and coord_system == 'WGS-84':
+                # 当前地图源是高德地图，路线点为WGS-84时需要转换为GCJ-02坐标
                 from modules.geolocation.coordinate_transform import CoordinateTransform
-                # 转换边界点坐标
                 transformed_bounds_points = []
                 for point in bounds_points:
                     if point:
