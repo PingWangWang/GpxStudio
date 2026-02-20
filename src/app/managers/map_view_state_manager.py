@@ -40,7 +40,7 @@ class MapViewStateManager:
         """
         获取当前地图的实时视图状态
         
-        优先级：JavaScript > HTTP服务器 > 缓存
+        优先级：JavaScript > 缓存
         
         Args:
             prefer_js: 是否优先使用JavaScript获取（默认True，最准确）
@@ -64,12 +64,6 @@ class MapViewStateManager:
                 return js_view
             else:
                 self.logger.warning("[视图状态] JavaScript获取失败，尝试降级策略")
-        
-        # 尝试从HTTP服务器获取
-        http_view = self._get_view_from_http_server()
-        if http_view:
-            self._update_cache(http_view['center'], http_view['zoom'])
-            return http_view
         
         # 使用缓存的视图
         cached_view = self._get_cached_view()
@@ -182,32 +176,7 @@ class MapViewStateManager:
             self.logger.error(f"[视图状态] JS获取异常: {e}")
             return None
     
-    def _get_view_from_http_server(self) -> Optional[Dict]:
-        """
-        从HTTP服务器获取视口缓存（较准确）
-        
-        Returns:
-            dict 或 None
-        """
-        try:
-            from modules.map.http_server import get_map_server
-            
-            map_server = get_map_server()
-            viewport_center = map_server.get_current_viewport_center()
-            viewport_zoom = map_server.get_current_zoom()
-            
-            if viewport_center and viewport_zoom:
-                view = {
-                    'center': viewport_center,
-                    'zoom': viewport_zoom,
-                    'source': 'http_server'
-                }
-                self.logger.debug(f"[视图状态] 从HTTP服务器获取: {view}")
-                return view
-        except Exception as e:
-            self.logger.debug(f"[视图状态] HTTP服务器获取失败: {e}")
-        
-        return None
+
     
     def _get_cached_view(self) -> Optional[Dict]:
         """

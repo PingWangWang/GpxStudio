@@ -1226,52 +1226,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         content_layout.addLayout(row5_layout)
 
-        # 地图瓦片缓存
-        row6_layout = QHBoxLayout()
-        row6_layout.setSpacing(6)
-        
-        gaode_size = self.get_directory_size(get_gaode_cache_dir())
-        osm_size = self.get_directory_size(get_osm_cache_dir())
-        tiles_size = gaode_size + osm_size
-        
-        self.tiles_size_text = QLineEdit()
-        self.tiles_size_text.setReadOnly(True)
-        self.tiles_size_text.setFixedHeight(30)
-        self.tiles_size_text.setText(f"地图瓦片: {tiles_size:.2f} MB")
-        self.tiles_size_text.setStyleSheet("""
-            QLineEdit {
-                padding: 0px 8px;
-                border: none;
-                border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
-                font-size: 12px;
-                color: #333333;
-                min-height: 30px;
-                max-height: 30px;
-            }
-        """)
-        row6_layout.addWidget(self.tiles_size_text, 3)
 
-        self.clean_tiles_btn = QPushButton("清理瓦片")
-        self.clean_tiles_btn.clicked.connect(self.on_clean_map_tiles)
-        self.clean_tiles_btn.setFixedHeight(30)
-        self.clean_tiles_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
-            }
-        """)
-        row6_layout.addWidget(self.clean_tiles_btn, 0)
-        
-        content_layout.addLayout(row6_layout)
 
         main_layout.addLayout(content_layout)
 
@@ -1394,40 +1349,7 @@ class LogSettingsPopup(BaseSettingsPopup):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"清理缓存文件失败: {str(e)}")
 
-    def on_clean_map_tiles(self):
-        """清理地图瓦片缓存"""
-        reply = QMessageBox.question(self, "确认", "确定要清理所有地图瓦片缓存吗？\n这会删除已下载的高德和OSM地图瓦片，同时清理内存缓存。",
-                                     QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            try:
-                import shutil
-                
-                # 清理高德地图缓存
-                gaode_dir = get_gaode_cache_dir()
-                if os.path.exists(gaode_dir):
-                    shutil.rmtree(gaode_dir)
-                    os.makedirs(gaode_dir, exist_ok=True)
-                
-                # 清理OSM地图缓存
-                osm_dir = get_osm_cache_dir()
-                if os.path.exists(osm_dir):
-                    shutil.rmtree(osm_dir)
-                    os.makedirs(osm_dir, exist_ok=True)
-                
-                # 清理HTTP服务器的内存缓存
-                if self.parent() and hasattr(self.parent(), 'map_manager'):
-                    map_manager = self.parent().map_manager
-                    if hasattr(map_manager, 'http_server'):
-                        http_server = map_manager.http_server
-                        # 清理视口完整性缓存
-                        if hasattr(http_server, 'viewport_completeness_cache'):
-                            http_server.viewport_completeness_cache.clear()
-                
-                QMessageBox.information(self, "成功", "地图瓦片缓存已清理")
-                self._init_ui()
-                self.load_current_config()
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"清理地图瓦片缓存失败: {str(e)}")
+
 
 
 class AboutPopup(BaseSettingsPopup):

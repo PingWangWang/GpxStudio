@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QIcon
 from core.resource_path import get_icon_path
-from modules.map.http_server import get_map_server
 
 
 class WindowManager:
@@ -177,11 +176,7 @@ class WindowManager:
         except Exception as e:
             print(f"[WindowManager] Error closing windows: {e}")
         
-        # 2. 停止地图服务
-        try:
-            get_map_server().stop()
-        except Exception as e:
-            print(f"[WindowManager] Error stopping map server: {e}")
+        # 2. 不再需要停止地图服务，因为已移除HTTP服务器
             
         # 3. 隐藏托盘图标
         if self.tray_icon:

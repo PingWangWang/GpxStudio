@@ -236,20 +236,11 @@ class MapRenderer:
         )
 
         if map_source == 'gaode':
-            # 确保服务器已启动以获取端口
-            from .http_server import get_map_server
-            server = get_map_server()
-            server.start()
-            port = server.port
-            
-            # 使用本地代理URL
-            # 格式: http://127.0.0.1:{port}/tiles/{source}/{style}/{z}/{x}/{y}
-            proxy_url_base = f'http://127.0.0.1:{port}/tiles/gaode'
-            
+            # 直接使用高德地图在线瓦片URL
             tile_urls = {
-                'roadmap': f'{proxy_url_base}/roadmap/{{z}}/{{x}}/{{y}}',
-                'satellite': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}',
-                'hybrid': f'{proxy_url_base}/hybrid/{{z}}/{{x}}/{{y}}'
+                'roadmap': 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                'satellite': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
+                'hybrid': 'https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
             }
 
             tile_url = tile_urls.get(map_type, tile_urls['roadmap'])
@@ -265,11 +256,7 @@ class MapRenderer:
             
             # 如果是卫星地图或混合地图，始终添加标注图层
             if map_type in ['satellite', 'hybrid']:
-                # 标注层通常是透明png，也可以缓存，这里假设它使用hybrid样式
-                # 高德webst01其实包含标注，或者用专门的标注服务。这里为了简化，暂不走缓存代理避免复杂
-                # 或者，简单地也指向代理
                 road_layer = folium.TileLayer(
-                    # 使用直连，或者可以配置为 proxy_url_base + '/roadmap/...' (高德标注通常和路网类似)
                     tiles='https://webst01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
                     attr='© 高德地图',
                     name='高德地图标注',
@@ -278,20 +265,11 @@ class MapRenderer:
                 )
                 road_layer.add_to(m)
         else:
-            # 使用OSM地图瓦片（通过代理服务器缓存）
-            from .http_server import get_map_server
-            server = get_map_server()
-            server.start()
-            port = server.port
-            
-            # 使用本地代理URL，实现OSM瓦片缓存
-            # 格式: http://127.0.0.1:{port}/tiles/{source}/{style}/{z}/{x}/{y}
-            proxy_url_base = f'http://127.0.0.1:{port}/tiles/osm'
-            
+            # 直接使用OSM地图在线瓦片URL
             osm_tile_urls = {
-                'roadmap': f'{proxy_url_base}/roadmap/{{z}}/{{x}}/{{y}}',
-                'satellite': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}',
-                'hybrid': f'{proxy_url_base}/satellite/{{z}}/{{x}}/{{y}}'  # hybrid使用satellite瓦片
+                'roadmap': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                'hybrid': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'  # hybrid使用satellite瓦片
             }
             
             tile_url = osm_tile_urls.get(map_type, osm_tile_urls['roadmap'])
@@ -527,28 +505,7 @@ class MapRenderer:
                     console.log('[地图移动] 移动结束，中心点: [' + center.lat.toFixed(4) + ', ' + center.lng.toFixed(4) + ']');
                     console.log('[地图移动] 视口范围: SW[' + bounds.getSouthWest().lat.toFixed(4) + ',' + bounds.getSouthWest().lng.toFixed(4) + 
                                 '] - NE[' + bounds.getNorthEast().lat.toFixed(4) + ',' + bounds.getNorthEast().lng.toFixed(4) + ']');
-                                
-                    // 发送视口信息到后端HTTP服务器
-                    var sw = bounds.getSouthWest();
-                    var ne = bounds.getNorthEast();
-                    var port = window.location.port;
-                    if (port) {
-                        var url = 'http://127.0.0.1:' + port + '/update_viewport?sw_lat=' + sw.lat + '&sw_lon=' + sw.lng + '&ne_lat=' + ne.lat + '&ne_lon=' + ne.lng + '&zoom=' + map.getZoom();
-                        fetch(url).catch(err => console.error('Failed to update viewport:', err));
-                    }
                 });
-
-                // 首次加载也发送一次
-                setTimeout(function() {
-                    var bounds = map.getBounds();
-                    var sw = bounds.getSouthWest();
-                    var ne = bounds.getNorthEast();
-                    var port = window.location.port;
-                    if (port) {
-                        var url = 'http://127.0.0.1:' + port + '/update_viewport?sw_lat=' + sw.lat + '&sw_lon=' + sw.lng + '&ne_lat=' + ne.lat + '&ne_lon=' + ne.lng + '&zoom=' + map.getZoom();
-                        fetch(url).catch(err => console.error('Failed to update viewport:', err));
-                    }
-                }, 1000);
 
                 // 5. 设置瓦片加载监听 (针对所有TileLayer)
                 map.eachLayer(function(layer) {
@@ -726,61 +683,32 @@ class MapRenderer:
 
         Args:
             map_obj: folium地图对象
-            use_http_server: 是否使用HTTP服务器（解决地理定位限制和本地文件访问问题）
+            use_http_server: 是否使用HTTP服务器（已废弃，始终使用本地文件）
 
         Returns:
-            QUrl: 本地文件URL或HTTP URL
+            QUrl: 本地文件URL
         """
         import logging
         logger = logging.getLogger(__name__)
 
         try:
-            if use_http_server:
-                from .http_server import get_map_server
-                import uuid
-                import os
+            import os
+            import tempfile
+            temp_path = tempfile.mktemp(suffix='.html')
 
-                server = get_map_server()
-                filename = f"map_{uuid.uuid4().hex[:8]}.html"
-                url_str = server.save_map(map_obj, filename)
+            map_obj.save(temp_path)
+            logger.debug(f"保存地图到临时文件: {temp_path}")
 
-                # 检查返回的是HTTP URL还是本地文件路径
-                if url_str.startswith('http://') or url_str.startswith('https://'):
-                    logger.debug(f"使用HTTP服务器提供地图: {url_str}")
-                    return QUrl(url_str)
-                else:
-                    # 返回的是本地文件路径，创建本地文件URL
-                    logger.debug(f"HTTP服务器返回本地文件路径: {url_str}")
-                    return QUrl.fromLocalFile(url_str)
+            # 确保文件存在且可访问
+            if os.path.exists(temp_path):
+                logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
+                return QUrl.fromLocalFile(temp_path)
             else:
-                import os
-                # 优化：直接使用路径创建，避免文件对象操作
-                import tempfile
+                logger.error(f"临时文件创建失败: {temp_path}")
+                # 再次尝试创建临时文件
                 temp_path = tempfile.mktemp(suffix='.html')
-
                 map_obj.save(temp_path)
-                logger.debug(f"保存地图到临时文件: {temp_path}")
-
-                # 确保文件存在且可访问
-                if os.path.exists(temp_path):
-                    logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
-                    return QUrl.fromLocalFile(temp_path)
-                else:
-                    logger.error(f"临时文件创建失败: {temp_path}")
-                    # 回退到HTTP服务器方式
-                    from .http_server import get_map_server
-                    import uuid
-                    server = get_map_server()
-                    filename = f"map_{uuid.uuid4().hex[:8]}.html"
-                    url_str = server.save_map(map_obj, filename)
-
-                    # 检查返回的是HTTP URL还是本地文件路径
-                    if url_str.startswith('http://') or url_str.startswith('https://'):
-                        logger.debug(f"回退到HTTP服务器: {url_str}")
-                        return QUrl(url_str)
-                    else:
-                        logger.debug(f"HTTP服务器回退返回本地文件路径: {url_str}")
-                        return QUrl.fromLocalFile(url_str)
+                return QUrl.fromLocalFile(temp_path)
         except Exception as e:
             logger.error(f"保存地图失败: {str(e)}")
             # 出错时回退到简单的本地文件
