@@ -2004,6 +2004,11 @@ class GpxStudio(QMainWindow):
 
     def on_locate_clicked(self):
         """定位按钮点击"""
+        self.logger.info("=" * 80)
+        self.logger.info("[定位按钮] 定位按钮被点击")
+        self.logger.info("[定位按钮] 开始启动定位流程")
+        self.logger.info("=" * 80)
+        
         self.start_loading_animation()  # 启动加载动画
         self.location_manager.get_current_location()
 

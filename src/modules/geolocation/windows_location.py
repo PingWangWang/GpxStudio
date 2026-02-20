@@ -48,14 +48,15 @@ class WindowsLocationService(ILocationService):
                 access_status = await geolocator.request_access_async()
 
                 if access_status != GeolocationAccessStatus.ALLOWED:
-                    self.log("WARNING", f"访问状态: {access_status}")
+                    self.log("ERROR", f"Windows定位访问被拒绝，访问状态: {access_status}")
+                    self.log("INFO", "请在Windows设置中开启位置服务：设置 → 隐私 → 位置 → 开启'允许应用访问你的位置'")
                     return None
             except AttributeError:
                 self.log("DEBUG", "request_access_async 不可用，直接尝试获取位置")
 
             position = await geolocator.get_geoposition_async()
 
-            return {
+            location_data = {
                 "latitude": position.coordinate.latitude,
                 "longitude": position.coordinate.longitude,
                 "accuracy": position.coordinate.accuracy,
@@ -63,6 +64,11 @@ class WindowsLocationService(ILocationService):
                 "timestamp": getattr(position.coordinate, 'timestamp', None),
                 "source": "windows_native"
             }
+
+            # 添加详细的成功日志
+            self.log("INFO", f"Windows原生定位成功 - 坐标: {location_data['latitude']:.6f}, {location_data['longitude']:.6f}, 精度: {location_data['accuracy']:.0f}米")
+
+            return location_data
 
         except ImportError as e:
             if "winrt" in str(e):
@@ -94,20 +100,29 @@ class WindowsLocationService(ILocationService):
 
         try:
             if platform.system() == "Windows":
+                self.log("INFO", f"开始执行Windows原生定位，超时时间: {timeout}秒")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    return loop.run_until_complete(
+                    result = loop.run_until_complete(
                         asyncio.wait_for(self._get_location_async(), timeout=timeout)
                     )
+                    if result:
+                        self.log("INFO", "Windows原生定位完成")
+                    else:
+                        self.log("WARNING", "Windows原生定位未获取到位置信息")
+                    return result
                 finally:
                     loop.close()
             else:
+                self.log("WARNING", "当前系统不是Windows，无法使用Windows原生定位")
                 return None
 
         except asyncio.TimeoutError:
-            self.log("WARNING", "获取位置超时")
+            self.log("ERROR", f"Windows定位超时 ({timeout}秒)")
+            self.log("INFO", "请检查网络连接和位置服务状态")
             return None
         except Exception as e:
-            self.log("ERROR", f"获取位置异常: {str(e)}")
+            self.log("ERROR", f"Windows定位异常: {str(e)}")
+            self.log("INFO", "请检查Windows位置服务是否已开启")
             return None

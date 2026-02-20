@@ -31,7 +31,15 @@ class ConsoleWebEnginePage(QWebEnginePage):
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)
             settings.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
             settings.setAttribute(QWebEngineSettings.AllowRunningInsecureContent, True)
-            print("[ConsoleWebEnginePage] ✅ 已启用JavaScript和LocalStorage")
+            # 启用地理定位功能（修复属性名错误）
+            try:
+                # 尝试使用GeolocationEnabled属性
+                settings.setAttribute(QWebEngineSettings.GeolocationEnabled, True)
+                print("[ConsoleWebEnginePage] ✅ 已启用JavaScript、LocalStorage和地理定位")
+            except AttributeError:
+                # 如果属性不存在，捕获错误并继续
+                print("[ConsoleWebEnginePage] ⚠️ GeolocationEnabled属性不存在，但地理定位权限仍会通过featurePermissionRequested处理")
+                # 继续执行其他设置
         except Exception as e:
             print(f"[ConsoleWebEnginePage] ⚠️ 配置设置时出错: {e}")
 

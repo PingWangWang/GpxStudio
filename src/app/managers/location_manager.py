@@ -110,10 +110,17 @@ class LocationManager(QObject):
             windows_location = service_manager.windows_location_service
             log_callback("DEBUG", f"Windows位置服务可用: {windows_location.is_available()}")
 
+            # 检查Windows位置服务状态并显示提示
+            if not windows_location.is_available():
+                log_callback("INFO", "提示: Windows位置服务未开启或无权限")
+                log_callback("INFO", "建议: 开启Windows位置服务以获得更准确的定位")
+                log_callback("INFO", "操作方法: 设置 → 隐私 → 位置 → 开启'允许应用访问你的位置'")
+
             # 尝试 Windows 原生定位（优先级最高）
             if windows_location.is_available():
                 progress_callback(10, "正在使用Windows原生定位...")
                 log_callback("INFO", "尝试使用Windows原生位置服务...")
+                log_callback("DEBUG", "Windows位置服务状态: 可用")
 
                 # 检查是否取消
                 if cancel_check():
@@ -121,14 +128,18 @@ class LocationManager(QObject):
                     return None
 
                 # 获取Windows原生定位信息
+                log_callback("INFO", "开始获取Windows原生定位信息，超时时间: 10秒")
                 location_info = windows_location.get_location(timeout=10)
                 if location_info:
                     progress_callback(100, "Windows原生定位成功")
                     log_callback("INFO", "Windows原生定位成功")
+                    log_callback("DEBUG", f"定位结果: 纬度={location_info['latitude']:.6f}, 经度={location_info['longitude']:.6f}, 精度={location_info['accuracy']:.0f}米")
                     return {
                         'type': 'native',
                         'data': location_info
                     }
+                else:
+                    log_callback("WARNING", "Windows原生定位未获取到位置信息")
 
             # Windows定位不可用，尝试其他方式
             log_callback("INFO", "Windows定位不可用，尝试其他方式")
@@ -199,6 +210,12 @@ class LocationManager(QObject):
             windows_location = self.service_manager.windows_location_service
             self.logger.debug(f"Windows位置服务可用: {windows_location.is_available()}")
 
+            # 检查Windows位置服务状态并显示提示
+            if not windows_location.is_available():
+                self.ui_updater['add_result']("提示: Windows位置服务未开启或无权限")
+                self.ui_updater['add_result']("建议: 开启Windows位置服务以获得更准确的定位")
+                self.ui_updater['add_result']("操作方法: 设置 → 隐私 → 位置 → 开启'允许应用访问你的位置'")
+
             # 尝试 Windows 原生定位（优先级最高）
             if windows_location.is_available():
                 self.ui_updater['add_result']("正在使用Windows原生定位...")
@@ -213,6 +230,7 @@ class LocationManager(QObject):
             # Windows定位不可用，尝试其他方式
             self.ui_updater['clear_results']()
             self.ui_updater['add_result']("Windows定位不可用")
+            self.ui_updater['add_result']("将尝试使用浏览器定位...")
 
             # 获取当前地图源
             current_map_source = map_config.get_map_source()
@@ -418,6 +436,13 @@ class LocationManager(QObject):
 
         # 获取当前地图源
         current_map_source = map_config.get_map_source()
+
+        # 显示详细的错误信息和备选方案
+        self.ui_updater['clear_results']()
+        self.ui_updater['add_result']("浏览器定位失败")
+        self.ui_updater['add_result'](f"错误原因: {error_msg}")
+        self.ui_updater['add_result']("将尝试使用IP定位作为备选方案")
+        self.ui_updater['add_result']("提示: IP定位精度较低，建议开启Windows位置服务以获得更准确的定位")
 
         # 只有当当前地图源是高德时，才尝试高德IP定位
         if current_map_source == "gaode" and map_config.is_gaode_configured():

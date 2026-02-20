@@ -514,18 +514,20 @@ class MapRenderer:
                          if (layer._gpx_listeners_attached) return;
                          
                          layer.on('tileloadstart', function(e) {
-                             // 计算瓦片坐标 (z/x/y)
-                             if (e.coords) {
-                                 console.log('[地图瓦片] 开始加载瓦片: z=' + e.coords.z + ', x=' + e.coords.x + ', y=' + e.coords.y);
-                             }
-                         });
+                            // 计算瓦片坐标 (z/x/y)
+                            if (e.coords) {
+                                // 屏蔽日志，减少控制台输出
+                                // console.log('[地图瓦片] 开始加载瓦片: z=' + e.coords.z + ', x=' + e.coords.x + ', y=' + e.coords.y);
+                            }
+                        });
                          
                          layer.on('tileerror', function(e) {
                              console.error('[地图瓦片] 瓦片加载失败:', e.coords, e.error);
                          });
                          
                          layer.on('load', function(e) {
-                             console.log('[地图瓦片] 当前视口瓦片加载完成');
+                             // 屏蔽日志，减少控制台输出
+                             // console.log('[地图瓦片] 当前视口瓦片加载完成');
                          });
 
                          layer._gpx_listeners_attached = true;
@@ -537,7 +539,8 @@ class MapRenderer:
                     if (e.layer instanceof L.TileLayer && !e.layer._gpx_listeners_attached) {
                          e.layer.on('tileloadstart', function(ev) {
                              if (ev.coords) {
-                                 console.log('[地图瓦片] 开始加载瓦片: z=' + ev.coords.z + ', x=' + ev.coords.x + ', y=' + ev.coords.y);
+                                 // 屏蔽日志，减少控制台输出
+                                 // console.log('[地图瓦片] 开始加载瓦片: z=' + ev.coords.z + ', x=' + ev.coords.x + ', y=' + ev.coords.y);
                              }
                          });
                          e.layer.on('tileerror', function(ev) {
@@ -683,35 +686,37 @@ class MapRenderer:
 
         Args:
             map_obj: folium地图对象
-            use_http_server: 是否使用HTTP服务器（已废弃，始终使用本地文件）
+            use_http_server: 是否使用HTTP服务器（默认使用）
 
         Returns:
-            QUrl: 本地文件URL
+            QUrl: 地图URL
         """
         import logging
         logger = logging.getLogger(__name__)
 
         try:
-            import os
+            # 优先使用HTTP服务器
+            from .http_server import get_map_server
+            map_server = get_map_server()
+            
+            # 生成唯一文件名
             import tempfile
-            temp_path = tempfile.mktemp(suffix='.html')
-
-            map_obj.save(temp_path)
-            logger.debug(f"保存地图到临时文件: {temp_path}")
-
-            # 确保文件存在且可访问
-            if os.path.exists(temp_path):
-                logger.debug(f"临时文件大小: {os.path.getsize(temp_path)} bytes")
-                return QUrl.fromLocalFile(temp_path)
+            filename = f"map_{tempfile.mktemp(suffix='', prefix='', dir='')}.html"
+            
+            # 使用HTTP服务器保存地图并获取URL
+            url_str = map_server.save_map(map_obj, filename)
+            logger.debug(f"保存地图到HTTP服务器: {url_str}")
+            
+            # 检查返回的是否是HTTP URL
+            if url_str.startswith('http://'):
+                logger.info(f"成功获取HTTP URL: {url_str}")
+                return QUrl(url_str)
             else:
-                logger.error(f"临时文件创建失败: {temp_path}")
-                # 再次尝试创建临时文件
-                temp_path = tempfile.mktemp(suffix='.html')
-                map_obj.save(temp_path)
-                return QUrl.fromLocalFile(temp_path)
+                logger.warning(f"HTTP服务器返回非HTTP URL: {url_str}，回退到本地文件")
+                return QUrl.fromLocalFile(url_str)
         except Exception as e:
-            logger.error(f"保存地图失败: {str(e)}")
-            # 出错时回退到简单的本地文件
+            logger.error(f"使用HTTP服务器失败: {str(e)}")
+            # 出错时回退到本地文件
             try:
                 import os
                 import tempfile
@@ -877,32 +882,238 @@ class MapRenderer:
         Args:
             map_obj: folium地图对象
         """
+        # 获取高德地图API密钥
+        from services.config.map_config import map_config
+        amap_api_key = map_config.get_api_key() or ""
+        
         geolocation_script = """
         <script>
         console.log('[初始化] 定位脚本已加载');
         console.log('[初始化] 页面协议: ' + window.location.protocol);
         console.log('[初始化] 页面URL: ' + window.location.href);
+        console.log('[初始化] navigator.geolocation: ' + navigator.geolocation);
+        console.log('[初始化] navigator.permissions: ' + navigator.permissions);
+        console.log('[初始化] navigator.onLine: ' + navigator.onLine);
+        console.log('[初始化] 高德地图API密钥: ' + ('已配置' if API_KEY_PLACEHOLDER else '未配置'));
 
+        // 检查地理位置权限状态
+        if (navigator.permissions) {
+            navigator.permissions.query({name:"geolocation"}).then(function(status) {
+                console.log('[权限状态] 初始状态: ' + status.state);
+                status.onchange = function() {
+                    console.log('[权限状态] 状态变化: ' + status.state);
+                };
+            }).catch(function(error) {
+                console.log('[权限状态] 检查权限状态失败: ' + error);
+            });
+        } else {
+            console.log('[权限状态] 浏览器不支持Permissions API');
+        }
+
+        // 检查网络连接状态
+        function checkNetworkStatus() {
+            var online = navigator.onLine;
+            console.log('[网络状态] 当前状态: ' + (online ? '在线' : '离线'));
+            return online;
+        }
+
+        // 测试网络连接质量
+        function testNetworkConnectivity() {
+            return new Promise(function(resolve) {
+                console.log('[网络测试] 开始测试网络连接质量...');
+                var startTime = Date.now();
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', 'https://www.baidu.com', true);
+                xhr.timeout = 5000;
+                xhr.onload = function() {
+                    var latency = Date.now() - startTime;
+                    console.log('[网络测试] 连接成功，延迟: ' + latency + 'ms');
+                    resolve({ success: true, latency: latency });
+                };
+                xhr.onerror = function() {
+                    console.log('[网络测试] 连接失败');
+                    resolve({ success: false });
+                };
+                xhr.ontimeout = function() {
+                    console.log('[网络测试] 连接超时');
+                    resolve({ success: false });
+                };
+                xhr.send();
+            });
+        }
+
+        // 使用高德地图定位API
+        function getLocationByAmap() {
+            console.log('[高德定位] 开始使用高德地图定位API...');
+            
+            // 检查是否已加载高德地图API
+            if (typeof AMap === 'undefined') {
+                console.log('[高德定位] 加载高德地图API...');
+                // 动态加载高德地图API
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                var apiKey = 'AMAP_API_KEY_PLACEHOLDER' || '';
+                if (apiKey && apiKey !== 'AMAP_API_KEY_PLACEHOLDER') {
+                    script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + apiKey;
+                    script.onload = function() {
+                        console.log('[高德定位] 高德地图API加载成功');
+                        performAmapLocation();
+                    };
+                    script.onerror = function() {
+                        console.log('[高德定位] 高德地图API加载失败');
+                        console.log('定位失败:高德地图API加载失败');
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    console.log('[高德定位] 高德地图API密钥未配置');
+                    console.log('定位失败:高德地图API密钥未配置');
+                }
+            } else {
+                performAmapLocation();
+            }
+        }
+
+        function performAmapLocation() {
+            console.log('[高德定位] 执行高德地图定位...');
+            
+            if (typeof AMap === 'undefined') {
+                console.log('[高德定位] 高德地图API未加载');
+                console.log('定位失败:高德地图API未加载');
+                return;
+            }
+
+            // 记录开始时间
+            var startTime = Date.now();
+            
+            // 创建定位实例
+            var geolocation = new AMap.Geolocation({
+                enableHighAccuracy: true, // 是否使用高精度定位，默认:true
+                timeout: 15000, // 超过15秒后停止定位，默认：无穷大
+                maximumAge: 0, // 定位结果缓存0毫秒，默认：0
+                convert: true, // 自动偏移坐标，偏移后的坐标为高德坐标，默认：true
+                showButton: false, // 显示定位按钮，默认：true
+                buttonPosition: 'RB', // 定位按钮停靠位置，默认：'LB'，左下角
+                buttonOffset: new AMap.Pixel(10, 20), // 定位按钮与设置的停靠位置的偏移量，默认：Pixel(10, 20)
+                showMarker: false, // 定位成功后在定位到的位置显示点标记，默认：true
+                showCircle: false, // 定位成功后用圆圈表示定位精度范围，默认：true
+                panToLocation: false, // 定位成功后将定位到的位置作为地图中心点，默认：true
+                zoomToAccuracy: false // 定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
+            });
+
+            // 监听定位成功事件
+            geolocation.on('complete', function(data) {
+                console.log('[高德定位] ✅ 定位成功');
+                console.log('[高德定位] 耗时: ' + (Date.now() - startTime) + 'ms');
+                console.log('[高德定位] 成功数据: ' + JSON.stringify(data));
+                
+                var lat = data.position.getLat();
+                var lon = data.position.getLng();
+                var accuracy = data.accuracy || 100; // 默认精度值
+                var location_type = data.location_type;
+                var location_detail = data.formattedAddress || '未知位置';
+                
+                console.log('[高德定位] 纬度: ' + lat);
+                console.log('[高德定位] 经度: ' + lon);
+                console.log('[高德定位] 精度: ' + accuracy + ' 米');
+                console.log('[高德定位] 定位类型: ' + location_type);
+                console.log('[高德定位] 位置详情: ' + location_detail);
+                
+                // 使用处理器期望的格式输出日志
+                console.log('定位成功: ' + lat + ', ' + lon + ', ' + accuracy);
+                
+                // 在地图上显示标记
+                if (window.map) {
+                    var marker = L.marker([lat, lon]).addTo(window.map);
+                    marker.bindPopup('我的位置<br>定位方式: 高德地图定位<br>精度: ' + Math.round(accuracy) + ' 米<br>位置: ' + location_detail).openPopup();
+                    window.map.setView([lat, lon], 15); // 放大到更详细的级别
+                }
+            });
+
+            // 监听定位失败事件
+            geolocation.on('error', function(data) {
+                console.log('[高德定位] ❌ 定位失败');
+                console.log('[高德定位] 耗时: ' + (Date.now() - startTime) + 'ms');
+                console.log('[高德定位] 错误数据: ' + JSON.stringify(data));
+                
+                var errorMsg = '高德地图定位失败: ' + (data.message || '未知错误');
+                console.log('定位失败:' + errorMsg);
+            });
+
+            // 开始定位
+            geolocation.getCurrentPosition();
+        }
+
+        // 综合定位函数
         function getLocation() {
-            console.log('[定位] 开始定位...');
+            console.log('[定位] 开始综合定位...');
             console.log('[定位] navigator.geolocation 可用性: ' + (!!navigator.geolocation));
 
+            // 检查网络连接
+            if (!checkNetworkStatus()) {
+                console.log('[定位] 网络离线，可能影响定位结果');
+            }
+
+            // 测试网络连接质量
+            testNetworkConnectivity().then(function(networkResult) {
+                if (networkResult.success) {
+                    console.log('[定位] 网络连接良好，开始执行定位');
+                    executeLocationFlow();
+                } else {
+                    console.log('[定位] 网络连接不稳定，尝试执行定位');
+                    executeLocationFlow();
+                }
+            });
+        }
+
+        // 执行定位流程
+        function executeLocationFlow() {
+            var hasAmapApiKey = API_KEY_PLACEHOLDER;
+            console.log('[定位] 高德地图API密钥状态: ' + (hasAmapApiKey ? '已配置' : '未配置'));
+
+            // 优先尝试浏览器定位
             if (navigator.geolocation) {
-                console.log('[定位] 浏览器支持定位，准备调用getCurrentPosition');
+                console.log('[定位] 浏览器支持定位，开始调用getCurrentPosition');
 
                 var options = {
                     enableHighAccuracy: true,
-                    timeout: 30000,
+                    timeout: 10000, // 缩短超时时间，快速失败
                     maximumAge: 0
                 };
                 console.log('[定位] 定位选项: ' + JSON.stringify(options));
 
+                console.log('[定位] 正在调用getCurrentPosition...');
+                
+                // 记录开始时间
+                var startTime = Date.now();
+                
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
-                        console.log('[定位] ✅ 定位回调触发 - 成功');
+                        console.log('[定位] ✅ 浏览器定位成功');
+                        console.log('[定位] 耗时: ' + (Date.now() - startTime) + 'ms');
+                        
                         var lat = position.coords.latitude;
                         var lon = position.coords.longitude;
                         var accuracy = position.coords.accuracy;
+                        var altitude = position.coords.altitude;
+                        var altitudeAccuracy = position.coords.altitudeAccuracy;
+                        var heading = position.coords.heading;
+                        var speed = position.coords.speed;
+
+                        console.log('[定位] 成功数据:');
+                        console.log('[定位] 纬度: ' + lat);
+                        console.log('[定位] 经度: ' + lon);
+                        console.log('[定位] 精度: ' + accuracy + ' 米');
+                        console.log('[定位] 海拔: ' + altitude);
+                        console.log('[定位] 海拔精度: ' + altitudeAccuracy);
+                        console.log('[定位] 方向: ' + heading);
+                        console.log('[定位] 速度: ' + speed);
+
+                        // 检查定位精度
+                        if (accuracy > 1000) {
+                            console.log('[定位] ⚠️ 浏览器定位精度较低，尝试使用高德地图定位提高精度');
+                            getLocationByAmap();
+                            return;
+                        }
 
                         // 使用处理器期望的格式输出日志
                         console.log('定位成功: ' + lat + ', ' + lon + ', ' + accuracy);
@@ -910,14 +1121,16 @@ class MapRenderer:
                         // 在地图上显示标记
                         if (window.map) {
                             var marker = L.marker([lat, lon]).addTo(window.map);
-                            marker.bindPopup('我的位置<br>定位方式: 电脑定位服务<br>精度: ' + Math.round(accuracy) + ' 米').openPopup();
+                            marker.bindPopup('我的位置<br>定位方式: 浏览器定位<br>精度: ' + Math.round(accuracy) + ' 米').openPopup();
                             window.map.setView([lat, lon], 13);
                         }
                     },
                     function(error) {
-                        console.log('[定位] ❌ 定位回调触发 - 失败');
+                        console.log('[定位] ❌ 浏览器定位失败');
+                        console.log('[定位] 耗时: ' + (Date.now() - startTime) + 'ms');
                         console.log('[定位] 错误代码: ' + error.code);
                         console.log('[定位] 错误消息: ' + error.message);
+                        console.log('[定位] 错误对象: ' + JSON.stringify(error));
 
                         var errorMsg = '';
                         switch(error.code) {
@@ -934,16 +1147,44 @@ class MapRenderer:
                                 errorMsg = '未知错误 (code: ' + error.code + '): ' + error.message;
                                 break;
                         }
-                        // 使用处理器期望的格式输出错误日志
                         console.log('定位失败: ' + errorMsg);
+                        
+                        // 浏览器定位失败后，尝试使用高德地图定位API
+                        console.log('[定位] 浏览器定位失败，尝试使用高德地图定位API...');
+                        getLocationByAmap();
                     },
                     options
                 );
 
                 console.log('[定位] getCurrentPosition 已调用，等待回调...');
             } else {
-                console.log('定位失败: 浏览器不支持定位');
+                console.log('[定位] 浏览器不支持定位，直接尝试高德地图定位');
+                getLocationByAmap();
             }
+        }
+
+        // 页面加载完成后测试
+        window.testGeolocation = function() {
+            console.log('[测试] 手动触发定位测试');
+            getLocation();
+        };
+
+        // 尝试多次定位
+        function tryMultipleLocationAttempts(maxAttempts = 3, delay = 2000) {
+            let attempts = 0;
+            
+            function attemptLocation() {
+                attempts++;
+                console.log('[定位] 第 ' + attempts + ' 次尝试定位');
+                
+                getLocation();
+                
+                if (attempts < maxAttempts) {
+                    setTimeout(attemptLocation, delay);
+                }
+            }
+            
+            attemptLocation();
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -953,7 +1194,8 @@ class MapRenderer:
                 if (container && container._leaflet_map) {
                     window.map = container._leaflet_map;
                     console.log('[定位] 地图对象获取成功，开始定位');
-                    getLocation();
+                    // 尝试多次定位以提高成功率
+                    tryMultipleLocationAttempts(2, 3000);
                 } else {
                     console.log('定位失败: 无法获取地图对象');
                 }
