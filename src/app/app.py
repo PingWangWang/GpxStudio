@@ -925,8 +925,10 @@ class GpxStudio(QMainWindow):
         
         # 重写paintEvent以实现旋转效果
         def loading_button_paint_event(event):
-            from PyQt5.QtGui import QPainter, QFont
-            from PyQt5.QtCore import Qt, QPointF
+            from PyQt5.QtGui import QPainter
+            from PyQt5.QtCore import Qt, QPointF, QRectF
+            from PyQt5.QtSvg import QSvgRenderer
+            from core.resource_path import resource_path
             
             # 先调用父类的paintEvent，确保样式表（包括阴影）能够正常应用
             QPushButton.paintEvent(self.loading_button, event)
@@ -947,15 +949,14 @@ class GpxStudio(QMainWindow):
             # 应用旋转
             painter.rotate(self.loading_rotation)
             
-            # 绘制emoji文本（居中显示）
-            text = "🔆"
-            # 设置字体
-            font = QFont()
-            font.setPointSize(18)
-            painter.setFont(font)
-            # 使用Qt的对齐方式确保居中
-            # 绘制一个以原点为中心的矩形，然后在其中居中绘制文本
-            painter.drawText(-18, -18, 36, 36, Qt.AlignCenter, text)
+            # 绘制SVG图标
+            svg_path = resource_path("res/icons/Loading.svg")
+            svg_renderer = QSvgRenderer(svg_path)
+            # 计算SVG图标的绘制区域，使用按钮高度的70%作为尺寸
+            icon_size = rect.height() * 0.7
+            # 使用QRectF，支持浮点值
+            svg_rect = QRectF(-icon_size / 2, -icon_size / 2, icon_size, icon_size)
+            svg_renderer.render(painter, svg_rect)
             
             # 恢复painter状态
             painter.restore()

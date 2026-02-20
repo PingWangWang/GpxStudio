@@ -462,6 +462,7 @@ def main():
         "--add-data", "version.py;version.py",
         "--add-data", "res/GPXStudio.png;res",
         "--add-data", "res/GPXStudio.ico;res",
+        "--add-data", "res/icons/Loading.svg;res/icons",
         "--add-data", f"{XYZ_SERVICES_DATA};xyzservices/data",
         # 排除不需要的模块减小体积
         "--exclude-module", "tkinter",
@@ -516,6 +517,7 @@ def main():
         "version.py",
         "res/GPXStudio.png",
         "res/GPXStudio.ico",
+        "res/icons/Loading.svg",
         XYZ_SERVICES_DATA,
         "main.py"
     ]
