@@ -14,7 +14,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
 import os
-from typing import Optional
+from typing import Optional, Any
 
 # 确保日志重定向生效 - 必须在其他导入之前执行
 import core.logging_setup
@@ -54,6 +54,60 @@ from .managers import (
 class GpxStudio(QMainWindow):
     """GPX Studio 主应用窗口（重构版）"""
 
+    # ==================== 类型注解（替代 hasattr 防御）====================
+    # 管理器
+    logger: Any
+    task_manager: Any
+    data_manager: Any
+    service_manager: Any
+    window_manager: Any
+    map_manager: Any
+    search_manager: Any
+    route_manager: Any
+    location_manager: Any
+    time_manager: Any
+    update_manager: Any
+    signal_manager: Any
+    geolocation_handler: Any
+    route_history_storage: Any
+    # UI 组件
+    map_view: Any
+    web_page: Any
+    map_context_menu: Any
+    search_container: Any
+    route_plan_panel: Any
+    gpx_export_popup: Any
+    search_history_popup: Any
+    search_input: Any
+    search_results_popup: Any
+    start_label: Any
+    end_label: Any
+    start_list: Any
+    end_list: Any
+    waypoint_list: Any
+    search_results_list: Any
+    search_results_title: Any
+    road_overlay_button: Any
+    route_button: Any
+    log_settings_popup: Any
+    about_popup: Any
+    map_settings_popup: Any
+    scale_panel: Any
+    scale_info_label: Any
+    time_panel: Any
+    date_panel: Any
+    location_info_popup: Any
+    center_point_marker: Optional[tuple]
+    # 内部状态
+    splash_screen: Any
+    _widget_refs: Optional[list]
+    _pending_export_history: Any
+    _current_route_info: Optional[dict]
+    last_window_geometry: Any
+    logger_callbacks: Optional[dict]
+    active_popups: Optional[list]
+    ui_updater: Optional[dict]
+
     def __init__(self, splash_screen=None):
         """
         初始化主窗口
@@ -62,6 +116,8 @@ class GpxStudio(QMainWindow):
             splash_screen: 启动画面实例，用于更新加载进度
         """
         super().__init__()
+        # 声明所有属性为 None，消除 hasattr 防御性代码
+        self._init_null_attributes()
         self.splash_screen = splash_screen
 
         print("=" * 80)
@@ -128,6 +184,63 @@ class GpxStudio(QMainWindow):
             from PyQt5.QtWidgets import QApplication
             QApplication.processEvents()
 
+    def _init_null_attributes(self):
+        """
+        在 __init__ 最前面声明所有实例属性为 None，
+        消除 hasattr 防御性代码，确保初始化顺序可控。
+        """
+        # 管理器
+        self.logger = None
+        self.task_manager = None
+        self.data_manager = None
+        self.service_manager = None
+        self.window_manager = None
+        self.map_manager = None
+        self.search_manager = None
+        self.route_manager = None
+        self.location_manager = None
+        self.time_manager = None
+        self.update_manager = None
+        self.signal_manager = None
+        self.geolocation_handler = None
+        self.route_history_storage = None
+        self.logger_callbacks = None
+        self.ui_updater = None
+        # UI 组件
+        self.map_view = None
+        self.web_page = None
+        self.map_context_menu = None
+        self.search_container = None
+        self.route_plan_panel = None
+        self.gpx_export_popup = None
+        self.search_history_popup = None
+        self.search_input = None
+        self.search_results_popup = None
+        self.start_label = None
+        self.end_label = None
+        self.start_list = None
+        self.end_list = None
+        self.waypoint_list = None
+        self.search_results_list = None
+        self.search_results_title = None
+        self.road_overlay_button = None
+        self.route_button = None
+        self.log_settings_popup = None
+        self.about_popup = None
+        self.map_settings_popup = None
+        self.scale_panel = None
+        self.scale_info_label = None
+        self.time_panel = None
+        self.date_panel = None
+        self.location_info_popup = None
+        self.center_point_marker = None
+        # 内部状态
+        self._widget_refs = None
+        self._pending_export_history = None
+        self._current_route_info = None
+        self.last_window_geometry = None
+        self.active_popups = None
+
     def _init_managers(self):
         """初始化所有管理器"""
         print("开始初始化管理器")
@@ -147,7 +260,7 @@ class GpxStudio(QMainWindow):
         self.service_manager = ServiceManager(self.logger_callbacks)
 
         # 初始化Windows定位服务（需要logger）
-        if hasattr(self, 'logger'):
+        if self.logger is not None:
             self.service_manager.initialize_windows_location_service()
 
         # 窗口管理器
@@ -193,7 +306,7 @@ class GpxStudio(QMainWindow):
         # 连接信号（稍后在各管理器初始化后连接具体处理）
 
         # 连接更新相关信号
-        if hasattr(self, 'update_manager'):
+        if self.update_manager is not None:
             self.update_manager.update_available.connect(self._on_update_available)
             self.update_manager.update_downloaded.connect(self._on_update_downloaded)
             self.update_manager.update_error.connect(self._on_update_error)
@@ -243,7 +356,7 @@ class GpxStudio(QMainWindow):
             self.search_results_popup.result_selected.connect(self._on_result_selected)
 
         except ImportError as e:
-            if hasattr(self, 'logger'):
+            if self.logger is not None:
                 self.logger.error(f"无法导入搜索弹出面板: {e}")
             else:
                 print(f"无法导入搜索弹出面板: {e}")
@@ -265,7 +378,7 @@ class GpxStudio(QMainWindow):
             self.about_popup = AboutPopup(self)
 
         except ImportError as e:
-            if hasattr(self, 'logger'):
+            if self.logger is not None:
                 self.logger.error(f"无法导入设置弹出面板: {e}")
             else:
                 print(f"无法导入设置弹出面板: {e}")
@@ -279,7 +392,7 @@ class GpxStudio(QMainWindow):
             self.location_info_popup = LocationInfoPopup(self)
 
         except ImportError as e:
-            if hasattr(self, 'logger'):
+            if self.logger is not None:
                 self.logger.error(f"无法导入位置信息弹出面板: {e}")
             else:
                 print(f"无法导入位置信息弹出面板: {e}")
@@ -309,7 +422,7 @@ class GpxStudio(QMainWindow):
             self.route_plan_panel.history_clear_all_clicked.connect(self._on_history_clear_all_clicked)
 
         except ImportError as e:
-            if hasattr(self, 'logger'):
+            if self.logger is not None:
                 self.logger.error(f"无法导入路线规划面板: {e}")
             else:
                 print(f"无法导入路线规划面板: {e}")
@@ -326,7 +439,7 @@ class GpxStudio(QMainWindow):
             self.map_view.setPage(self.web_page)
 
             # 保持强引用
-            if hasattr(self, '_widget_refs'):
+            if self._widget_refs is not None:
                 self._widget_refs.append(self.map_view)
 
             # 更新MapManager的引用
@@ -356,7 +469,7 @@ class GpxStudio(QMainWindow):
         self.map_view = QWebEngineView(self)  # 明确设置父对象
 
         # 保持强引用防止垃圾回收
-        if not hasattr(self, '_widget_refs'):
+        if self._widget_refs is None:
             self._widget_refs = []
         self._widget_refs.append(self.map_view)
 
@@ -482,8 +595,8 @@ class GpxStudio(QMainWindow):
             'get_transport_mode': lambda: self.transport_combo.currentText(),
 
             # 时间面板
-            'hide_time_panel': lambda: self.time_panel.hide() if hasattr(self, 'time_panel') and self.time_panel.isVisible() else None,
-            'hide_date_panel': lambda: self.date_panel.hide() if hasattr(self, 'date_panel') and self.date_panel.isVisible() else None,
+            'hide_time_panel': lambda: self.time_panel.hide() if self.time_panel is not None and self.time_panel.isVisible() else None,
+            'hide_date_panel': lambda: self.date_panel.hide() if self.date_panel is not None and self.date_panel.isVisible() else None,
             'setup_date_panel_callback': self._setup_date_panel_callback,
             'setup_time_panel_callback': self._setup_time_panel_callback,
             'show_date_panel': self._show_date_panel,
@@ -538,7 +651,7 @@ class GpxStudio(QMainWindow):
 
     def _log_with_prefix(self, prefix: str, level: str, message: str):
         """通用日志转发方法"""
-        if not hasattr(self, 'logger'):
+        if self.logger is None:
             return
         level_map = {
             "DEBUG": self.logger.debug,
@@ -599,7 +712,7 @@ class GpxStudio(QMainWindow):
 
         # 确保map_view存在且有效，如果不存在则重新创建
         try:
-            if not hasattr(self, 'map_view') or self.map_view is None:
+            if self.map_view is None:
                 print("[调试] map_view不存在，重新创建")
                 self._create_map_view()
             # 测试map_view是否有效
@@ -1130,26 +1243,26 @@ class GpxStudio(QMainWindow):
         """窗口移动事件 - 更新路线规划面板位置"""
         super().moveEvent(event)
         # 只有在应用完全初始化后才更新面板位置
-        if (hasattr(self, 'logger') and
-            hasattr(self, 'search_container') and
-            hasattr(self, 'route_plan_panel')):
+        if (self.logger is not None and
+            self.search_container is not None and
+            self.route_plan_panel is not None):
             self._update_route_panel_position()
 
     def resizeEvent(self, event):
         """窗口大小变化事件 - 更新路线规划面板位置"""
         super().resizeEvent(event)
         # 只有在应用完全初始化后才更新面板位置
-        if (hasattr(self, 'logger') and
-            hasattr(self, 'search_container') and
-            hasattr(self, 'route_plan_panel')):
+        if (self.logger is not None and
+            self.search_container is not None and
+            self.route_plan_panel is not None):
             self._update_route_panel_position()
 
     def _update_route_panel_position(self):
         """更新路线规划面板和相关弹出面板位置"""
         try:
             # 如果路线规划面板正在显示，更新其位置
-            if (hasattr(self, 'route_plan_panel') and
-                hasattr(self, 'search_container') and
+            if (self.route_plan_panel is not None and
+                self.search_container is not None and
                 self.route_plan_panel and
                 self.search_container and
                 self.route_plan_panel.isVisible()):
@@ -1162,12 +1275,12 @@ class GpxStudio(QMainWindow):
                 self.route_plan_panel.move(container_global_pos.x(), container_global_pos.y())
 
                 # 只有在logger已初始化时才记录日志
-                if hasattr(self, 'logger'):
+                if self.logger is not None:
                     self.logger.debug(f"[路线面板] 更新面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
 
             # 如果GPX导出弹出面板正在显示，更新其位置
-            if (hasattr(self, 'gpx_export_popup') and
-                hasattr(self, 'route_plan_panel') and
+            if (self.gpx_export_popup is not None and
+                self.route_plan_panel is not None and
                 self.gpx_export_popup and
                 self.route_plan_panel and
                 self.gpx_export_popup.isVisible() and
@@ -1196,11 +1309,11 @@ class GpxStudio(QMainWindow):
                 self.gpx_export_popup.move(popup_x, popup_y)
 
                 # 只有在logger已初始化时才记录日志
-                if hasattr(self, 'logger'):
+                if self.logger is not None:
                     self.logger.debug(f"[GPX导出] 更新弹出面板位置: ({popup_x}, {popup_y})")
         except Exception as e:
             # 防止在初始化过程中出现错误
-            if hasattr(self, 'logger'):
+            if self.logger is not None:
                 self.logger.error(f"[面板位置] 更新面板位置时出错: {e}")
             else:
                 print(f"[面板位置] 更新面板位置时出错: {e}")
@@ -1274,7 +1387,7 @@ class GpxStudio(QMainWindow):
         self.current_search_text = search_text
 
         # 隐藏搜索历史下拉列表
-        if hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is not None:
             self.search_history_popup.hide()
 
         # 调用搜索管理器进行搜索
@@ -1313,7 +1426,7 @@ class GpxStudio(QMainWindow):
 
     def _show_search_history(self):
         """显示搜索历史下拉列表"""
-        if not hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is None:
             return
         
         # 如果设置了抑制标志，不显示历史面板
@@ -1338,7 +1451,7 @@ class GpxStudio(QMainWindow):
 
     def _hide_search_history_if_needed(self):
         """如果需要，隐藏搜索历史下拉列表"""
-        if not hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is None:
             return
 
         # 检查搜索框是否仍有焦点
@@ -1356,12 +1469,12 @@ class GpxStudio(QMainWindow):
         
         # 将地址名称回填到搜索框
         name = record.get('name', '')
-        if hasattr(self, 'search_input'):
+        if self.search_input is not None:
             self.search_input.setText(name)
             self.logger.debug(f"[搜索历史] 已回填地址到搜索框: {name}")
 
         # 隐藏下拉列表
-        if hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is not None:
             self.search_history_popup.hide()
 
         # 调用搜索管理器处理历史记录选择
@@ -1375,7 +1488,7 @@ class GpxStudio(QMainWindow):
         self.logger.info(f"[搜索结果] 用户选择: {result.get('name')}")
 
         # 隐藏下拉列表
-        if hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is not None:
             self.search_history_popup.hide()
 
         # 调用搜索管理器处理搜索结果选择（会保存到历史记录）
@@ -1401,13 +1514,13 @@ class GpxStudio(QMainWindow):
         self.logger.debug(f"[搜索] 关闭按钮启用状态: {self.cancel_button.isEnabled()}")
         self.logger.debug(f"[搜索] 关闭按钮位置: {self.cancel_button.pos()}")
         self.logger.debug(f"[搜索] 关闭按钮大小: {self.cancel_button.size()}")
-        self.logger.debug(f"[搜索] 搜索结果下拉列表存在: {hasattr(self, 'search_results_popup')}")
+        self.logger.debug(f"[搜索] 搜索结果下拉列表存在: {self.search_results_popup is not None}")
 
-        if hasattr(self, 'search_results_popup'):
+        if self.search_results_popup is not None:
             self.logger.debug(f"[搜索] 搜索结果下拉列表可见: {self.search_results_popup.isVisible()}")
 
         # 隐藏搜索结果下拉列表
-        if hasattr(self, 'search_results_popup'):
+        if self.search_results_popup is not None:
             self.logger.debug("[搜索] 正在隐藏搜索结果下拉列表...")
             self.search_results_popup.hide()
             self.logger.debug("[搜索] 搜索结果下拉列表已隐藏")
@@ -1756,7 +1869,7 @@ class GpxStudio(QMainWindow):
         self.hide_loading()  # 隐藏加载状态
         self.logger.debug(f"[搜索结果] 显示 {len(results)} 条搜索结果")
 
-        if hasattr(self, 'search_results_popup') and results:
+        if self.search_results_popup is not None and results:
             # 使用搜索容器（包含输入框和两个按钮）作为参考
             self.search_results_popup.show_results(results, self.search_container)
 
@@ -1770,34 +1883,34 @@ class GpxStudio(QMainWindow):
     def _update_location_display(self, location_type: str, name: str, data: tuple):
         """更新位置显示"""
         if location_type == "start":
-            if hasattr(self, 'start_label'):
+            if self.start_label is not None:
                 self.start_label.setText(name)
                 self.start_label.setCursorPosition(0)  # 将光标移到开头
                 self.start_label.setProperty('userData', data)
         elif location_type == "end":
-            if hasattr(self, 'end_label'):
+            if self.end_label is not None:
                 self.end_label.setText(name)
                 self.end_label.setCursorPosition(0)  # 将光标移到开头
                 self.end_label.setProperty('userData', data)
 
     def _update_start_from_search(self, name: str, data: tuple):
         """从搜索结果更新起点"""
-        if hasattr(self, 'start_label'):
+        if self.start_label is not None:
             self.start_label.setText(name)
             self.start_label.setCursorPosition(0)  # 将光标移到开头
             self.start_label.setProperty('userData', data)
-        if hasattr(self, 'start_list'):
+        if self.start_list is not None:
             self.start_list.clear()
             self.start_list.addItem(name)
             self.start_list.item(0).setData(Qt.UserRole, data)
 
     def _update_end_from_search(self, name: str, data: tuple):
         """从搜索结果更新终点"""
-        if hasattr(self, 'end_label'):
+        if self.end_label is not None:
             self.end_label.setText(name)
             self.end_label.setCursorPosition(0)  # 将光标移到开头
             self.end_label.setProperty('userData', data)
-        if hasattr(self, 'end_list'):
+        if self.end_list is not None:
             self.end_list.clear()
             self.end_list.addItem(name)
             self.end_list.item(0).setData(Qt.UserRole, data)
@@ -1963,21 +2076,21 @@ class GpxStudio(QMainWindow):
         all_points = []
         
         # 添加起点、终点、途径点
-        if hasattr(self, 'data_manager'):
+        if self.data_manager is not None:
             # 添加起点
-            if hasattr(self.data_manager, 'start_coords') and self.data_manager.start_coords:
+            if self.data_manager.start_coords:
                 all_points.append(self.data_manager.start_coords)
             
             # 添加终点
-            if hasattr(self.data_manager, 'end_coords') and self.data_manager.end_coords:
+            if self.data_manager.end_coords:
                 all_points.append(self.data_manager.end_coords)
             
             # 添加途径点
-            if hasattr(self.data_manager, 'waypoints_coords') and self.data_manager.waypoints_coords:
+            if self.data_manager.waypoints_coords:
                 all_points.extend(self.data_manager.waypoints_coords)
             
             # 添加路线点
-            if hasattr(self.data_manager, 'route_points') and self.data_manager.route_points:
+            if self.data_manager.route_points:
                 # 过滤掉None值
                 route_points = [p for p in self.data_manager.route_points if p is not None]
                 all_points.extend(route_points)
@@ -2028,7 +2141,7 @@ class GpxStudio(QMainWindow):
         self.logger.info(f"[缩放] 计算完成：中心点={center}，缩放级别={zoom}")
         
         # 更新地图显示
-        if hasattr(self, 'map_manager'):
+        if self.map_manager is not None:
             self.map_manager.show_map(center=center, zoom=zoom, title="地图")
         else:
             self.logger.warning("[缩放] 地图管理器不存在")
@@ -2052,7 +2165,7 @@ class GpxStudio(QMainWindow):
             self.road_overlay_button.hide()
         
         # 重新加载地图，保持当前视图和所有元素
-        if hasattr(self, 'map_manager'):
+        if self.map_manager is not None:
             self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True, keep_search_results=True, keep_location=True)
             
             # 同步路网按钮状态
@@ -2060,7 +2173,7 @@ class GpxStudio(QMainWindow):
     
     def _sync_road_button_state(self):
         """同步路网按钮状态到配置值"""
-        if hasattr(self, 'road_overlay_button'):
+        if self.road_overlay_button is not None:
             from services.config.map_config import map_config
             show_roads = map_config.get_satellite_show_roads()
             # 阻塞信号，避免触发切换事件
@@ -2078,7 +2191,7 @@ class GpxStudio(QMainWindow):
         map_config.set_satellite_show_roads(checked)
 
         # 通过 MapJsBridge 控制路网图层的显示/隐藏（不重新加载地图）
-        if hasattr(self, 'map_view') and self.map_view:
+        if self.map_view is not None:
             def on_js_result(result):
                 if result:
                     self.logger.info(f"[地图-路网切换] JavaScript执行结果: {result}")
@@ -2159,13 +2272,13 @@ class GpxStudio(QMainWindow):
         self.logger.info("[设置] 打开地图设置面板")
 
         # 隐藏其他popup
-        if hasattr(self, 'log_settings_popup'):
+        if self.log_settings_popup is not None:
             self.log_settings_popup.hide()
-        if hasattr(self, 'about_popup'):
+        if self.about_popup is not None:
             self.about_popup.hide()
 
         # 显示地图设置popup
-        if hasattr(self, 'map_settings_popup'):
+        if self.map_settings_popup is not None:
             # 开始齿轮动画
             if hasattr(self.map_settings_button, 'start_animation'):
                 self.map_settings_button.start_animation()
@@ -2177,13 +2290,13 @@ class GpxStudio(QMainWindow):
         self.logger.info("[设置] 打开日志设置面板")
 
         # 隐藏其他popup
-        if hasattr(self, 'map_settings_popup'):
+        if self.map_settings_popup is not None:
             self.map_settings_popup.hide()
-        if hasattr(self, 'about_popup'):
+        if self.about_popup is not None:
             self.about_popup.hide()
 
         # 显示日志设置popup
-        if hasattr(self, 'log_settings_popup'):
+        if self.log_settings_popup is not None:
             self.log_settings_popup.show_popup(self.log_settings_button)
 
     def on_about_clicked(self):
@@ -2191,13 +2304,13 @@ class GpxStudio(QMainWindow):
         self.logger.info("[设置] 打开关于面板")
 
         # 隐藏其他popup
-        if hasattr(self, 'map_settings_popup'):
+        if self.map_settings_popup is not None:
             self.map_settings_popup.hide()
-        if hasattr(self, 'log_settings_popup'):
+        if self.log_settings_popup is not None:
             self.log_settings_popup.hide()
 
         # 显示关于popup
-        if hasattr(self, 'about_popup'):
+        if self.about_popup is not None:
             self.about_popup.show_popup(self.about_button)
 
     def _on_map_config_saved(self):
@@ -2220,7 +2333,7 @@ class GpxStudio(QMainWindow):
     def _on_map_settings_popup_closed(self):
         """地图设置弹出面板关闭时的处理"""
         # 检查logger是否已初始化
-        if hasattr(self, 'logger'):
+        if self.logger is not None:
             self.logger.debug("[设置] 地图设置面板已关闭")
 
         # 停止齿轮动画
@@ -2249,8 +2362,8 @@ class GpxStudio(QMainWindow):
         """处理地图缩放变化事件"""
         self.logger.info(f"[主应用] ========== 接收到地图缩放信号 ==========")
         self.logger.info(f"[主应用] 缩放级别变化: {zoom_level}")
-        self.logger.info(f"[主应用] map_manager存在: {hasattr(self, 'map_manager')}")
-        if hasattr(self, 'data_manager'):
+        self.logger.info(f"[主应用] map_manager存在: {self.map_manager is not None}")
+        if self.data_manager is not None:
             self.logger.info(f"[主应用] data_manager存在: True")
             self.logger.info(f"[主应用] original_route_points存在: {hasattr(self.data_manager, 'original_route_points')}")
             if hasattr(self.data_manager, 'original_route_points'):
@@ -2258,12 +2371,12 @@ class GpxStudio(QMainWindow):
                 self.logger.info(f"[主应用] original_route_points点数: {original_count}")
 
         # 更新隐藏的比例尺面板（用于后台逻辑）
-        if hasattr(self, 'scale_panel'):
+        if self.scale_panel is not None:
             self.scale_panel.update_zoom(zoom_level)
 
         # 更新显示的比例尺信息标签
         try:
-            if hasattr(self, 'scale_info_label') and self.scale_info_label:
+            if self.scale_info_label is not None:
                 # 测试标签是否仍然有效
                 _ = self.scale_info_label.isVisible()
                 # 根据缩放级别计算比例尺
@@ -2277,7 +2390,7 @@ class GpxStudio(QMainWindow):
 
         # 动态调整路线渲染精度
         try:
-            if hasattr(self, 'map_manager'):
+            if self.map_manager is not None:
                 self.map_manager.on_map_zoom_changed(zoom_level)
         except Exception as e:
             self.logger.error(f"动态路线渲染出错: {e}")
@@ -2327,8 +2440,8 @@ class GpxStudio(QMainWindow):
         """处理浏览器定位成功信号"""
         self.hide_loading()  # 隐藏加载状态
         self.logger.info(f"[主应用] 收到浏览器定位成功信号: {lat}, {lon}, 精度: {accuracy}m")
-        self.logger.debug(f"[主应用] location_manager存在: {hasattr(self, 'location_manager')}")
-        if hasattr(self, 'location_manager'):
+        self.logger.debug(f"[主应用] location_manager存在: {self.location_manager is not None}")
+        if self.location_manager is not None:
             self.logger.debug("[主应用] 调用location_manager.handle_browser_location_success...")
             self.location_manager.handle_browser_location_success(lat, lon, accuracy)
             self.logger.debug("[主应用] location_manager.handle_browser_location_success 调用完成")
@@ -2533,19 +2646,19 @@ class GpxStudio(QMainWindow):
         self.data_manager.clear_all_route_data()
 
         # 清空UI显示
-        if hasattr(self, 'start_label'):
+        if self.start_label is not None:
             self.start_label.setText('')
-        if hasattr(self, 'end_label'):
+        if self.end_label is not None:
             self.end_label.setText('')
-        if hasattr(self, 'start_list'):
+        if self.start_list is not None:
             self.start_list.clear()
-        if hasattr(self, 'end_list'):
+        if self.end_list is not None:
             self.end_list.clear()
-        if hasattr(self, 'waypoint_list'):
+        if self.waypoint_list is not None:
             self.waypoint_list.clear()
-        if hasattr(self, 'search_results_list'):
+        if self.search_results_list is not None:
             self.search_results_list.clear()
-        if hasattr(self, 'search_results_title'):
+        if self.search_results_title is not None:
             self.search_results_title.setText("搜索结果")
 
         self.logger.info("已清空所有路线相关数据")
@@ -2610,7 +2723,7 @@ class GpxStudio(QMainWindow):
         if obj == self:
             if event.type() == QEvent.WindowDeactivate:
                 # 检查是否有GPX导出面板正在显示时间日期选择器
-                if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup and self.gpx_export_popup.isVisible():
+                if self.gpx_export_popup is not None and self.gpx_export_popup.isVisible():
                     if hasattr(self.gpx_export_popup, 'picker_popup') and self.gpx_export_popup.picker_popup and self.gpx_export_popup.picker_popup.isVisible():
                         print("[应用程序] 时间日期选择器显示中，不关闭弹出面板")
                         return super().eventFilter(obj, event)  # 不关闭面板
@@ -2650,7 +2763,7 @@ class GpxStudio(QMainWindow):
         current_geometry = self.geometry()
 
         # 计算窗口位置的变化
-        if hasattr(self, 'last_window_geometry'):
+        if self.last_window_geometry is not None:
             dx = current_geometry.x() - self.last_window_geometry.x()
             dy = current_geometry.y() - self.last_window_geometry.y()
 
@@ -2714,7 +2827,7 @@ class GpxStudio(QMainWindow):
             self.task_progress_panel.task_completed("路线规划完成")
 
             # 检查是否有待导出的历史记录
-            if hasattr(self, '_pending_export_history') and self._pending_export_history:
+            if self._pending_export_history is not None:
                 self.logger.info("[GPX导出] 路线规划完成，准备导出历史记录")
                 # 获取规划好的路线数据
                 if result and result.get('alternatives'):
@@ -2741,7 +2854,7 @@ class GpxStudio(QMainWindow):
             self.route_manager.on_map_render_task_completed(task_id, result)
             self.task_progress_panel.task_completed("地图渲染完成")
             # 地图渲染完成后隐藏加载状态
-            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                 self.route_plan_panel.hide_loading()
         elif task_id.startswith('context_menu_'):
             # 处理右键菜单任务完成
@@ -2774,14 +2887,14 @@ class GpxStudio(QMainWindow):
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_route_task_failed(task_id, error)
             # 路线规划失败时隐藏加载状态并显示错误提示
-            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                 self.route_plan_panel.hide_loading()
                 self.route_plan_panel.show_route_plan_error("路线规划失败，请重试")
         elif task_id.startswith('map_render_'):
             self.hide_loading()  # 隐藏主界面加载状态
             self.route_manager.on_map_render_task_failed(task_id, error)
             # 地图渲染失败时隐藏加载状态并显示错误提示
-            if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                 self.route_plan_panel.hide_loading()
                 self.route_plan_panel.show_route_plan_error("地图渲染失败，请重试")
         elif task_id.startswith('context_menu_'):
@@ -2834,13 +2947,13 @@ class GpxStudio(QMainWindow):
         self.logger.info("[路线面板] 显示路线规划面板")
 
         # 隐藏搜索相关的下拉列表
-        if hasattr(self, 'search_history_popup'):
+        if self.search_history_popup is not None:
             self.search_history_popup.hide()
-        if hasattr(self, 'search_results_popup'):
+        if self.search_results_popup is not None:
             self.search_results_popup.hide()
 
         # 设置面板位置和大小（覆盖搜索容器）
-        if hasattr(self, 'search_container') and hasattr(self, 'route_plan_panel'):
+        if self.search_container is not None and self.route_plan_panel is not None:
             # 清空所有输入框内容
             self.route_plan_panel.clear_all_inputs()
 
@@ -2884,15 +2997,15 @@ class GpxStudio(QMainWindow):
         self.logger.info("[路线面板] 取消路线规划")
 
         # 停止路线按钮动画
-        if hasattr(self, 'route_button') and hasattr(self.route_button, 'stop_animation'):
+        if self.route_button is not None and hasattr(self.route_button, 'stop_animation'):
             self.route_button.stop_animation()
 
         # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
-        if hasattr(self, 'route_plan_panel'):
+        if self.route_plan_panel is not None:
             self.route_plan_panel.restore_history_mode()
 
         # 隐藏路线规划面板
-        if hasattr(self, 'route_plan_panel'):
+        if self.route_plan_panel is not None:
             self.route_plan_panel.hide()
 
     def _on_route_plan_clicked(self, start: str, end: str, mode: str, waypoints: list):
@@ -2973,7 +3086,7 @@ class GpxStudio(QMainWindow):
             self.logger.info(f"[路线面板] 途径点已反转，数量: {len(self.data_manager.waypoints_coords)}")
 
         # 关键修复：更新 _current_route_info，确保后续规划使用新的途径点信息
-        if hasattr(self, '_current_route_info') and self._current_route_info:
+        if self._current_route_info is not None:
             # 更新起止点信息
             self._current_route_info['start'] = self.data_manager.start_name
             self._current_route_info['end'] = self.data_manager.end_name
@@ -3283,7 +3396,7 @@ class GpxStudio(QMainWindow):
             self.logger.info(f"[路线面板] 路线点数量: {len(route_points)}, 距离: {distance}m, 时长: {duration}s")
 
             # 显示加载状态
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel.show_loading()
 
             # 清除旧的路线数据（重要：避免显示上一次的路线）
@@ -3293,7 +3406,7 @@ class GpxStudio(QMainWindow):
             self.data_manager.clear_waypoints()
 
             # 恢复历史记录模式（关闭路线待选列表，显示历史记录）
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel.restore_history_mode()
 
                 # 清空所有输入框（重要：清除旧数据）
@@ -3303,7 +3416,7 @@ class GpxStudio(QMainWindow):
                 self.route_plan_panel.set_selected_history(history_data)
 
             # 填充到输入框
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel.set_start_location(start)
                 self.route_plan_panel.set_end_location(end)
 
@@ -3383,7 +3496,7 @@ class GpxStudio(QMainWindow):
                         # 添加到data_manager
                         self.data_manager.add_waypoint(tuple(coords), waypoint_name)
                         # 添加到UI
-                        if hasattr(self, 'route_plan_panel'):
+                        if self.route_plan_panel is not None:
                             self.route_plan_panel._add_waypoint()
                             # 设置途径点文本
                             if i < len(self.route_plan_panel.waypoint_widgets):
@@ -3391,11 +3504,11 @@ class GpxStudio(QMainWindow):
                         self.logger.info(f"[路线面板] 已恢复途径点{i+1}坐标: {coords} (坐标系: {current_coord_system})")
 
             # 重新更新交通方式UI（确保选中效果正确）
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel._update_transport_mode_ui()
 
             # 更新添加途径点按钮状态（仅驾车模式）
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 if mode == "driving":
                     waypoint_count = len(waypoint_coords)
                     if waypoint_count >= 5:
@@ -3434,18 +3547,18 @@ class GpxStudio(QMainWindow):
                         self.logger.info(f"[路线面板] 路线已渲染到地图")
 
                         # 通知路线面板该历史记录有完整路线数据
-                        if hasattr(self, 'route_plan_panel'):
+                        if self.route_plan_panel is not None:
                             self.route_plan_panel.update_history_route_data_status(history_data, True)
 
                         # 隐藏加载状态
-                        if hasattr(self, 'route_plan_panel'):
+                        if self.route_plan_panel is not None:
                             self.route_plan_panel.hide_loading()
                 else:
                     # 如果没有路线点数据，只显示起点和终点
                     self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
 
                     # 通知路线面板该历史记录没有完整路线数据
-                    if hasattr(self, 'route_plan_panel'):
+                    if self.route_plan_panel is not None:
                         self.route_plan_panel.update_history_route_data_status(history_data, False)
 
                     # 在地图上预览起点和终点
@@ -3454,13 +3567,13 @@ class GpxStudio(QMainWindow):
                         self.map_manager.update_map_preview(auto_fit=True)
 
                     # 隐藏加载状态
-                    if hasattr(self, 'route_plan_panel'):
+                    if self.route_plan_panel is not None:
                         self.route_plan_panel.hide_loading()
 
         except Exception as e:
             self.logger.error(f"[路线面板] 处理历史记录选择时出错: {str(e)}")
             # 确保在异常情况下也隐藏加载状态
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel.hide_loading()
 
     def _auto_search_history_locations(self, start: str, end: str, mode: str, history_data: dict):
@@ -3535,7 +3648,7 @@ class GpxStudio(QMainWindow):
             self.logger.error(f"[路线面板] 自动搜索历史记录位置失败: {str(e)}")
         finally:
             # 无论成功还是失败，都要隐藏加载状态
-            if hasattr(self, 'route_plan_panel'):
+            if self.route_plan_panel is not None:
                 self.route_plan_panel.hide_loading()
 
                 # 自动搜索的历史记录没有完整路线数据，只有起点终点坐标
@@ -3560,7 +3673,7 @@ class GpxStudio(QMainWindow):
             from ui.popups.gpx_export_popup import GpxExportPopup
 
             # 如果已经有弹出面板，先关闭
-            if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup.isVisible():
+            if self.gpx_export_popup is not None and self.gpx_export_popup.isVisible():
                 self.gpx_export_popup.hide()
 
             # 创建弹出面板
@@ -3577,7 +3690,7 @@ class GpxStudio(QMainWindow):
                 item_global_pos = item.mapToGlobal(item.rect().topLeft())
 
                 # 获取路线面板在屏幕上的位置，用于计算水平位置
-                if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                     panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
                     panel_rect = self.route_plan_panel.rect()
 
@@ -3599,7 +3712,7 @@ class GpxStudio(QMainWindow):
                     from PyQt5.QtCore import QPoint
                     popup_pos = QPoint(popup_x, popup_y)
                     self.gpx_export_popup.show_at_position(popup_pos)
-            elif hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            elif self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                 # 兼容旧逻辑：如果没有位置信息，使用默认位置
                 # 获取路线面板在屏幕上的位置
                 panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
@@ -3897,21 +4010,21 @@ class GpxStudio(QMainWindow):
             enhanced_route_data = {
                 'start_name': start_name,
                 'end_name': end_name,
-                'mode': route_data.get('mode') or (self.route_plan_panel.current_transport_mode if hasattr(self, 'route_plan_panel') else 'driving'),
-                'waypoints': route_data.get('waypoints') or (self.data_manager.waypoints_names if hasattr(self, 'data_manager') else []),
-                'start_coords': route_data.get('start_coords') or (self.data_manager.start_coords if hasattr(self, 'data_manager') else None),
-                'end_coords': route_data.get('end_coords') or (self.data_manager.end_coords if hasattr(self, 'data_manager') else None),
-                'waypoint_coords': route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if hasattr(self, 'data_manager') else []),
+                'mode': route_data.get('mode') or (self.route_plan_panel.current_transport_mode if self.route_plan_panel is not None else 'driving'),
+                'waypoints': route_data.get('waypoints') or (self.data_manager.waypoints_names if self.data_manager is not None else []),
+                'start_coords': route_data.get('start_coords') or (self.data_manager.start_coords if self.data_manager is not None else None),
+                'end_coords': route_data.get('end_coords') or (self.data_manager.end_coords if self.data_manager is not None else None),
+                'waypoint_coords': route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if self.data_manager is not None else []),
                 'distance': route_data.get('distance'),
                 'duration': route_data.get('duration'),
                 'start_coord_system': route_data.get('start_coord_system') or coord_system,
                 'end_coord_system': route_data.get('end_coord_system') or coord_system,
-                'waypoint_coord_systems': route_data.get('waypoint_coord_systems') or [coord_system for _ in (route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if hasattr(self, 'data_manager') else []))]
+                'waypoint_coord_systems': route_data.get('waypoint_coord_systems') or [coord_system for _ in (route_data.get('waypoint_coords') or (self.data_manager.waypoints_coords if self.data_manager is not None else []))]
             }
 
             # 获取路线历史存储实例
             route_history_storage = None
-            if hasattr(self, 'route_manager') and hasattr(self.route_manager, 'route_history_storage'):
+            if self.route_manager is not None and hasattr(self.route_manager, 'route_history_storage'):
                 route_history_storage = self.route_manager.route_history_storage
 
             # 创建并启动导出线程
@@ -3999,7 +4112,7 @@ class GpxStudio(QMainWindow):
             from ui.popups.gpx_export_popup import GpxExportPopup
 
             # 如果已经有弹出面板，先关闭
-            if hasattr(self, 'gpx_export_popup') and self.gpx_export_popup.isVisible():
+            if self.gpx_export_popup is not None and self.gpx_export_popup.isVisible():
                 self.gpx_export_popup.hide()
 
             # 创建弹出面板
@@ -4020,7 +4133,7 @@ class GpxStudio(QMainWindow):
                 item_global_pos = item.mapToGlobal(item.rect().topLeft())
 
                 # 获取路线规划面板在屏幕上的位置
-                if hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+                if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                     panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
                     panel_rect = self.route_plan_panel.rect()
 
@@ -4051,7 +4164,7 @@ class GpxStudio(QMainWindow):
                     center_x = screen.center().x() - self.gpx_export_popup.width() // 2
                     center_y = screen.center().y() - 100
                     self.gpx_export_popup.show_at_position(QPoint(center_x, center_y))
-            elif hasattr(self, 'route_plan_panel') and self.route_plan_panel.isVisible():
+            elif self.route_plan_panel is not None and self.route_plan_panel.isVisible():
                 # 否则使用默认位置（在路线面板右侧）
                 # 获取路线面板在屏幕上的位置
                 panel_global_pos = self.route_plan_panel.mapToGlobal(self.route_plan_panel.rect().topLeft())
@@ -4128,7 +4241,7 @@ class GpxStudio(QMainWindow):
             distance: 路线总距离（米）
             duration: 路线总时长（秒）
         """
-        if not hasattr(self, '_current_route_info'):
+        if self._current_route_info is None:
             self.logger.warning("[路线面板] 没有当前路线信息，无法保存历史记录")
             return
 
@@ -4357,7 +4470,7 @@ class GpxStudio(QMainWindow):
             cursor_pos = QCursor.pos()
             
             # 显示位置信息面板
-            if hasattr(self, 'location_info_popup'):
+            if self.location_info_popup is not None:
                 self.location_info_popup.show_location_info(location_data, cursor_pos)
             return
         
@@ -4413,7 +4526,7 @@ class GpxStudio(QMainWindow):
             click_pos = QCursor.pos()
         
         # 显示位置信息面板
-        if hasattr(self, 'location_info_popup'):
+        if self.location_info_popup is not None:
             self.location_info_popup.show_location_info(location_data, click_pos)
         else:
             self.logger.error("[右键菜单] 位置信息面板不存在")
@@ -4423,8 +4536,6 @@ class GpxStudio(QMainWindow):
         self.logger.info(f"[右键菜单] 设为地图中心点: ({lat}, {lon})")
 
         # 保存中心点标记位置
-        if not hasattr(self, 'center_point_marker'):
-            self.center_point_marker = None
         self.center_point_marker = (lat, lon)
 
         # 通过 MapJsBridge 平移地图到指定位置并添加箭头标识
