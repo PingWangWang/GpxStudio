@@ -352,7 +352,8 @@ class RouteManager(QObject):
                             # 路线历史存储的add_record方法只涉及文件IO操作
                             if self.route_history_storage:
                                 map_source = map_config.get_map_source()
-                                coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+                                from modules.geolocation.coordinate_transform import CoordinateTransform
+                                coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                                 # 直接调用存储的add_record方法
                                 info = {
                                     'start': self.data_manager.start_name,
@@ -415,7 +416,8 @@ class RouteManager(QObject):
                 def save_history():
                     try:
                         map_source = map_config.get_map_source()
-                        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+                        from modules.geolocation.coordinate_transform import CoordinateTransform
+                        coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                         # 直接调用存储的add_record方法
                         info = {
                             'start': self.data_manager.start_name,

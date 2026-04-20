@@ -506,7 +506,8 @@ class MapManager:
                 self.logger.debug(f"[重载地图] JavaScript返回坐标系: WGS-84 (当前是OSM地图)")
             else:
                 # 首次加载或未知，根据目标地图源推测
-                coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+                from modules.geolocation.coordinate_transform import CoordinateTransform
+                coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                 self.logger.warning(f"[重载地图] 无法确定当前坐标系，根据目标地图源推测: {coord_system}")
         else:
             # 不保持视图，使用默认中心点
@@ -621,7 +622,8 @@ class MapManager:
 
         # 推断坐标系：右键菜单传入的坐标与当前地图源一致
         # 高德地图：GCJ-02，OSM地图：WGS-84
-        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        from modules.geolocation.coordinate_transform import CoordinateTransform
+        coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
 
         # 获取地图模式
         map_mode = map_config.get_map_mode()

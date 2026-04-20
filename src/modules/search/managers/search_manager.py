@@ -373,21 +373,14 @@ class SearchManager(QObject):
         # 检查当前地图源需要的坐标系统
         from services.config.map_config import map_config
         current_map_source = map_config.get_map_source()
-        current_coord_system = 'GCJ-02' if current_map_source == 'gaode' else 'WGS-84'
-        
+        from modules.geolocation.coordinate_transform import CoordinateTransform
+        current_coord_system = CoordinateTransform.coord_system_for_map_source(current_map_source)
+
         # 如果坐标系统不匹配，需要转换
         if saved_coord_system != current_coord_system:
-            from modules.geolocation.coordinate_transform import CoordinateTransform
-            if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
-                # GCJ-02 → WGS-84
-                lat, lon = CoordinateTransform.gcj02_to_wgs84(lat, lon)
-                coords = (lat, lon)
-                self.logger.info(f"[搜索历史] 坐标已转换: GCJ-02 → WGS-84")
-            elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
-                # WGS-84 → GCJ-02
-                lat, lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
-                coords = (lat, lon)
-                self.logger.info(f"[搜索历史] 坐标已转换: WGS-84 → GCJ-02")
+            lat, lon = CoordinateTransform.convert(lat, lon, saved_coord_system, current_coord_system)
+            coords = (lat, lon)
+            self.logger.info(f"[搜索历史] 坐标已转换: {saved_coord_system} → {current_coord_system}")
         
         # 更新record中的坐标系统为当前系统
         updated_record = record.copy()

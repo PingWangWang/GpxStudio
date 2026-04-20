@@ -213,16 +213,11 @@ class MapRenderer:
         """
         # 只在坐标系统不匹配时进行转换
         map_center = center
-        if map_source == 'gaode' and coord_system == 'WGS-84':
-            # 高德地图需要GCJ-02坐标，但输入是WGS-84，需要转换
+        target_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        if coord_system != target_system:
             from modules.geolocation.coordinate_transform import CoordinateTransform
-            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(center[0], center[1])
-            map_center = [gcj_lat, gcj_lon]
-        elif map_source == 'osm' and coord_system == 'GCJ-02':
-            # OSM地图需要WGS-84坐标，但输入是GCJ-02，需要转换
-            from modules.geolocation.coordinate_transform import CoordinateTransform
-            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(center[0], center[1])
-            map_center = [wgs_lat, wgs_lon]
+            converted = CoordinateTransform.convert(center[0], center[1], coord_system, target_system)
+            map_center = list(converted)
         # 否则直接使用（坐标系统匹配）
         
         # 使用Canvas renderer实现高性能路线渲染（参考GPXStudio官方）
@@ -585,16 +580,11 @@ class MapRenderer:
         """
         # 只在坐标系统不匹配时进行转换
         marker_location = location
-        if map_source == 'gaode' and coord_system == 'WGS-84':
-            # 高德地图需要GCJ-02坐标，但输入是WGS-84，需要转换
+        target_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        if coord_system != target_system:
             from modules.geolocation.coordinate_transform import CoordinateTransform
-            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(location[0], location[1])
-            marker_location = [gcj_lat, gcj_lon]
-        elif map_source == 'osm' and coord_system == 'GCJ-02':
-            # OSM地图需要WGS-84坐标，但输入是GCJ-02，需要转换
-            from modules.geolocation.coordinate_transform import CoordinateTransform
-            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(location[0], location[1])
-            marker_location = [wgs_lat, wgs_lon]
+            converted = CoordinateTransform.convert(location[0], location[1], coord_system, target_system)
+            marker_location = list(converted)
         # 否则直接使用（坐标系统匹配）
         
         # 如果提供了序号，使用自定义DivIcon显示带序号的标记

@@ -129,6 +129,59 @@ class CoordinateTransform:
         return False
     
     @staticmethod
+    def coord_system_for_map_source(map_source: str) -> str:
+        """根据地图源返回对应的坐标系标识。
+
+        高德地图使用 GCJ-02，其他（OSM 等）使用 WGS-84。
+
+        Args:
+            map_source: 地图源标识，如 'gaode' 或 'osm'。
+
+        Returns:
+            str: 'GCJ-02' 或 'WGS-84'
+        """
+        return 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+
+    @staticmethod
+    def convert(lat: float, lon: float, from_system: str, to_system: str) -> Tuple[float, float]:
+        """统一坐标转换入口。
+
+        Args:
+            lat:         纬度。
+            lon:         经度。
+            from_system: 源坐标系，'GCJ-02' 或 'WGS-84'。
+            to_system:   目标坐标系，'GCJ-02' 或 'WGS-84'。
+
+        Returns:
+            Tuple[float, float]: 转换后的 (lat, lon)。
+
+        Raises:
+            ValueError: 不支持的坐标系组合。
+        """
+        if from_system == to_system:
+            return lat, lon
+        if from_system == 'GCJ-02' and to_system == 'WGS-84':
+            return CoordinateTransform.gcj02_to_wgs84(lat, lon)
+        if from_system == 'WGS-84' and to_system == 'GCJ-02':
+            return CoordinateTransform.wgs84_to_gcj02(lat, lon)
+        raise ValueError(f"不支持的坐标系转换: {from_system} → {to_system}")
+
+    @staticmethod
+    def ensure_system(lat: float, lon: float, current: str, target: str) -> Tuple[float, float]:
+        """确保坐标处于目标坐标系中，若已匹配则直接返回原值。
+
+        Args:
+            lat:     纬度。
+            lon:     经度。
+            current: 当前坐标系。
+            target:  目标坐标系。
+
+        Returns:
+            Tuple[float, float]: 目标坐标系中的 (lat, lon)。
+        """
+        return CoordinateTransform.convert(lat, lon, current, target)
+
+    @staticmethod
     def transform_route_points(points: List[Tuple[float, float]], transform_func) -> List[Tuple[float, float]]:
         """
         转换路线点列表

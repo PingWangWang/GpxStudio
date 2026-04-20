@@ -3149,15 +3149,8 @@ class GpxStudio(QMainWindow):
             # 如果坐标系不匹配，需要进行转换
             if saved_coord_system != current_coord_system:
                 from modules.geolocation.coordinate_transform import CoordinateTransform
-                
-                if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
-                    # 高德坐标转OSM坐标
-                    lat_float, lng_float = CoordinateTransform.gcj02_to_wgs84(lat_float, lng_float)
-                    self.logger.info(f"[坐标转换] GCJ-02 -> WGS-84: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
-                elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
-                    # OSM坐标转高德坐标
-                    lat_float, lng_float = CoordinateTransform.wgs84_to_gcj02(lat_float, lng_float)
-                    self.logger.info(f"[坐标转换] WGS-84 -> GCJ-02: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
+                lat_float, lng_float = CoordinateTransform.convert(lat_float, lng_float, saved_coord_system, current_coord_system)
+                self.logger.info(f"[坐标转换] {saved_coord_system} -> {current_coord_system}: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
 
             # 根据地址类型设置到 data_manager
             name = address_data.get('name', '')
@@ -3333,16 +3326,9 @@ class GpxStudio(QMainWindow):
                 # 如果坐标系统不匹配，需要转换
                 if saved_coord_system != current_coord_system:
                     from modules.geolocation.coordinate_transform import CoordinateTransform
-                    if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
-                        # GCJ-02 → WGS-84
-                        lat, lon = CoordinateTransform.gcj02_to_wgs84(start_coords[0], start_coords[1])
-                        start_coords = (lat, lon)
-                        self.logger.info(f"[路线面板] 起点坐标已转换: GCJ-02 → WGS-84")
-                    elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
-                        # WGS-84 → GCJ-02
-                        lat, lon = CoordinateTransform.wgs84_to_gcj02(start_coords[0], start_coords[1])
-                        start_coords = (lat, lon)
-                        self.logger.info(f"[路线面板] 起点坐标已转换: WGS-84 → GCJ-02")
+                    lat, lon = CoordinateTransform.convert(start_coords[0], start_coords[1], saved_coord_system, current_coord_system)
+                    start_coords = (lat, lon)
+                    self.logger.info(f"[路线面板] 起点坐标已转换: {saved_coord_system} → {current_coord_system}")
                 
                 self.data_manager.set_start_location(tuple(start_coords), start)
                 # 保存转换后的坐标系统
@@ -3358,16 +3344,9 @@ class GpxStudio(QMainWindow):
                 # 如果坐标系统不匹配，需要转换
                 if saved_coord_system != current_coord_system:
                     from modules.geolocation.coordinate_transform import CoordinateTransform
-                    if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
-                        # GCJ-02 → WGS-84
-                        lat, lon = CoordinateTransform.gcj02_to_wgs84(end_coords[0], end_coords[1])
-                        end_coords = (lat, lon)
-                        self.logger.info(f"[路线面板] 终点坐标已转换: GCJ-02 → WGS-84")
-                    elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
-                        # WGS-84 → GCJ-02
-                        lat, lon = CoordinateTransform.wgs84_to_gcj02(end_coords[0], end_coords[1])
-                        end_coords = (lat, lon)
-                        self.logger.info(f"[路线面板] 终点坐标已转换: WGS-84 → GCJ-02")
+                    lat, lon = CoordinateTransform.convert(end_coords[0], end_coords[1], saved_coord_system, current_coord_system)
+                    end_coords = (lat, lon)
+                    self.logger.info(f"[路线面板] 终点坐标已转换: {saved_coord_system} → {current_coord_system}")
                 
                 self.data_manager.set_end_location(tuple(end_coords), end)
                 # 保存转换后的坐标系统
@@ -3394,16 +3373,9 @@ class GpxStudio(QMainWindow):
                         # 如果坐标系统不匹配，需要转换
                         if saved_coord_system != current_coord_system:
                             from modules.geolocation.coordinate_transform import CoordinateTransform
-                            if saved_coord_system == 'GCJ-02' and current_coord_system == 'WGS-84':
-                                # GCJ-02 → WGS-84
-                                lat, lon = CoordinateTransform.gcj02_to_wgs84(coords[0], coords[1])
-                                coords = (lat, lon)
-                                self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: GCJ-02 → WGS-84")
-                            elif saved_coord_system == 'WGS-84' and current_coord_system == 'GCJ-02':
-                                # WGS-84 → GCJ-02
-                                lat, lon = CoordinateTransform.wgs84_to_gcj02(coords[0], coords[1])
-                                coords = (lat, lon)
-                                self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: WGS-84 → GCJ-02")
+                            lat, lon = CoordinateTransform.convert(coords[0], coords[1], saved_coord_system, current_coord_system)
+                            coords = (lat, lon)
+                            self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: {saved_coord_system} → {current_coord_system}")
                         
                         # 保存转换后的坐标系统
                         self.data_manager.waypoint_coord_systems.append(current_coord_system)
@@ -4223,7 +4195,8 @@ class GpxStudio(QMainWindow):
                 map_source   (str)  — 当前地图源标识
         """
         map_source = map_config.get_map_source()
-        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        from modules.geolocation.coordinate_transform import CoordinateTransform
+        coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
 
         address_name = f'位置 ({lat:.6f}, {lon:.6f})'
         level = None
