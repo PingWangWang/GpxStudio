@@ -26,6 +26,7 @@ from core.signals import SignalManager
 from modules.geolocation.geolocation import GeolocationHandler
 from modules.map.webengine import ConsoleWebEnginePage
 from modules.map.map_renderer import MapRenderer
+from modules.map.js_bridge import MapJsBridge
 from services.config.map_config import map_config
 from ui.icons.icon_manager import create_icon_button
 
@@ -1241,76 +1242,18 @@ class GpxStudio(QMainWindow):
     def on_zoom_in_clicked(self):
         """放大按钮点击"""
         self.logger.info("[缩放] 放大按钮点击")
-        # 通过JavaScript调用地图的放大方法
-        js_code = """
-        (function() {
-            var map = null;
-
-            // 方法1: 通过leaflet-container元素
-            var mapElement = document.querySelector('.leaflet-container');
-            if (mapElement && mapElement._leaflet_map) {
-                map = mapElement._leaflet_map;
-            }
-
-            // 方法2: 查找全局地图对象
-            if (!map) {
-                for (var key in window) {
-                    if (key.startsWith('map_') && window[key] && window[key].zoomIn) {
-                        map = window[key];
-                        break;
-                    }
-                }
-            }
-
-            if (map && map.zoomIn) {
-                map.zoomIn();
-                console.log('[缩放] 放大地图成功，当前级别: ' + map.getZoom());
-            } else {
-                console.log('[缩放] 未找到地图对象');
-            }
-        })();
-        """
         if self.map_view and self.map_view.page():
-            self.map_view.page().runJavaScript(js_code)
-            self.logger.debug("[缩放] 已执行放大JavaScript代码")
+            MapJsBridge.zoom_in(self.map_view.page())
+            self.logger.debug("[缩放] 已执行放大 JavaScript 代码")
         else:
             self.logger.warning("[缩放] 地图视图或页面不存在")
 
     def on_zoom_out_clicked(self):
         """缩小按钮点击"""
         self.logger.info("[缩放] 缩小按钮点击")
-        # 通过JavaScript调用地图的缩小方法
-        js_code = """
-        (function() {
-            var map = null;
-
-            // 方法1: 通过leaflet-container元素
-            var mapElement = document.querySelector('.leaflet-container');
-            if (mapElement && mapElement._leaflet_map) {
-                map = mapElement._leaflet_map;
-            }
-
-            // 方法2: 查找全局地图对象
-            if (!map) {
-                for (var key in window) {
-                    if (key.startsWith('map_') && window[key] && window[key].zoomOut) {
-                        map = window[key];
-                        break;
-                    }
-                }
-            }
-
-            if (map && map.zoomOut) {
-                map.zoomOut();
-                console.log('[缩放] 缩小地图成功，当前级别: ' + map.getZoom());
-            } else {
-                console.log('[缩放] 未找到地图对象');
-            }
-        })();
-        """
         if self.map_view and self.map_view.page():
-            self.map_view.page().runJavaScript(js_code)
-            self.logger.debug("[缩放] 已执行缩小JavaScript代码")
+            MapJsBridge.zoom_out(self.map_view.page())
+            self.logger.debug("[缩放] 已执行缩小 JavaScript 代码")
         else:
             self.logger.warning("[缩放] 地图视图或页面不存在")
 
@@ -2129,123 +2072,13 @@ class GpxStudio(QMainWindow):
     def on_road_overlay_toggled(self, checked):
         """路网开关按钮点击事件"""
         self.logger.debug(f"[地图] 路网开关切换: {checked}")
-        
+
         # 保存路网开关状态到配置
         from services.config.map_config import map_config
         map_config.set_satellite_show_roads(checked)
-        
-        # 使用JavaScript直接控制路网图层的显示/隐藏（不重新加载地图）
+
+        # 通过 MapJsBridge 控制路网图层的显示/隐藏（不重新加载地图）
         if hasattr(self, 'map_view') and self.map_view:
-            js_code = f"""
-            (function() {{
-                var map = null;
-                var result = {{
-                    success: false,
-                    message: '',
-                    layerCount: 0,
-                    roadLayerFound: false
-                }};
-                
-                // 查找Leaflet地图实例
-                for (var key in window) {{
-                    if (key.startsWith('map_') && window[key] && window[key]._container) {{
-                        map = window[key];
-                        result.mapFound = true;
-                        console.log('[路网切换] 找到地图实例: ' + key);
-                        break;
-                    }}
-                }}
-                
-                if (!map) {{
-                    console.error('[路网切换] 未找到地图实例');
-                    result.message = '未找到地图实例';
-                    return result;
-                }}
-                
-                var showRoads = {str(checked).lower()};
-                
-                // 初始化路网图层缓存（如果不存在）
-                if (!map._roadLayers) {{
-                    map._roadLayers = [];
-                }}
-                
-                // 首先尝试从缓存中获取路网图层
-                if (map._roadLayers.length > 0) {{
-                    console.log('[路网切换] 从缓存中找到', map._roadLayers.length, '个路网图层');
-                    result.roadLayerFound = true;
-                    
-                    map._roadLayers.forEach(function(layer) {{
-                        var hasLayer = map.hasLayer(layer);
-                        console.log('[路网切换] 缓存图层状态 hasLayer:', hasLayer);
-                        
-                        if (showRoads) {{
-                            if (!hasLayer) {{
-                                map.addLayer(layer);
-                                console.log('[路网切换] 从缓存添加路网图层');
-                            }}
-                        }} else {{
-                            if (hasLayer) {{
-                                map.removeLayer(layer);
-                                console.log('[路网切换] 移除路网图层到缓存');
-                            }}
-                        }}
-                    }});
-                    
-                    result.success = true;
-                    result.message = showRoads ? '路网图层已显示' : '路网图层已隐藏';
-                }} else {{
-                    // 缓存为空，从地图中查找并缓存路网图层
-                    console.log('[路网切换] 缓存为空，开始查找路网图层');
-                    
-                    map.eachLayer(function(layer) {{
-                        result.layerCount++;
-                        
-                        if (layer instanceof L.TileLayer) {{
-                            var layerName = layer.options.name || '';
-                            var layerUrl = layer._url || '';
-                            
-                            // 通过名称或URL识别路网图层
-                            if (layerName.indexOf('标注') !== -1 || 
-                                layerName.indexOf('Labels') !== -1 ||
-                                layerUrl.indexOf('style=8') !== -1 ||
-                                layerUrl.indexOf('voyager_only_labels') !== -1) {{
-                                
-                                console.log('[路网切换] 找到路网图层并加入缓存:', layerName || layerUrl);
-                                map._roadLayers.push(layer);
-                                result.roadLayerFound = true;
-                                
-                                var hasLayer = map.hasLayer(layer);
-                                
-                                if (showRoads) {{
-                                    if (!hasLayer) {{
-                                        map.addLayer(layer);
-                                        console.log('[路网切换] 执行addLayer');
-                                    }}
-                                }} else {{
-                                    if (hasLayer) {{
-                                        map.removeLayer(layer);
-                                        console.log('[路网切换] 执行removeLayer');
-                                    }}
-                                }}
-                                
-                                result.success = true;
-                            }}
-                        }}
-                    }});
-                    
-                    if (result.roadLayerFound) {{
-                        result.message = showRoads ? '路网图层已显示' : '路网图层已隐藏';
-                    }} else {{
-                        result.message = '未找到路网图层（可能当前不是卫星模式）';
-                    }}
-                }}
-                
-                console.log('[路网切换] 操作完成 - 缓存图层数:', map._roadLayers.length);
-                
-                return result;
-            }})();
-            """
-            
             def on_js_result(result):
                 if result:
                     self.logger.info(f"[地图-路网切换] JavaScript执行结果: {result}")
@@ -2253,8 +2086,8 @@ class GpxStudio(QMainWindow):
                         self.logger.warning(f"[地图-路网切换] 操作失败: {result.get('message')}")
                 else:
                     self.logger.error("[地图-路网切换] JavaScript返回空结果")
-            
-            self.map_view.page().runJavaScript(js_code, on_js_result)
+
+            MapJsBridge.set_road_overlay(self.map_view.page(), checked, on_js_result)
     
     def on_map_mode_button_enter(self):
         """鼠标进入卫星按钮区域"""
@@ -4374,6 +4207,70 @@ class GpxStudio(QMainWindow):
 
     # ==================== 新右键菜单处理方法 ====================
 
+    # ------------------------------------------------------------------ #
+    #  右键菜单公共辅助方法                                               #
+    # ------------------------------------------------------------------ #
+
+    def _resolve_map_click_address(self, lat: float, lon: float) -> dict:
+        """将地图点击坐标解析为地址信息（含逆地理编码）。
+
+        Returns:
+            dict with keys:
+                name         (str)  — 地址名称，失败时为坐标字符串
+                level        (Any)  — 地址级别，失败时为 None
+                type_info    (Any)  — 地址类型，失败时为 None
+                coord_system (str)  — 坐标系（'GCJ-02' 或 'WGS-84'）
+                map_source   (str)  — 当前地图源标识
+        """
+        map_source = map_config.get_map_source()
+        coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+
+        address_name = f'位置 ({lat:.6f}, {lon:.6f})'
+        level = None
+        type_info = None
+
+        geocoding_service = self.service_manager.get_geocoding_service(map_source)
+        if geocoding_service:
+            try:
+                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
+                result = geocoding_service.reverse_geocode(lat, lon)
+                if result:
+                    address_name = result.get('full_address', address_name)
+                    level = result.get('level')
+                    type_info = result.get('type')
+                    self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
+                else:
+                    self.logger.warning("[右键菜单] 逆地理编码失败，使用坐标作为名称")
+            except Exception as e:
+                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
+        else:
+            self.logger.warning("[右键菜单] 地理编码服务不可用")
+
+        return {
+            'name': address_name,
+            'level': level,
+            'type_info': type_info,
+            'coord_system': coord_system,
+            'map_source': map_source,
+        }
+
+    def _refresh_map_after_point_set(self, lat: float, lon: float, level, type_info) -> None:
+        """设置地图标记点后刷新地图显示。
+
+        若当前已有 ≥2 个选中坐标则自动适应所有点；否则按地址级别智能缩放到该单点。
+        """
+        all_coords = self.map_manager._get_all_selected_coords()
+        if len(all_coords) >= 2:
+            self.map_manager.update_map_preview(auto_fit=True)
+        else:
+            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
+            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
+            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+
+    # ------------------------------------------------------------------ #
+    #  右键菜单事件处理                                                   #
+    # ------------------------------------------------------------------ #
+
     def _on_context_menu_set_start_new(self, lat: float, lon: float):
         """右键菜单：设为起点（新版）"""
         self.logger.info(f"[右键菜单] 设为起点: ({lat}, {lon})")
@@ -4381,69 +4278,24 @@ class GpxStudio(QMainWindow):
         # 显示路线规划面板
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
-            # 更新面板位置
             self._update_route_panel_position()
 
-        # 获取当前地图源
-        map_source = map_config.get_map_source()
+        # 逆地理编码
+        geo = self._resolve_map_click_address(lat, lon)
 
-        # 获取地理编码服务
-        geocoding_service = self.service_manager.get_geocoding_service(map_source)
-
-        address_name = f'位置 ({lat:.6f}, {lon:.6f})'  # 默认地址名称
-        level = None
-        type_info = None
-
-        if geocoding_service:
-            try:
-                # 执行逆地理编码查询
-                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
-                result = geocoding_service.reverse_geocode(lat, lon)
-
-                if result:
-                    # 获取地址名称和详细信息
-                    address_name = result.get('full_address', f'位置 ({lat:.6f}, {lon:.6f})')
-                    level = result.get('level')
-                    type_info = result.get('type')
-                    self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
-                else:
-                    # 逆地理编码失败，使用坐标作为名称
-                    self.logger.warning(f"[右键菜单] 逆地理编码失败，使用坐标作为名称")
-
-            except Exception as e:
-                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
-        else:
-            # 没有地理编码服务，直接使用坐标
-            self.logger.warning("[右键菜单] 地理编码服务不可用")
-
-        # 填充到起点输入框
-        self.route_plan_panel.start_input.setText(address_name)
-        # 保存起点坐标信息到面板（用于后续规划）
+        # 更新面板输入框
+        self.route_plan_panel.start_input.setText(geo['name'])
         self.route_plan_panel.start_coords = (lat, lon)
 
-        # 保存起点信息到数据管理器（用于在地图上显示标记）
-        self.data_manager.set_start_location((lat, lon), address_name)
-        self.data_manager.start_level = level
-        
-        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
-        # 高德地图：GCJ-02，OSM地图：WGS-84
-        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
-        self.data_manager.start_coord_system = current_coord_system
-        self.logger.debug(f"[右键菜单] 保存起点坐标系: {current_coord_system}")
+        # 保存到数据管理器
+        self.data_manager.set_start_location((lat, lon), geo['name'])
+        self.data_manager.start_level = geo['level']
+        self.data_manager.start_coord_system = geo['coord_system']
+        self.logger.debug(f"[右键菜单] 保存起点坐标系: {geo['coord_system']}")
 
-        # 清除搜索结果（数据和UI）
+        # 清除搜索结果并刷新地图
         self.search_manager.clear_search_results()
-
-        # 更新地图显示起点标记
-        all_coords = self.map_manager._get_all_selected_coords()
-        if len(all_coords) >= 2:
-            # 多点：自动适应所有点
-            self.map_manager.update_map_preview(auto_fit=True)
-        else:
-            # 单点：根据地址级别智能缩放
-            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
-            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
-            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+        self._refresh_map_after_point_set(lat, lon, geo['level'], geo['type_info'])
 
     def _on_context_menu_add_waypoint_new(self, lat: float, lon: float):
         """右键菜单：设为途经点（新版）"""
@@ -4452,87 +4304,39 @@ class GpxStudio(QMainWindow):
         # 显示路线规划面板
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
-            # 更新面板位置
             self._update_route_panel_position()
-
-        # 获取当前地图源
-        map_source = map_config.get_map_source()
-
-        # 获取地理编码服务
-        geocoding_service = self.service_manager.get_geocoding_service(map_source)
-
-        address_name = f'位置 ({lat:.6f}, {lon:.6f})'  # 默认地址名称
-        level = None
-        type_info = None
-
-        if geocoding_service:
-            try:
-                # 执行逆地理编码查询
-                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
-                result = geocoding_service.reverse_geocode(lat, lon)
-
-                if result:
-                    # 获取地址名称和详细信息
-                    address_name = result.get('full_address', f'位置 ({lat:.6f}, {lon:.6f})')
-                    level = result.get('level')
-                    type_info = result.get('type')
-                    self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
-                else:
-                    # 逆地理编码失败，使用坐标作为名称
-                    self.logger.warning(f"[右键菜单] 逆地理编码失败，使用坐标作为名称")
-
-            except Exception as e:
-                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
-        else:
-            # 没有地理编码服务，直接使用坐标
-            self.logger.warning("[右键菜单] 地理编码服务不可用")
 
         # 检查途径点数量限制（最多5个）
         if len(self.route_plan_panel.waypoint_widgets) >= 5:
             self.logger.warning("[右键菜单] 途径点已达到5个上限，无法添加")
             return
 
-        # 添加途径点到路线规划面板
+        # 逆地理编码
+        geo = self._resolve_map_click_address(lat, lon)
+
+        # 更新面板：添加途径点输入框并填充地址
         self.route_plan_panel._add_waypoint()
-
-        # 获取新添加的途径点输入框（最后一个）
         if self.route_plan_panel.waypoint_widgets:
-            latest_waypoint = self.route_plan_panel.waypoint_widgets[-1]
-            waypoint_input = latest_waypoint['input']
-            waypoint_input.setText(address_name)
+            self.route_plan_panel.waypoint_widgets[-1]['input'].setText(geo['name'])
 
-        # 保存途径点坐标信息到面板
+        # 保存途径点坐标到面板
         if not hasattr(self.route_plan_panel, 'waypoint_coords_list'):
             self.route_plan_panel.waypoint_coords_list = []
         self.route_plan_panel.waypoint_coords_list.append((lat, lon))
 
-        # 保存途径点信息到数据管理器（用于在地图上显示标记）
-        self.data_manager.add_waypoint((lat, lon), address_name)
-        # 保存途径点的level信息
+        # 保存到数据管理器
+        self.data_manager.add_waypoint((lat, lon), geo['name'])
         if not hasattr(self.data_manager, 'waypoints_level'):
             self.data_manager.waypoints_level = []
-        self.data_manager.waypoints_level.append(level)
-        
-        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
-        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
+        self.data_manager.waypoints_level.append(geo['level'])
         if not hasattr(self.data_manager, 'waypoint_coord_systems'):
             self.data_manager.waypoint_coord_systems = []
-        self.data_manager.waypoint_coord_systems.append(current_coord_system)
-        self.logger.debug(f"[右键菜单] 保存途径点坐标系: {current_coord_system}")
+        self.data_manager.waypoint_coord_systems.append(geo['coord_system'])
+        self.logger.debug(f"[右键菜单] 保存途径点坐标系: {geo['coord_system']}")
 
-        # 清除搜索结果（数据和UI）
+        # 清除搜索结果并刷新地图
         self.search_manager.clear_search_results()
-
-        # 更新地图显示途径点标记
-        all_coords = self.map_manager._get_all_selected_coords()
-        if len(all_coords) >= 2:
-            # 多点：自动适应所有点
-            self.map_manager.update_map_preview(auto_fit=True)
-        else:
-            # 单点：根据地址级别智能缩放
-            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
-            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
-            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+        self._refresh_map_after_point_set(lat, lon, geo['level'], geo['type_info'])
 
     def _on_context_menu_set_end_new(self, lat: float, lon: float):
         """右键菜单：设为终点（新版）"""
@@ -4541,68 +4345,24 @@ class GpxStudio(QMainWindow):
         # 显示路线规划面板
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
-            # 更新面板位置
             self._update_route_panel_position()
 
-        # 获取当前地图源
-        map_source = map_config.get_map_source()
+        # 逆地理编码
+        geo = self._resolve_map_click_address(lat, lon)
 
-        # 获取地理编码服务
-        geocoding_service = self.service_manager.get_geocoding_service(map_source)
-
-        address_name = f'位置 ({lat:.6f}, {lon:.6f})'  # 默认地址名称
-        level = None
-        type_info = None
-
-        if geocoding_service:
-            try:
-                # 执行逆地理编码查询
-                self.logger.info(f"[右键菜单] 开始逆地理编码查询: ({lat}, {lon})")
-                result = geocoding_service.reverse_geocode(lat, lon)
-
-                if result:
-                    # 获取地址名称和详细信息
-                    address_name = result.get('full_address', f'位置 ({lat:.6f}, {lon:.6f})')
-                    level = result.get('level')
-                    type_info = result.get('type')
-                    self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
-                else:
-                    # 逆地理编码失败，使用坐标作为名称
-                    self.logger.warning(f"[右键菜单] 逆地理编码失败，使用坐标作为名称")
-
-            except Exception as e:
-                self.logger.error(f"[右键菜单] 逆地理编码异常: {str(e)}")
-        else:
-            # 没有地理编码服务，直接使用坐标
-            self.logger.warning("[右键菜单] 地理编码服务不可用")
-
-        # 填充到终点输入框
-        self.route_plan_panel.end_input.setText(address_name)
-        # 保存终点坐标信息到面板（用于后续规划）
+        # 更新面板输入框
+        self.route_plan_panel.end_input.setText(geo['name'])
         self.route_plan_panel.end_coords = (lat, lon)
 
-        # 保存终点信息到数据管理器（用于在地图上显示标记）
-        self.data_manager.set_end_location((lat, lon), address_name)
-        self.data_manager.end_level = level
-        
-        # 保存坐标系信息：右键点击的坐标系与当前地图源一致
-        current_coord_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
-        self.data_manager.end_coord_system = current_coord_system
-        self.logger.debug(f"[右键菜单] 保存终点坐标系: {current_coord_system}")
+        # 保存到数据管理器
+        self.data_manager.set_end_location((lat, lon), geo['name'])
+        self.data_manager.end_level = geo['level']
+        self.data_manager.end_coord_system = geo['coord_system']
+        self.logger.debug(f"[右键菜单] 保存终点坐标系: {geo['coord_system']}")
 
-        # 清除搜索结果（数据和UI）
+        # 清除搜索结果并刷新地图
         self.search_manager.clear_search_results()
-
-        # 更新地图显示终点标记
-        all_coords = self.map_manager._get_all_selected_coords()
-        if len(all_coords) >= 2:
-            # 多点：自动适应所有点
-            self.map_manager.update_map_preview(auto_fit=True)
-        else:
-            # 单点：根据地址级别智能缩放
-            zoom_level = MapRenderer.get_zoom_by_level(level, type_info)
-            self.logger.info(f"[右键菜单] 单点缩放: level={level}, type={type_info}, zoom={zoom_level}")
-            self.map_manager.update_map_preview_simple((lat, lon), zoom_level=zoom_level)
+        self._refresh_map_after_point_set(lat, lon, geo['level'], geo['type_info'])
 
     def _on_context_menu_query_here(self, lat: float, lon: float):
         """右键菜单：这是哪儿"""
@@ -4692,118 +4452,12 @@ class GpxStudio(QMainWindow):
         # 保存中心点标记位置
         if not hasattr(self, 'center_point_marker'):
             self.center_point_marker = None
-
         self.center_point_marker = (lat, lon)
 
-        # 通过JavaScript平移地图到指定位置并添加箭头标识
-        js_code = f"""
-        (function() {{
-            console.log('[地图中心] 开始执行设置中心点逻辑');
-            console.log('[地图中心] 目标坐标: {lat}, {lon}');
-
-            // 定义平移函数
-            function panToCenter() {{
-                console.log('[地图中心] panToCenter 函数被调用');
-
-                var map = window.map;
-                console.log('[地图中心] 检查 window.map: ' + (map ? '存在' : '不存在'));
-
-                if (!map) {{
-                    var container = document.querySelector('.leaflet-container');
-                    console.log('[地图中心] 尝试从 DOM 获取地图，container: ' + (container ? '存在' : '不存在'));
-                    if (container && container._leaflet_map) {{
-                        map = container._leaflet_map;
-                        window.map = map;
-                        console.log('[地图中心] 从 DOM 成功获取地图对象');
-                    }}
-                }}
-
-                if (!map) {{
-                    console.error('[地图中心] 无法获取地图对象');
-                    return false;
-                }}
-
-                try {{
-                    console.log('[地图中心] 地图对象已获取');
-
-                    // 记录当前地图状态
-                    var currentCenter = map.getCenter();
-                    var currentZoom = map.getZoom();
-                    console.log('[地图中心] 当前地图中心: ' + currentCenter.lat.toFixed(6) + ', ' + currentCenter.lng.toFixed(6) + ', 缩放: ' + currentZoom);
-
-                    var latLng = new L.LatLng({lat}, {lon});
-                    console.log('[地图中心] 创建坐标对象成功: ' + latLng.lat + ', ' + latLng.lng);
-
-                    // 检查 panTo 方法是否存在
-                    if (typeof map.panTo !== 'function') {{
-                        console.error('[地图中心] map.panTo 不是一个函数');
-                        return false;
-                    }}
-
-                    // 平移地图到指定位置
-                    console.log('[地图中心] 调用 map.panTo()');
-                    map.panTo(latLng, {{animate: true, duration: 1}});
-                    console.log('[地图中心] panTo 方法已调用');
-
-                    // 监听移动完成事件
-                    var moveEndHandler = function() {{
-                        var newCenter = map.getCenter();
-                        console.log('[地图中心] moveend 事件触发，新中心: ' + newCenter.lat.toFixed(6) + ', ' + newCenter.lng.toFixed(6));
-                        map.off('moveend', moveEndHandler);
-                    }};
-                    map.on('moveend', moveEndHandler);
-
-                    // 移除旧标记
-                    if (window.centerMarker) {{
-                        map.removeLayer(window.centerMarker);
-                        console.log('[地图中心] 旧标记已移除');
-                    }}
-
-                    // 创建水滴状定位图标（参考示例风格，使用蓝色）
-                    var arrowIcon = L.icon({{
-                        iconUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40"><path d="M20 5C12.8 5 7 10.8 7 18c0 10 13 21 13 21s13-11 13-21c0-7.2-5.8-13-13-13zm0 20c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z" fill="%231890ff"/><path d="M20 12c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="white"/></svg>',
-                        iconSize: [40, 40],
-                        iconAnchor: [20, 40],
-                        popupAnchor: [0, -40]
-                    }});
-                    console.log('[地图中心] 箭头图标已创建');
-
-                    // 创建标记
-                    window.centerMarker = L.marker(latLng, {{icon: arrowIcon}});
-                    window.centerMarker.addTo(map);
-                    console.log('[地图中心] 箭头标记已添加');
-
-                    // 100ms 后再次检查地图位置
-                    setTimeout(function() {{
-                        var finalCenter = map.getCenter();
-                        console.log('[地图中心] 100ms 后检查 - 地图中心: ' + finalCenter.lat.toFixed(6) + ', ' + finalCenter.lng.toFixed(6));
-                    }}, 100);
-
-                    return true;
-                }} catch(e) {{
-                    console.error('[地图中心] 执行失败:', e);
-                    console.error('[地图中心] 错误消息:', e.message);
-                    console.error('[地图中心] 错误堆栈:', e.stack);
-                    return false;
-                }}
-            }}
-
-            // 立即尝试平移
-            console.log('[地图中心] 立即尝试平移');
-            if (!panToCenter()) {{
-                // 如果失败，在500ms后重试
-                console.log('[地图中心] 第一次失败，将在500ms后重试');
-                setTimeout(function() {{
-                    console.log('[地图中心] 执行重试');
-                    panToCenter();
-                }}, 500);
-            }}
-        }})();
-        """
-
+        # 通过 MapJsBridge 平移地图到指定位置并添加箭头标识
         if self.map_view and self.map_view.page():
-            self.map_view.page().runJavaScript(js_code)
-            self.logger.info(f"[右键菜单] 已执行地图中心点平移和箭头标记JavaScript代码")
+            MapJsBridge.pan_to_center(self.map_view.page(), lat, lon)
+            self.logger.info(f"[右键菜单] 已执行地图中心点平移和箭头标记 JavaScript 代码")
         else:
             self.logger.warning("[右键菜单] 地图视图或页面不存在")
 
