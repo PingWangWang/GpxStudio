@@ -7,7 +7,7 @@ import asyncio
 import platform
 from typing import Optional, Dict, Any, Callable
 
-from modules.geolocation.interfaces.location_service import ILocationService
+from domain.services.location_service import ILocationService
 
 
 class WindowsLocationService(ILocationService):

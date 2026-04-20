@@ -5,7 +5,7 @@ OSM地理编码服务
 
 import requests
 from typing import Optional, List, Dict, Callable
-from services.interfaces.geocoding_service import IGeocodingService
+from domain.services.geocoding_service import IGeocodingService
 
 
 class OsmGeocodingService(IGeocodingService):

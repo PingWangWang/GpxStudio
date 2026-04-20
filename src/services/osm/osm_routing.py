@@ -5,7 +5,7 @@ OSM路线规划服务
 
 import requests
 from typing import Optional, List, Dict, Callable, Tuple
-from modules.routing.interfaces.routing_service import IRoutingService
+from domain.services.routing_service import IRoutingService
 import math
 
 

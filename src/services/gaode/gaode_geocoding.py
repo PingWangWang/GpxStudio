@@ -24,7 +24,7 @@ import hashlib
 import json
 from typing import Optional, Callable, List, Dict
 
-from services.interfaces.geocoding_service import IGeocodingService
+from domain.services.geocoding_service import IGeocodingService
 
 
 class GaodeGeocodingService(IGeocodingService):

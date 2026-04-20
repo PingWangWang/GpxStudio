@@ -25,7 +25,7 @@ import requests
 import hashlib
 from typing import Optional, Callable, List, Tuple
 
-from modules.routing.interfaces.routing_service import IRoutingService
+from domain.services.routing_service import IRoutingService
 
 
 class GaodeRoutingService(IRoutingService):
