@@ -25,7 +25,8 @@ class SearchManager(QObject):
     支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None):
+    def __init__(self, service_manager, data_manager, ui_updater, logger,
+                 task_manager=None, search_viewmodel=None):
         """
         初始化搜索管理器
 
@@ -35,6 +36,9 @@ class SearchManager(QObject):
             ui_updater: UI更新回调函数字典，用于更新界面显示
             logger: 日志器，用于记录搜索操作日志
             task_manager: 任务管理器实例，用于后台任务管理
+            search_viewmodel: SearchViewModel 实例（可选）；若提供，搜索结果将
+                通过 ``search_viewmodel.set_results()`` 信号驱动，而非直接调用
+                ``ui_updater['show_search_results_dropdown']``
         """
         super().__init__()
         self.service_manager = service_manager
@@ -42,6 +46,8 @@ class SearchManager(QObject):
         self.ui_updater = ui_updater
         self.logger = logger
         self.task_manager = task_manager
+        # ViewModel（Step 8 引入）：若提供则优先通过信号通知 UI
+        self.search_viewmodel = search_viewmodel
 
         # 初始化地理信息存储
         self.geo_storage = GeoInfoStorage()
@@ -109,14 +115,17 @@ class SearchManager(QObject):
         QApplication.processEvents()
 
         if result is not None and len(result) > 0:
-            # 搜索成功 - 通过UI回调显示搜索结果下拉列表
+            # 搜索成功 - 通过 ViewModel 信号（优先）或 ui_updater 回调显示结果
             location_type = self.data_manager.searching_for
 
             # 转换搜索结果为标准格式
             formatted_results = self._format_search_results(result)
 
-            # 调用UI回调显示搜索结果
-            if 'show_search_results_dropdown' in self.ui_updater:
+            if self.search_viewmodel is not None:
+                # ViewModel 路径（Step 8）：set_results 发射 results_changed 信号
+                self.search_viewmodel.set_results(formatted_results)
+            elif 'show_search_results_dropdown' in self.ui_updater:
+                # 兼容旧路径（未传入 ViewModel 时）
                 self.ui_updater['show_search_results_dropdown'](formatted_results)
         else:
             # 搜索失败或无结果

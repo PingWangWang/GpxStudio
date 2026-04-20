@@ -50,6 +50,9 @@ from .managers import (
     RouteManager, TimeManager, UpdateManager
 )
 
+# 导入 ViewModel 层
+from ui.viewmodels import AppViewModel
+
 
 class GpxStudio(QMainWindow):
     """GPX Studio 主应用窗口（重构版）"""
@@ -240,6 +243,8 @@ class GpxStudio(QMainWindow):
         self._current_route_info = None
         self.last_window_geometry = None
         self.active_popups = None
+        # ViewModel 层（Step 8 引入）
+        self.app_viewmodel = None
 
     def _init_managers(self):
         """初始化所有管理器"""
@@ -515,6 +520,16 @@ class GpxStudio(QMainWindow):
         """初始化功能管理器（需要在UI和logger之后）"""
         print("开始初始化功能管理器")
 
+        # 创建应用 ViewModel（Step 8）
+        self.app_viewmodel = AppViewModel(self)
+        # 连接 ViewModel 信号到实际实现方法
+        self.app_viewmodel.search_vm.results_changed.connect(
+            self._show_search_results_dropdown
+        )
+        self.app_viewmodel.map_vm.loading_changed.connect(
+            self._on_map_loading_changed
+        )
+
         # 构建UI更新器回调
         self._build_ui_updater()
 
@@ -530,7 +545,8 @@ class GpxStudio(QMainWindow):
 
         self.search_manager = SearchManager(
             self.service_manager, self.data_manager,
-            self.ui_updater, self.logger, self.task_manager
+            self.ui_updater, self.logger, self.task_manager,
+            search_viewmodel=self.app_viewmodel.search_vm
         )
 
         self.route_manager = RouteManager(
@@ -2664,16 +2680,37 @@ class GpxStudio(QMainWindow):
         self.logger.info("已清空所有路线相关数据")
 
     def show_loading(self):
-        """显示加载动画"""
+        """显示加载动画（通过 MapViewModel 信号驱动）"""
+        if self.app_viewmodel is not None:
+            self.app_viewmodel.map_vm.set_loading(True)
+        else:
+            self._do_show_loading()
+
+    def hide_loading(self):
+        """停止加载动画（通过 MapViewModel 信号驱动）"""
+        if self.app_viewmodel is not None:
+            self.app_viewmodel.map_vm.set_loading(False)
+        else:
+            self._do_hide_loading()
+
+    def _on_map_loading_changed(self, loading: bool):
+        """MapViewModel.loading_changed 信号的槽函数。"""
+        if loading:
+            self._do_show_loading()
+        else:
+            self._do_hide_loading()
+
+    def _do_show_loading(self):
+        """实际启动加载动画。"""
         if not self.is_loading:
             self.is_loading = True
             self.loading_rotation = 0
-            self.loading_timer.start(50)  # 启动定时器，50ms刷新一次
+            self.loading_timer.start(50)
             self.loading_button.setToolTip("正在加载...")
             self.logger.debug("[加载] 开始加载动画")
 
-    def hide_loading(self):
-        """停止加载动画"""
+    def _do_hide_loading(self):
+        """实际停止加载动画。"""
         self.logger.debug(f"[加载] hide_loading被调用 - is_loading={self.is_loading}, timer_active={self.loading_timer.isActive()}")
         if self.is_loading:
             self.is_loading = False
