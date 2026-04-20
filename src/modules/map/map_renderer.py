@@ -336,12 +336,14 @@ class MapRenderer:
                         if (layer instanceof L.TileLayer) {
                             var layerName = layer.options.name || '';
                             var layerUrl = layer._url || '';
+                            var isOverlay = layer.options.overlay;
                             
-                            // 识别路网图层（高德标注或OSM Labels）
-                            if (layerName.indexOf('标注') !== -1 || 
-                                layerName.indexOf('Labels') !== -1 ||
-                                layerUrl.indexOf('style=8') !== -1 ||
-                                layerUrl.indexOf('voyager_only_labels') !== -1) {
+                            // 识别路网图层：必须是覆盖层（overlay=True），且名称或URL符合特征
+                            // 修复：街道底图（roadmap）虽然URL含style=8，但它是底图（overlay=False），不应被隐藏
+                            if (isOverlay && (layerName.indexOf('标注') !== -1 || 
+                                              layerName.indexOf('Labels') !== -1 ||
+                                              layerUrl.indexOf('style=8') !== -1 ||
+                                              layerUrl.indexOf('voyager_only_labels') !== -1)) {
                                 
                                 roadLayersFound.push(layer);
                                 map._roadLayers.push(layer);
