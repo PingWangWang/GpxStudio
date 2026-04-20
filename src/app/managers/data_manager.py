@@ -4,6 +4,32 @@
 """
 
 from typing import Optional, List, Tuple
+from domain.models.location import Location
+
+
+class _WaypointCoordSystemsProxy(list):
+    """可写的途径点坐标系代理列表。
+
+    list.__getitem__ / __setitem__ / append 均同步到 Location 对象，
+    使旧代码 ``data_manager.waypoint_coord_systems[i] = 'GCJ-02'``
+    和 ``data_manager.waypoint_coord_systems.append(...)`` 正常工作。
+    """
+
+    def __init__(self, waypoints: List[Location]):
+        self._waypoints = waypoints
+        super().__init__(wp.coord_system for wp in waypoints)
+
+    def __setitem__(self, index: int, value: str):
+        super().__setitem__(index, value)
+        if 0 <= index < len(self._waypoints):
+            self._waypoints[index].coord_system = value
+
+    def append(self, value: str):
+        # append 只能影响已有 Location 对象；若列表比 waypoints 短则扩展
+        idx = len(self)
+        super().append(value)
+        if idx < len(self._waypoints):
+            self._waypoints[idx].coord_system = value
 
 
 class DataManager:
@@ -18,19 +44,10 @@ class DataManager:
 
     def __init__(self):
         """初始化数据状态"""
-        # 起点信息
-        self.start_coords: Optional[Tuple[float, float]] = None  # 起点坐标 (纬度, 经度)
-        self.start_name: Optional[str] = None  # 起点名称
-        self.start_level: Optional[str] = None  # 起点精度级别
-
-        # 终点信息
-        self.end_coords: Optional[Tuple[float, float]] = None  # 终点坐标 (纬度, 经度)
-        self.end_name: Optional[str] = None  # 终点名称
-        self.end_level: Optional[str] = None  # 终点精度级别
-
-        # 途径点信息
-        self.waypoints_coords: List[Tuple[float, float]] = []  # 途径点坐标列表
-        self.waypoints_names: List[str] = []  # 途径点名称列表
+        # ── 起点 / 终点 / 途径点（领域模型） ──────────────────────────────
+        self.start_location: Optional[Location] = None   # 起点（Location 对象）
+        self.end_location: Optional[Location] = None     # 终点（Location 对象）
+        self.waypoints: List[Location] = []              # 途径点列表
 
         # 路线数据
         self.current_route = None  # 当前路线对象
@@ -69,6 +86,124 @@ class DataManager:
 
         print("数据状态初始化完成")
 
+    # ── 向后兼容属性：起点 ────────────────────────────────────────────────
+
+    @property
+    def start_coords(self) -> Optional[Tuple[float, float]]:
+        """起点坐标（向后兼容）"""
+        return self.start_location.coords if self.start_location else None
+
+    @start_coords.setter
+    def start_coords(self, value: Optional[Tuple[float, float]]):
+        if value is None:
+            self.start_location = None
+        elif self.start_location is None:
+            self.start_location = Location(name='', lat=value[0], lon=value[1])
+        else:
+            self.start_location.lat = value[0]
+            self.start_location.lon = value[1]
+
+    @property
+    def start_name(self) -> Optional[str]:
+        """起点名称（向后兼容）"""
+        return self.start_location.name if self.start_location else None
+
+    @start_name.setter
+    def start_name(self, value: Optional[str]):
+        if self.start_location is not None:
+            self.start_location.name = value or ''
+
+    @property
+    def start_level(self) -> Optional[str]:
+        """起点精度级别（向后兼容）"""
+        return self.start_location.level if self.start_location else None
+
+    @start_level.setter
+    def start_level(self, value: Optional[str]):
+        if self.start_location is not None:
+            self.start_location.level = value
+
+    @property
+    def start_coord_system(self) -> str:
+        """起点坐标系（向后兼容）"""
+        return self.start_location.coord_system if self.start_location else 'WGS-84'
+
+    @start_coord_system.setter
+    def start_coord_system(self, value: str):
+        if self.start_location is not None:
+            self.start_location.coord_system = value
+
+    # ── 向后兼容属性：终点 ────────────────────────────────────────────────
+
+    @property
+    def end_coords(self) -> Optional[Tuple[float, float]]:
+        """终点坐标（向后兼容）"""
+        return self.end_location.coords if self.end_location else None
+
+    @end_coords.setter
+    def end_coords(self, value: Optional[Tuple[float, float]]):
+        if value is None:
+            self.end_location = None
+        elif self.end_location is None:
+            self.end_location = Location(name='', lat=value[0], lon=value[1])
+        else:
+            self.end_location.lat = value[0]
+            self.end_location.lon = value[1]
+
+    @property
+    def end_name(self) -> Optional[str]:
+        """终点名称（向后兼容）"""
+        return self.end_location.name if self.end_location else None
+
+    @end_name.setter
+    def end_name(self, value: Optional[str]):
+        if self.end_location is not None:
+            self.end_location.name = value or ''
+
+    @property
+    def end_level(self) -> Optional[str]:
+        """终点精度级别（向后兼容）"""
+        return self.end_location.level if self.end_location else None
+
+    @end_level.setter
+    def end_level(self, value: Optional[str]):
+        if self.end_location is not None:
+            self.end_location.level = value
+
+    @property
+    def end_coord_system(self) -> str:
+        """终点坐标系（向后兼容）"""
+        return self.end_location.coord_system if self.end_location else 'WGS-84'
+
+    @end_coord_system.setter
+    def end_coord_system(self, value: str):
+        if self.end_location is not None:
+            self.end_location.coord_system = value
+
+    # ── 向后兼容属性：途径点 ──────────────────────────────────────────────
+
+    @property
+    def waypoints_coords(self) -> List[Tuple[float, float]]:
+        """途径点坐标列表（向后兼容，返回快照）"""
+        return [wp.coords for wp in self.waypoints]
+
+    @property
+    def waypoints_names(self) -> List[str]:
+        """途径点名称列表（向后兼容，返回快照）"""
+        return [wp.name for wp in self.waypoints]
+
+    @property
+    def waypoint_coord_systems(self) -> List[str]:
+        """途径点坐标系列表（向后兼容，返回可写代理）"""
+        return _WaypointCoordSystemsProxy(self.waypoints)
+
+    @waypoint_coord_systems.setter
+    def waypoint_coord_systems(self, value: List[str]):
+        """批量设置途径点坐标系"""
+        for i, cs in enumerate(value):
+            if i < len(self.waypoints):
+                self.waypoints[i].coord_system = cs
+
     def set_start_location(self, coords: Tuple[float, float], name: str, level: Optional[str] = None):
         """设置起点
 
@@ -77,9 +212,12 @@ class DataManager:
             name: 起点名称
             level: 起点精度级别（可选）
         """
-        self.start_coords = coords
-        self.start_name = name
-        self.start_level = level
+        self.start_location = Location(
+            name=name or '',
+            lat=coords[0],
+            lon=coords[1],
+            level=level,
+        )
         self._update_last_selected(coords, level, None, False)
 
     def set_end_location(self, coords: Tuple[float, float], name: str, level: Optional[str] = None):
@@ -90,9 +228,12 @@ class DataManager:
             name: 终点名称
             level: 终点精度级别（可选）
         """
-        self.end_coords = coords
-        self.end_name = name
-        self.end_level = level
+        self.end_location = Location(
+            name=name or '',
+            lat=coords[0],
+            lon=coords[1],
+            level=level,
+        )
         self._update_last_selected(coords, level, None, False)
 
     def add_waypoint(self, coords: Tuple[float, float], name: str):
@@ -102,8 +243,7 @@ class DataManager:
             coords: 途径点坐标 (纬度, 经度)
             name: 途径点名称
         """
-        self.waypoints_coords.append(coords)
-        self.waypoints_names.append(name)
+        self.waypoints.append(Location(name=name or '', lat=coords[0], lon=coords[1]))
         self._update_last_selected(coords, None, None, False)
 
     def update_waypoint(self, index: int, coords: Tuple[float, float], name: str):
@@ -114,9 +254,10 @@ class DataManager:
             coords: 新的途径点坐标 (纬度, 经度)
             name: 新的途径点名称
         """
-        if 0 <= index < len(self.waypoints_coords):
-            self.waypoints_coords[index] = coords
-            self.waypoints_names[index] = name
+        if 0 <= index < len(self.waypoints):
+            self.waypoints[index].lat = coords[0]
+            self.waypoints[index].lon = coords[1]
+            self.waypoints[index].name = name or ''
 
     def remove_waypoint(self, index: int):
         """删除途径点
@@ -124,14 +265,12 @@ class DataManager:
         参数:
             index: 要删除的途径点索引
         """
-        if 0 <= index < len(self.waypoints_coords):
-            self.waypoints_coords.pop(index)
-            self.waypoints_names.pop(index)
+        if 0 <= index < len(self.waypoints):
+            self.waypoints.pop(index)
 
     def clear_waypoints(self):
         """清空所有途径点"""
-        self.waypoints_coords.clear()
-        self.waypoints_names.clear()
+        self.waypoints.clear()
 
     def set_route(self, route_points: List[Tuple[float, float]], duration_seconds: int = 0):
         """设置路线（单条路线，兼容旧代码）
@@ -268,19 +407,10 @@ class DataManager:
 
     def clear_all_route_data(self):
         """清空所有路线相关数据"""
-        # 重置起点信息
-        self.start_coords = None
-        self.start_name = None
-        self.start_level = None
-
-        # 重置终点信息
-        self.end_coords = None
-        self.end_name = None
-        self.end_level = None
-
-        # 重置途径点信息
-        self.waypoints_coords = []
-        self.waypoints_names = []
+        # 重置起终点 / 途径点（领域模型）
+        self.start_location = None
+        self.end_location = None
+        self.waypoints.clear()
 
         # 重置路线数据
         self.current_route = None
@@ -309,11 +439,12 @@ class DataManager:
             包含所有点坐标的列表，顺序为：起点 -> 途径点 -> 终点
         """
         points = []
-        if self.start_coords:
-            points.append(self.start_coords)
-        points.extend(self.waypoints_coords)
-        if self.end_coords:
-            points.append(self.end_coords)
+        if self.start_location:
+            points.append(self.start_location.coords)
+        for wp in self.waypoints:
+            points.append(wp.coords)
+        if self.end_location:
+            points.append(self.end_location.coords)
         return points
 
     def has_route(self) -> bool:
@@ -330,4 +461,4 @@ class DataManager:
         返回:
             如果同时设置了起点和终点返回True，否则返回False
         """
-        return self.start_coords is not None and self.end_coords is not None
+        return self.start_location is not None and self.end_location is not None

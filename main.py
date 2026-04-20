@@ -8,6 +8,14 @@ GPX Studio - 路线规划工具
 import sys
 import os
 
+# 修复 Windows 控制台 GBK 编码无法输出 emoji 字符的问题
+for _stream in (sys.stdout, sys.stderr):
+    if _stream and hasattr(_stream, 'reconfigure'):
+        try:
+            _stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 # 获取当前文件的目录，用于构建相对路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
