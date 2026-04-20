@@ -353,76 +353,25 @@ class LocationManager(QObject):
         """
         self.logger.info(f"[LocationManager] 开始处理浏览器定位成功: {lat}, {lon}, 精度: {accuracy}m")
 
-        # 根据当前地图源选择地理编码服务进行逆地理编码（将坐标转换为可读地址）
-        address_info = None
-        map_source = map_config.get_map_source()
-        
-        if map_source == 'gaode' and map_config.is_gaode_configured():
-            self.logger.debug("[LocationManager] 使用高德地图进行逆地理编码...")
-            geocoding_service = self.service_manager.gaode_geocoding_service
-            address_info = geocoding_service.reverse_geocode(lat, lon)
-        elif map_source == 'osm':
-            self.logger.debug("[LocationManager] 使用 OSM 进行逆地理编码...")
-            geocoding_service = self.service_manager.osm_geocoding_service
-            address_info = geocoding_service.reverse_geocode(lat, lon)
-
-        if address_info:
-            # 解析地址信息
-            city = address_info.get('city', '')  # 城市
-            province = address_info.get('province', '')  # 省份
-            district = address_info.get('district', '')  # 区县
-            formatted_address = address_info.get('formatted_address', '')  # 详细地址
-
-            # 更新UI显示定位成功信息
-            self.ui_updater['set_progress_complete']()
-            self.ui_updater['clear_results']()
-
-            # 格式化位置信息
-            location_parts = [province, city, district]
-            location_text = "".join([part for part in location_parts if part])
-
-            # 合并所有信息为一条结果，避免分散显示
-            result_text = "定位成功！\n"
-            result_text += "定位方式: 浏览器Geolocation API\n"
-
-            if location_text:
-                result_text += f"位置: {location_text}\n"
-            if formatted_address:
-                result_text += f"详细地址: {formatted_address}\n"
-
-            result_text += f"坐标: {lat:.6f}, {lon:.6f}\n"
-            result_text += f"精度: 约{accuracy:.0f}米"
-
-            self.ui_updater['add_result'](result_text)
-
-            # 准备地图上显示的弹出信息
-            popup_text = f"我的位置\n{location_text}\n{formatted_address}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
-            self.data_manager.current_location = (lat, lon)
-            self.logger.debug(f"[LocationManager] 准备在地图上显示位置: {lat}, {lon}")
-            # 在地图上显示定位结果
-            self.ui_updater['show_location_on_map'](lat, lon, popup_text)
-            self.logger.debug("[LocationManager] 地图显示完成")
-            return
-
-        # 如果逆地理编码失败，仅显示坐标信息
+        # 更新UI显示定位成功信息
         self.ui_updater['set_progress_complete']()
         self.ui_updater['clear_results']()
 
-        # 合并信息为一条结果，避免分散显示
+        # 格式化位置信息
         result_text = "定位成功！\n"
         result_text += "定位方式: 浏览器Geolocation API\n"
-        result_text += f"坐标: {lat:.4f}, {lon:.4f}\n"
+        result_text += f"坐标: {lat:.6f}, {lon:.6f}\n"
         result_text += f"精度: 约{accuracy:.0f}米"
 
         self.ui_updater['add_result'](result_text)
 
-        # 准备地图上显示的弹出信息（无地址信息）
-        popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
+        # 准备地图上显示的弹出信息
+        popup_text = f"我的位置\n坐标: {lat:.6f}, {lon:.6f}\n定位方式: 浏览器定位\n精度: 约{accuracy:.0f}米"
         self.data_manager.current_location = (lat, lon)
-        self.logger.debug(f"[LocationManager] 准备在地图上显示位置（无逆地理编码）: {lat}, {lon}")
+        self.logger.debug(f"[LocationManager] 准备在地图上显示位置: {lat}, {lon}")
         # 在地图上显示定位结果
         self.ui_updater['show_location_on_map'](lat, lon, popup_text)
-        self.logger.debug("[LocationManager] 地图显示完成（无逆地理编码）")
+        self.logger.debug("[LocationManager] 地图显示完成")
 
     def handle_browser_location_error(self, error_msg: str):
         """处理浏览器定位失败
@@ -511,19 +460,6 @@ class LocationManager(QObject):
 
         self.logger.debug(f"纬度: {lat}, 经度: {lon}, 精度: {accuracy}米")
 
-        # 根据当前地图源选择地理编码服务进行逆地理编码（获取地址信息）
-        address_info = None
-        map_source = map_config.get_map_source()
-        
-        if map_source == 'gaode' and map_config.is_gaode_configured():
-            # 使用高德地理编码服务
-            geocoding_service = self.service_manager.gaode_geocoding_service
-            address_info = geocoding_service.reverse_geocode(lat, lon)
-        elif map_source == 'osm':
-            # 使用 OSM 地理编码服务（Nominatim）
-            geocoding_service = self.service_manager.osm_geocoding_service
-            address_info = geocoding_service.reverse_geocode(lat, lon)
-
         # 保存当前位置信息
         self.data_manager.current_location = (lat, lon)
 
@@ -533,20 +469,14 @@ class LocationManager(QObject):
         self.ui_updater['add_result']("定位成功！")
         self.ui_updater['add_result']("定位方式: Windows原生定位（高精度）")
 
-        if address_info:
-            # 格式化并显示地址信息
-            location_text = self._format_address(address_info)
-            self.ui_updater['add_result'](f"位置: {location_text}")
-            popup_text = f"我的位置\n{location_text}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
-        else:
-            # 仅显示坐标信息
-            popup_text = f"我的位置\n坐标: {lat:.4f}, {lon:.4f}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
-
         # 显示坐标和精度
         self.ui_updater['add_result'](f"坐标: {lat:.6f}, {lon:.6f}")
         self.ui_updater['add_result'](f"精度: 约{accuracy:.0f}米")
 
-        self.logger.info(f"位置信息: {address_info if address_info else '仅坐标'}")
+        # 准备地图上显示的弹出信息
+        popup_text = f"我的位置\n坐标: {lat:.6f}, {lon:.6f}\n定位方式: Windows原生定位\n精度: 约{accuracy:.0f}米"
+        
+        self.logger.info(f"位置坐标: {lat:.6f}, {lon:.6f}")
         # 在地图上显示位置
         self.ui_updater['show_location_on_map'](lat, lon, popup_text)
 
