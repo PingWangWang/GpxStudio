@@ -617,7 +617,7 @@ class GaodeRoutingService(IRoutingService):
                 for point in route_points:
                     if point is not None:
                         lat, lon = point
-                        wgs84_lat, wgs84_lon = CoordinateTransform.gcj02_to_wgs84(lat, lon)
+                        wgs84_lat, wgs84_lon = CoordinateTransform.convert(lat, lon, 'GCJ-02', 'WGS-84')
                         wgs84_route_points.append((wgs84_lat, wgs84_lon))
                     else:
                         wgs84_route_points.append(None)

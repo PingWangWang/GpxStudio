@@ -163,17 +163,9 @@ class UICallbacksMixin:
         self.map_view.setUrl(QUrl(url))
 
     def _trigger_browser_location(self):
-        script = """
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                function(p) { console.log('定位成功:'+p.coords.latitude+','+p.coords.longitude+','+p.coords.accuracy); },
-                function(e) { console.log('定位失败:'+e.message); },
-                {enableHighAccuracy:true,timeout:15000,maximumAge:0}
-            );
-        } else { console.log('定位失败: 浏览器不支持定位'); }
-        """
         if self.map_view and self.map_view.page():
-            self.map_view.page().runJavaScript(script)
+            from modules.map import MapJsBridge
+            MapJsBridge.trigger_browser_location(self.map_view.page())
 
     # ── 时间面板回调 ──────────────────────────────────────────────────────
 

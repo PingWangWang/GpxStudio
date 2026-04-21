@@ -347,7 +347,7 @@ class MapRenderTaskAdapter:
                 for point in route_points:
                     if point:
                         lat, lon = point
-                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                         transformed_route_points.append((gcj_lat, gcj_lon))
                 route_points = transformed_route_points
 
@@ -372,7 +372,7 @@ class MapRenderTaskAdapter:
                 for point in bounds_points:
                     if point:
                         lat, lon = point
-                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                         transformed_bounds_points.append((gcj_lat, gcj_lon))
                     else:
                         transformed_bounds_points.append(point)

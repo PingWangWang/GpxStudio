@@ -224,7 +224,7 @@ class MapManager:
                             # 提取坐标部分（忽略海拔）
                             lat, lon = point[0], point[1]
                             # 转换坐标
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             # 保留原始格式（可能包含海拔）
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])
@@ -352,7 +352,7 @@ class MapManager:
             # 只有当坐标系不正确时才进行转换
             if not has_correct_coord_system:
                 # 转换地图中心点坐标
-                center_lat, center_lon = CoordinateTransform.wgs84_to_gcj02(center_lat, center_lon)
+                center_lat, center_lon = CoordinateTransform.convert(center_lat, center_lon, 'WGS-84', 'GCJ-02')
                 center_coord_system = 'GCJ-02'  # 转换后坐标系为GCJ-02
                 self.logger.debug(f"[地图预览] 转换坐标系 WGS-84 -> GCJ-02: ({self.data_manager.last_map_center}) -> ({center_lat}, {center_lon})")
             else:
@@ -408,7 +408,7 @@ class MapManager:
                             # 提取坐标部分（忽略海拔）
                             lat, lon = point[0], point[1]
                             # 转换坐标
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             # 保留原始格式（可能包含海拔）
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])
@@ -437,7 +437,7 @@ class MapManager:
                         for coords in bounds_coords:
                             if coords:
                                 lat, lon = coords
-                                gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                                gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                                 transformed_bounds_coords.append((gcj_lat, gcj_lon))
                         bounds_coords = transformed_bounds_coords
                 MapRenderer.fit_bounds(m, bounds_coords)
@@ -567,7 +567,7 @@ class MapManager:
                     for point in route_points_to_render:
                         if point is not None:
                             lat, lon = point[0], point[1]
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])
                             else:
@@ -666,7 +666,7 @@ class MapManager:
                             # 提取坐标部分（忽略海拔）
                             lat, lon = point[0], point[1]
                             # 转换坐标
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             # 保留原始格式（可能包含海拔）
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])
@@ -887,7 +887,7 @@ class MapManager:
                         # 提取坐标部分（忽略海拔）
                         lat, lon = point[0], point[1]
                         # 转换坐标
-                        gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                        gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                         # 保留原始格式（可能包含海拔）
                         if len(point) > 2:
                             transformed_point = (gcj_lat, gcj_lon, point[2])
@@ -916,7 +916,7 @@ class MapManager:
                     # 提取坐标部分（忽略海拔）
                     lat, lon = point[0], point[1]
                     # 转换坐标
-                    gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                    gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                     transformed_bounds_points.append((gcj_lat, gcj_lon))
             bounds_points = transformed_bounds_points
 
@@ -1020,7 +1020,7 @@ class MapManager:
                             # 提取坐标部分（忽略海拔）
                             lat, lon = point[0], point[1]
                             # 转换坐标
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             # 保留原始格式（可能包含海拔）
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])
@@ -1095,7 +1095,7 @@ class MapManager:
                 return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
             raw_min = min(diff(coords, first_point), diff(coords, last_point))
-            wgs_lat, wgs_lon = CoordinateTransform.gcj02_to_wgs84(coords[0], coords[1])
+            wgs_lat, wgs_lon = CoordinateTransform.convert(coords[0], coords[1], 'GCJ-02', 'WGS-84')
             conv_min = min(diff((wgs_lat, wgs_lon), first_point), diff((wgs_lat, wgs_lon), last_point))
 
             return 'GCJ-02' if conv_min + 1e-6 < raw_min else 'WGS-84'
@@ -1274,99 +1274,6 @@ class MapManager:
         # 将坐标数据转换为JavaScript数组字符串
         coords_js = str(route_segments).replace("'", '"')
 
-        # 构建JavaScript代码来更新路线
-        update_route_js = f"""
-        (function() {{
-            try {{
-                // 多种方法获取地图对象
-                var map = null;
-
-                // 方法1: 通过.leaflet-container元素的_leaflet_map属性
-                var mapElement = document.querySelector('.leaflet-container');
-                if (mapElement && mapElement._leaflet_map) {{
-                    map = mapElement._leaflet_map;
-                    console.log('[路线更新] 通过.leaflet-container._leaflet_map获取到地图');
-                }} else {{
-                    // 方法2: 查找window上以map_开头的全局变量
-                    for (var key in window) {{
-                        if (key.startsWith('map_') && window[key] && typeof window[key].getZoom === 'function') {{
-                            map = window[key];
-                            console.log('[路线更新] 通过window.' + key + '获取到地图');
-                            break;
-                        }}
-                    }}
-                }}
-
-                if (!map) {{
-                    console.log('[路线更新] 错误: 无法获取地图对象，稍后会自动重试');
-                    return false;
-                }}
-
-                // 检查Leaflet库
-                if (typeof L === 'undefined') {{
-                    console.log('[路线更新] 错误: Leaflet库(L)未定义');
-                    return false;
-                }}
-
-                // 保存当前地图的中心和缩放级别（关键：确保位置不变）
-                var currentCenter = map.getCenter();
-                var currentZoom = map.getZoom();
-                console.log('[路线更新] 保存当前视图 - 中心: [' + currentCenter.lat.toFixed(6) + ', ' + currentCenter.lng.toFixed(6) + '], 缩放: ' + currentZoom);
-
-                // 删除所有Polyline类型的层（路线），保留Marker（标记点）和TileLayer（地图瓦片）
-                var layersToRemove = [];
-                map.eachLayer(function(layer) {{
-                    if (layer instanceof L.Polyline) {{
-                        layersToRemove.push(layer);
-                    }}
-                }});
-
-                console.log('[路线更新] 找到 ' + layersToRemove.length + ' 个Polyline层，准备删除');
-                layersToRemove.forEach(function(layer) {{
-                    map.removeLayer(layer);
-                }});
-
-                // 添加新的路线层 (支持多段线)
-                var routeSegments = {coords_js};
-                if (!Array.isArray(routeSegments) || routeSegments.length === 0) {{
-                    console.log('[路线更新] 错误: 路线数据无效');
-                    return false;
-                }}
-
-                // L.polyline 支持传入数组的数组来绘制 MultiPolyline
-                var routeLine = L.polyline(routeSegments, {{
-                    color: 'blue',
-                    weight: 5,
-                    opacity: 0.7,
-                    smoothFactor: 1.5,
-                    noClip: true
-                }});
-                routeLine.addTo(map);
-
-                // 强制恢复视图位置（不使用动画，立即恢复）
-                map.setView(currentCenter, currentZoom, {{animate: false}});
-                console.log('[路线更新] 已恢复视图位置');
-
-                // 计算总点数便于日志记录
-                var totalPoints = 0;
-                if (routeSegments.length > 0 && Array.isArray(routeSegments[0][0])) {{
-                    // 多段
-                     routeSegments.forEach(function(seg) {{ totalPoints += seg.length; }});
-                }} else {{
-                    // 单段 (其实上面的逻辑产生的routeSegments一定是多段结构，即 [[[lat,lon]...]] )
-                    totalPoints = routeSegments.length;
-                }}
-                
-                console.log('[路线更新] ✅ 成功更新路线: ' + routeSegments.length + ' 段, 共 ' + totalPoints + ' 个点');
-                return true;
-            }} catch (e) {{
-                console.log('[路线更新] ❌ 异常: ' + e.name + ' - ' + e.message);
-                console.log('[路线更新] 堆栈: ' + e.stack);
-                return false;
-            }}
-        }})();
-        """
-
         # 执行JavaScript代码（带重试机制）
         self._js_update_success = None  # 用于存储结果
         self._retry_count = 0
@@ -1383,15 +1290,15 @@ class MapManager:
                 else:
                     if self._retry_count < max_retries:
                         self.logger.debug(f"[路线重渲染] 第{self._retry_count}次尝试失败，{100}ms后重试...")
-                        # 延迟后重试
                         from PyQt5.QtCore import QTimer
                         QTimer.singleShot(100, try_update_route)
                     else:
                         self.logger.warning(f"[路线重渲染] ⚠️ JavaScript更新失败（已重试{max_retries}次），放弃更新")
 
             try:
+                from modules.map import MapJsBridge
                 page = self.map_view.page()
-                page.runJavaScript(update_route_js, handle_result)
+                MapJsBridge.update_route(page, coords_js, handle_result)
             except Exception as e:
                 self.logger.error(f"[路线重渲染] ❌ JavaScript执行异常: {e}")
                 import traceback
@@ -1532,7 +1439,7 @@ class MapManager:
                             # 提取坐标部分（忽略海拔）
                             lat, lon = point[0], point[1]
                             # 转换坐标
-                            gcj_lat, gcj_lon = CoordinateTransform.wgs84_to_gcj02(lat, lon)
+                            gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
                             # 保留原始格式（可能包含海拔）
                             if len(point) > 2:
                                 transformed_point = (gcj_lat, gcj_lon, point[2])

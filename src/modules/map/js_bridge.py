@@ -95,3 +95,45 @@ class MapJsBridge:
             .replace('__LON__', str(lon))
         )
         page.runJavaScript(js)
+
+    # ------------------------------------------------------------------
+    # 浏览器定位
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def trigger_browser_location(cls, page) -> None:
+        """触发浏览器 Geolocation API 定位请求。
+
+        结果通过 console.log 上报，由 ConsoleWebEnginePage 拦截处理。
+        """
+        page.runJavaScript(_load('map_geolocation.js'))
+
+    # ------------------------------------------------------------------
+    # 视图状态读取
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def get_view_state(cls, page, callback: Callable) -> None:
+        """异步读取当前地图中心坐标和缩放级别。
+
+        Args:
+            page:     QWebEnginePage 实例。
+            callback: 接收结果字典 ``{lat, lon, zoom}`` 或 ``None`` 的回调。
+        """
+        page.runJavaScript(_load('map_get_view_state.js'), callback)
+
+    # ------------------------------------------------------------------
+    # 路线更新
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def update_route(cls, page, coords_json: str, callback: Callable) -> None:
+        """在地图上更新路线图层（保留当前视图位置）。
+
+        Args:
+            page:        QWebEnginePage 实例。
+            coords_json: JSON 字符串，格式为 ``[[[lat,lon],...],...]``（多段线）。
+            callback:    接收布尔结果（True=成功）的回调。
+        """
+        js = _load('map_update_route.js').replace('__ROUTE_COORDS_JSON__', coords_json)
+        page.runJavaScript(js, callback)

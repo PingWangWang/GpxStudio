@@ -93,39 +93,7 @@ class MapViewStateManager:
             self.logger.warning("[视图状态] map_view为None，无法从JS获取")
             return None
         
-        js_code = """
-        (function() {
-            try {
-                // 查找地图对象
-                var map = null;
-                for (var key in window) {
-                    if (key.startsWith('map_') && window[key] && 
-                        typeof window[key].getCenter === 'function' && 
-                        typeof window[key].getZoom === 'function') {
-                        map = window[key];
-                        break;
-                    }
-                }
-                
-                if (!map) {
-                    return null;
-                }
-                
-                // 获取当前地图的中心点和缩放级别
-                var center = map.getCenter();
-                var zoom = map.getZoom();
-                
-                return {
-                    lat: center.lat,
-                    lon: center.lng,
-                    zoom: zoom
-                };
-            } catch(e) {
-                console.error('[视图状态] 获取失败:', e);
-                return null;
-            }
-        })();
-        """
+        from modules.map import MapJsBridge
         
         # 用于存储JavaScript返回的结果
         result_received = [False]
@@ -144,7 +112,7 @@ class MapViewStateManager:
         
         try:
             self.logger.debug(f"[视图状态] 开始执行JavaScript获取视图，超时时间: {timeout_ms}ms")
-            map_view.page().runJavaScript(js_code, on_result)
+            MapJsBridge.get_view_state(map_view.page(), on_result)
             
             # 等待JavaScript执行完成
             loop = QEventLoop()
