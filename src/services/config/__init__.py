@@ -1,12 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-配置模块初始化文件
+services.config — 向后兼容 shim
+
+真实实现已迁移到 ``infrastructure.config``。
 """
+from infrastructure.config.map_config import MapConfig, map_config  # noqa: F401
+from infrastructure.config.about_config import AboutConfig  # noqa: F401
+from infrastructure.config.about_config import about_config as about_config  # noqa: F401
+import infrastructure.config.about_config as about_config_module  # noqa: F401
 
-from .about_config import AboutConfig
-from .map_config import MapConfig
-
-# 创建全局配置对象
-about_config = AboutConfig()
-map_config = MapConfig()
+__all__ = ['MapConfig', 'map_config', 'AboutConfig', 'about_config']
