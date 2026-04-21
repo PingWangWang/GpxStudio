@@ -5,6 +5,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 from modules.map.js_bridge import MapJsBridge
 from services.config.map_config import map_config
+from app.ui_callbacks import UICallbacks
 
 
 class InitMixin:
@@ -315,48 +316,48 @@ class InitMixin:
         print("功能管理器初始化完成")
 
     def _build_ui_updater(self):
-        """构建UI更新器回调字典"""
-        self.ui_updater = {
-            'main_window': self,
-            'show_warning': self._show_warning,
-            'show_info': self._show_info,
-            'set_progress_indeterminate': self._set_progress_indeterminate,
-            'set_progress_complete': self._set_progress_complete,
-            'set_progress': self._set_progress,
-            'clear_results': self._clear_results,
-            'clear_results_list': self._clear_results_list,
-            'add_result': self._add_result,
-            'set_results_title': self._set_results_title,
-            'show_search_results': self._show_search_results,
-            'show_search_results_on_map': self._show_search_results_on_map,
-            'show_search_results_dropdown': self._show_search_results_dropdown,
-            'update_location_display': self._update_location_display,
-            'update_start_from_search': self._update_start_from_search,
-            'update_end_from_search': self._update_end_from_search,
-            'add_waypoint_to_list': self._add_waypoint_to_list,
-            'update_map_preview': self._update_map_preview,
-            'preview_search_result': self._preview_search_result,
-            'show_location_on_map': self._show_location_on_map,
-            'show_route_on_map': self._show_route_on_map,
-            'load_map_url': self._load_map_url,
-            'trigger_browser_location': self._trigger_browser_location,
-            'get_start_time': lambda: self.start_time_edit.dateTime(),
-            'set_start_time': lambda dt: self.start_time_edit.setDateTime(dt),
-            'get_end_time': lambda: self.end_time_edit.dateTime(),
-            'set_end_time': lambda dt: self.end_time_edit.setDateTime(dt),
-            'get_duration': lambda: self.duration_time_edit.text(),
-            'set_duration': lambda text: self.duration_time_edit.setText(text),
-            'get_transport_mode': lambda: self.transport_combo.currentText(),
-            'hide_time_panel': lambda: self.time_panel.hide() if self.time_panel is not None and self.time_panel.isVisible() else None,
-            'hide_date_panel': lambda: self.date_panel.hide() if self.date_panel is not None and self.date_panel.isVisible() else None,
-            'setup_date_panel_callback': self._setup_date_panel_callback,
-            'setup_time_panel_callback': self._setup_time_panel_callback,
-            'show_date_panel': self._show_date_panel,
-            'show_time_panel': self._show_time_panel,
-            'add_route_time_info': self._add_route_time_info,
-            'show_route_alternatives': self._show_route_alternatives,
-            'save_route_history': self._save_route_history,
-        }
+        """构建类型化 UI 回调对象（UICallbacks），替代原 ui_updater 字典。"""
+        self.ui_updater = UICallbacks(
+            main_window=self,
+            show_warning=self._show_warning,
+            show_info=self._show_info,
+            set_progress_indeterminate=self._set_progress_indeterminate,
+            set_progress_complete=self._set_progress_complete,
+            set_progress=self._set_progress,
+            clear_results=self._clear_results,
+            clear_results_list=self._clear_results_list,
+            add_result=self._add_result,
+            set_results_title=self._set_results_title,
+            show_search_results=self._show_search_results,
+            show_search_results_on_map=self._show_search_results_on_map,
+            show_search_results_dropdown=self._show_search_results_dropdown,
+            update_location_display=self._update_location_display,
+            update_start_from_search=self._update_start_from_search,
+            update_end_from_search=self._update_end_from_search,
+            add_waypoint_to_list=self._add_waypoint_to_list,
+            update_map_preview=self._update_map_preview,
+            preview_search_result=self._preview_search_result,
+            show_location_on_map=self._show_location_on_map,
+            show_route_on_map=self._show_route_on_map,
+            load_map_url=self._load_map_url,
+            trigger_browser_location=self._trigger_browser_location,
+            get_start_time=lambda: self.start_time_edit.dateTime(),
+            set_start_time=lambda dt: self.start_time_edit.setDateTime(dt),
+            get_end_time=lambda: self.end_time_edit.dateTime(),
+            set_end_time=lambda dt: self.end_time_edit.setDateTime(dt),
+            get_duration=lambda: self.duration_time_edit.text(),
+            set_duration=lambda text: self.duration_time_edit.setText(text),
+            get_transport_mode=lambda: self.transport_combo.currentText(),
+            hide_time_panel=lambda: self.time_panel.hide() if self.time_panel is not None and self.time_panel.isVisible() else None,
+            hide_date_panel=lambda: self.date_panel.hide() if self.date_panel is not None and self.date_panel.isVisible() else None,
+            setup_date_panel_callback=self._setup_date_panel_callback,
+            setup_time_panel_callback=self._setup_time_panel_callback,
+            show_date_panel=self._show_date_panel,
+            show_time_panel=self._show_time_panel,
+            add_route_time_info=self._add_route_time_info,
+            show_route_alternatives=self._show_route_alternatives,
+            save_route_history=self._save_route_history,
+        )
 
     # ------------------------------------------------------------------ #
     #  信号连接                                                            #

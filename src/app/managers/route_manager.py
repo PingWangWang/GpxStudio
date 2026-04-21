@@ -58,20 +58,20 @@ class RouteManager(QObject):
         # 检查是否设置了起点和终点
         if not self.data_manager.has_start_end():
             self.logger.warning("路线规划失败：未设置起点或终点")
-            self.ui_updater['show_warning']("错误", "请先设置起点和终点")
+            self.ui_updater.show_warning("错误", "请先设置起点和终点")
             return
 
         # 检查是否设置了地图数据源
         map_source = map_config.get_map_source()
         if not map_source:
             self.logger.warning("路线规划失败：未设置地图数据源")
-            self.ui_updater['show_warning']("警告", "请先在地图配置中设置地图数据源")
+            self.ui_updater.show_warning("警告", "请先在地图配置中设置地图数据源")
             return
         
         # 检查高德地图API配置
         if map_source == 'gaode' and not map_config.is_gaode_configured():
             self.logger.warning("高德地图API未配置，无法进行路线规划")
-            self.ui_updater['show_warning'](
+            self.ui_updater.show_warning(
                 "高德地图API未配置", 
                 "使用高德地图规划路线需要先配置API密钥。\n\n"
                 "请在【地图设置】中配置高德地图Web服务API密钥。\n\n"
@@ -91,10 +91,10 @@ class RouteManager(QObject):
         self.logger.debug(f"总点数: {len(points)}")
 
         # 更新UI显示路线规划开始
-        self.ui_updater['set_progress_indeterminate']()
-        self.ui_updater['clear_results_list']()
+        self.ui_updater.set_progress_indeterminate()
+        self.ui_updater.clear_results_list()
         result_text = f"正在规划路线...\n方式: {transport_mode}"
-        self.ui_updater['add_result'](result_text)
+        self.ui_updater.add_result(result_text)
 
         # 如果有任务管理器，使用后台线程执行
         if self.task_manager:
@@ -147,7 +147,7 @@ class RouteManager(QObject):
                 route_alternatives, default_index = routing_service.plan_route(points, transport_mode)
 
             # 更新UI显示路线规划完成
-            self.ui_updater['set_progress_complete']()
+            self.ui_updater.set_progress_complete()
 
             if route_alternatives:
                 # 安全检查：确保default_index在有效范围内
@@ -171,13 +171,13 @@ class RouteManager(QObject):
         except Exception as e:
             # 捕获路线规划过程中的异常
             self.logger.exception(f"路线规划出错: {str(e)}")
-            self.ui_updater['set_progress_complete']()
-            self.ui_updater['clear_results_list']()
+            self.ui_updater.set_progress_complete()
+            self.ui_updater.clear_results_list()
 
             # 合并为一条结果显示
             result_text = f"路线规划出错\n错误信息: {str(e)}"
-            self.ui_updater['add_result'](result_text)
-            self.ui_updater['show_warning']("错误", f"路线规划出错: {str(e)}")
+            self.ui_updater.add_result(result_text)
+            self.ui_updater.show_warning("错误", f"路线规划出错: {str(e)}")
 
         self.logger.info("路线规划流程完成")
         self.logger.info("=" * 80)
@@ -192,7 +192,7 @@ class RouteManager(QObject):
         """
         self.logger.info(f"路线规划任务完成: {task_id}")
 
-        self.ui_updater['set_progress_complete']()
+        self.ui_updater.set_progress_complete()
 
         if result and result.get('alternatives'):
             # 路线规划成功
@@ -217,7 +217,7 @@ class RouteManager(QObject):
             self._update_route_times(selected_route['duration'])
 
             # 获取交通方式
-            transport_mode = self.ui_updater['get_transport_mode']()
+            transport_mode = self.ui_updater.get_transport_mode()
 
             # 处理成功（立即渲染路线）
             self._handle_route_success(transport_mode, route_alternatives, default_index)
@@ -234,11 +234,11 @@ class RouteManager(QObject):
             error: 错误信息
         """
         self.logger.error(f"路线规划任务失败: {task_id} - {error}")
-        self.ui_updater['set_progress_complete']()
-        self.ui_updater['clear_results_list']()
+        self.ui_updater.set_progress_complete()
+        self.ui_updater.clear_results_list()
         result_text = f"路线规划出错\n错误信息: {error}"
-        self.ui_updater['add_result'](result_text)
-        self.ui_updater['show_warning']("错误", f"路线规划出错: {error}")
+        self.ui_updater.add_result(result_text)
+        self.ui_updater.show_warning("错误", f"路线规划出错: {error}")
 
     @pyqtSlot(str, object)
     def on_map_render_task_completed(self, task_id: str, result):
@@ -252,7 +252,7 @@ class RouteManager(QObject):
 
         if result:
             # 在主线程中加载地图
-            self.ui_updater['load_map_url'](result)
+            self.ui_updater.load_map_url(result)
             self.logger.debug(f"已加载地图: {result}")
         else:
             self.logger.warning("地图渲染失败，URL为空")
@@ -266,7 +266,7 @@ class RouteManager(QObject):
             error: 错误信息
         """
         self.logger.error(f"地图渲染任务失败: {task_id} - {error}")
-        self.ui_updater['show_warning']("警告", f"地图显示失败: {error}")
+        self.ui_updater.show_warning("警告", f"地图显示失败: {error}")
 
     def _update_route_times(self, estimated_duration: int):
         """更新路线时间信息（内部方法）
@@ -278,11 +278,11 @@ class RouteManager(QObject):
             estimated_duration: 预估路线耗时（秒）
         """
         # 获取当前的起始时间（不更新，使用用户设置的值）
-        start_datetime = self.ui_updater['get_start_time']()
+        start_datetime = self.ui_updater.get_start_time()
 
         # 计算途径时间（小时，支持小数）
         duration_hours = estimated_duration / 3600
-        self.ui_updater['set_duration'](f"{duration_hours:.1f}")
+        self.ui_updater.set_duration(f"{duration_hours:.1f}")
 
         # 根据起始时间和途径时间计算结束时间
         start_timestamp = start_datetime.toSecsSinceEpoch()
@@ -290,7 +290,7 @@ class RouteManager(QObject):
 
         # 创建结束时间的 QDateTime 对象
         qt_end_datetime = QDateTime.fromSecsSinceEpoch(end_timestamp)
-        self.ui_updater['set_end_time'](qt_end_datetime)
+        self.ui_updater.set_end_time(qt_end_datetime)
 
     def _handle_route_success(self, transport_mode: str, route_alternatives: list = None, default_index: int = 0):
         """处理路线规划成功（内部方法）
@@ -310,7 +310,7 @@ class RouteManager(QObject):
         self.logger.info(f"路线规划成功，共 {len(route_alternatives)} 个方案")
 
         # 更新UI显示路线规划成功
-        self.ui_updater['set_progress_complete']()
+        self.ui_updater.set_progress_complete()
 
         # 1. 优先在地图上显示默认选中的路线 - 使用后台线程渲染
         if self.task_manager:
@@ -330,11 +330,11 @@ class RouteManager(QObject):
             self.logger.debug(f"地图渲染任务已提交: {task_id}")
         else:
             # 兼容模式：直接渲染
-            self.ui_updater['show_route_on_map']()
+            self.ui_updater.show_route_on_map()
 
         # 2. 弹出路线待选列表（在路线规划面板中）
-        if 'show_route_alternatives' in self.ui_updater:
-            self.ui_updater['show_route_alternatives'](route_alternatives, default_index)
+        if hasattr(self.ui_updater, 'show_route_alternatives'):
+            self.ui_updater.show_route_alternatives(route_alternatives, default_index)
 
         # 3. 移除自动获取海拔数据的操作，改为在GPX导出时按需获取
 
@@ -468,9 +468,9 @@ class RouteManager(QObject):
         路线规划失败后，更新UI显示失败信息。
         """
         self.logger.warning("路线规划失败，未返回路线点")
-        self.ui_updater['clear_results_list']()
-        self.ui_updater['add_result']("路线规划失败")
-        self.ui_updater['show_warning']("错误", "路线规划失败")
+        self.ui_updater.clear_results_list()
+        self.ui_updater.add_result("路线规划失败")
+        self.ui_updater.show_warning("错误", "路线规划失败")
 
     def _fetch_elevation_data_async(self, route_alternatives: list):
         """在后台异步获取海拔数据
@@ -649,7 +649,7 @@ class RouteManager(QObject):
             self.logger.debug(f"地图渲染任务已提交: {task_id}")
         else:
             # 兼容模式：直接渲染
-            self.ui_updater['show_route_on_map']()
+            self.ui_updater.show_route_on_map()
 
     def export_gpx(self):
         """导出路线为GPX文件
@@ -664,7 +664,7 @@ class RouteManager(QObject):
         # 检查是否已规划路线
         if not self.data_manager.has_route():
             self.logger.warning("GPX导出失败：未规划路线")
-            self.ui_updater['show_warning']("错误", "请先规划路线")
+            self.ui_updater.show_warning("错误", "请先规划路线")
             return
 
         # 生成默认文件名
@@ -680,7 +680,7 @@ class RouteManager(QObject):
 
         # 打开文件保存对话框
         file_path, _ = QFileDialog.getSaveFileName(
-            self.ui_updater['main_window'],
+            self.ui_updater.main_window,
             "保存GPX文件",
             default_path,
             "GPX文件 (*.gpx);;所有文件 (*.*)"
@@ -701,16 +701,16 @@ class RouteManager(QObject):
 
         try:
             # 更新UI显示导出开始
-            self.ui_updater['set_progress_indeterminate']()
-            self.ui_updater['clear_results_list']()
-            self.ui_updater['add_result']("正在导出GPX文件...")
+            self.ui_updater.set_progress_indeterminate()
+            self.ui_updater.clear_results_list()
+            self.ui_updater.add_result("正在导出GPX文件...")
 
             self.logger.debug("正在调用GPX导出服务...")
             # 获取起始时间
-            start_datetime = self.ui_updater['get_start_time']()
+            start_datetime = self.ui_updater.get_start_time()
 
             # 更新进度
-            self.ui_updater['set_progress'](50)
+            self.ui_updater.set_progress(50)
 
             # 提取起点和终点的城市名称
             start_city = self._extract_city_name(self.data_manager.start_name or "起点")
@@ -739,34 +739,34 @@ class RouteManager(QObject):
             )
 
             # 更新UI显示导出完成
-            self.ui_updater['set_progress_complete']()
+            self.ui_updater.set_progress_complete()
 
             if success:
                 # 导出成功
                 self.logger.info("GPX文件导出成功")
-                self.ui_updater['clear_results_list']()
+                self.ui_updater.clear_results_list()
 
                 # 合并为一条结果显示
                 result_text = f"导出成功！\n文件: {file_path}"
-                self.ui_updater['add_result'](result_text)
-                self.ui_updater['show_info']("成功", f"GPX文件已导出到: {file_path}")
+                self.ui_updater.add_result(result_text)
+                self.ui_updater.show_info("成功", f"GPX文件已导出到: {file_path}")
             else:
                 # 导出失败
                 self.logger.warning("GPX文件导出失败")
-                self.ui_updater['clear_results_list']()
-                self.ui_updater['add_result']("导出失败")
-                self.ui_updater['show_warning']("错误", "导出GPX文件失败")
+                self.ui_updater.clear_results_list()
+                self.ui_updater.add_result("导出失败")
+                self.ui_updater.show_warning("错误", "导出GPX文件失败")
 
         except Exception as e:
             # 捕获GPX导出过程中的异常
             self.logger.exception(f"导出GPX文件出错: {str(e)}")
-            self.ui_updater['set_progress_complete']()
-            self.ui_updater['clear_results_list']()
+            self.ui_updater.set_progress_complete()
+            self.ui_updater.clear_results_list()
 
             # 合并为一条结果显示
             result_text = f"导出出错\n错误信息: {str(e)}"
-            self.ui_updater['add_result'](result_text)
-            self.ui_updater['show_warning']("错误", f"导出GPX文件出错: {str(e)}")
+            self.ui_updater.add_result(result_text)
+            self.ui_updater.show_warning("错误", f"导出GPX文件出错: {str(e)}")
 
         self.logger.info("GPX导出流程完成")
         self.logger.info("=" * 80)
@@ -784,7 +784,7 @@ class RouteManager(QObject):
         end_city = self._extract_city_name(self.data_manager.end_name or "终点")
 
         # 获取起始时间
-        start_datetime = self.ui_updater['get_start_time']()
+        start_datetime = self.ui_updater.get_start_time()
         start_time_str = start_datetime.toString("yyyyMMdd_hhmm")
 
         # 生成文件名：起点_终点_时间.gpx

@@ -61,13 +61,13 @@ class SearchManager(QObject):
         # 检查地图源是否已设置
         map_source = map_config.get_map_source()
         if not map_source:
-            self.ui_updater['show_warning']("警告", "请先在地图配置中设置地图数据源")
+            self.ui_updater.show_warning("警告", "请先在地图配置中设置地图数据源")
             return
         
         # 检查高德地图API配置
         if map_source == 'gaode' and not map_config.is_gaode_configured():
             self.logger.warning("高德地图API未配置，无法进行地点搜索")
-            self.ui_updater['show_warning'](
+            self.ui_updater.show_warning(
                 "高德地图API未配置", 
                 "使用高德地图搜索需要先配置API密钥。\n\n"
                 "请在【地图设置】中配置高德地图Web服务API密钥。\n\n"
@@ -79,9 +79,9 @@ class SearchManager(QObject):
             return
 
         # 恢复信息展示框标题
-        self.ui_updater['set_results_title']("搜索结果")
-        self.ui_updater['clear_results_list']()
-        self.ui_updater['set_progress_indeterminate']()
+        self.ui_updater.set_results_title("搜索结果")
+        self.ui_updater.clear_results_list()
+        self.ui_updater.set_progress_indeterminate()
         QApplication.processEvents()
 
         # 如果有任务管理器，使用后台线程执行
@@ -119,13 +119,13 @@ class SearchManager(QObject):
         """
         self.logger.info(f"搜索任务完成: {task_id}")
 
-        self.ui_updater['set_progress_complete']()
+        self.ui_updater.set_progress_complete()
         QApplication.processEvents()
 
         # 检查是否是API未配置错误
         if isinstance(result, dict) and result.get('error') == 'api_not_configured':
             self.logger.warning("高德地图API未配置")
-            self.ui_updater['show_warning']("配置错误", result.get('message', '请配置地图 API'))
+            self.ui_updater.show_warning("配置错误", result.get('message', '请配置地图 API'))
             return
 
         if result is not None and len(result) > 0:
@@ -136,8 +136,8 @@ class SearchManager(QObject):
             formatted_results = self._format_search_results(result)
 
             # 调用UI回调显示搜索结果
-            if 'show_search_results_dropdown' in self.ui_updater:
-                self.ui_updater['show_search_results_dropdown'](formatted_results)
+            if hasattr(self.ui_updater, 'show_search_results_dropdown'):
+                self.ui_updater.show_search_results_dropdown(formatted_results)
         else:
             # 搜索失败或无结果
             search_text = "未知"  # 由于是异步，无法直接获取search_text
@@ -197,8 +197,8 @@ class SearchManager(QObject):
             error: 错误信息
         """
         self.logger.error(f"搜索任务失败: {task_id} - {error}")
-        self.ui_updater['set_progress_complete']()
-        self.ui_updater['show_warning']("搜索失败", f"搜索出错: {error}")
+        self.ui_updater.set_progress_complete()
+        self.ui_updater.show_warning("搜索失败", f"搜索出错: {error}")
 
     def _perform_search(self, search_text: str, location_type: str, map_source: str):
         """执行搜索（内部方法）
@@ -220,7 +220,7 @@ class SearchManager(QObject):
         else:
             locations = geocoding_service.search_location(search_text)
 
-        self.ui_updater['set_progress_complete']()
+        self.ui_updater.set_progress_complete()
         QApplication.processEvents()
 
         if locations:
@@ -242,13 +242,13 @@ class SearchManager(QObject):
         # 更新标题
         from app.constants import SEARCH_LIST_TITLES, SEARCH_RESULTS_TITLE
         title = SEARCH_LIST_TITLES.get(location_type, SEARCH_RESULTS_TITLE)
-        self.ui_updater['set_results_title'](title)
+        self.ui_updater.set_results_title(title)
 
         # 显示搜索结果
-        self.ui_updater['show_search_results'](locations)
+        self.ui_updater.show_search_results(locations)
 
         # 在地图上显示搜索结果
-        self.ui_updater['show_search_results_on_map'](locations, location_type)
+        self.ui_updater.show_search_results_on_map(locations, location_type)
 
     def _handle_search_failure(self, search_text: str):
         """处理搜索失败（内部方法）
@@ -258,7 +258,7 @@ class SearchManager(QObject):
         参数:
             search_text: 搜索文本
         """
-        self.ui_updater['show_warning'](
+        self.ui_updater.show_warning(
             "搜索失败",
             f"未找到: {search_text}\n\n建议：\n"
             "1. 尝试使用更具体的地址（如：陕西省西安市）\n"
@@ -294,8 +294,8 @@ class SearchManager(QObject):
             pass
 
         # 更新UI和地图
-        self.ui_updater['update_location_display'](location_type, name, data)
-        self.ui_updater['update_map_preview']()
+        self.ui_updater.update_location_display(location_type, name, data)
+        self.ui_updater.update_map_preview()
 
     def select_search_result(self, data: tuple):
         """
@@ -330,13 +330,13 @@ class SearchManager(QObject):
         # 根据搜索类型更新数据
         if searching_for == "start":
             self.data_manager.set_start_location(coords, clean_name, level)
-            self.ui_updater['update_start_from_search'](clean_name, data)
+            self.ui_updater.update_start_from_search(clean_name, data)
         elif searching_for == "end":
             self.data_manager.set_end_location(coords, clean_name, level)
-            self.ui_updater['update_end_from_search'](clean_name, data)
+            self.ui_updater.update_end_from_search(clean_name, data)
         elif searching_for == "waypoint":
             self.data_manager.add_waypoint(coords, clean_name)
-            self.ui_updater['add_waypoint_to_list'](clean_name, data, level)
+            self.ui_updater.add_waypoint_to_list(clean_name, data, level)
 
         # 预览选中的搜索结果，传递type_info和radius以便根据地址类型和实际范围进行缩放
         # 构造完整的result_data字典，包含坐标系统信息
@@ -352,7 +352,7 @@ class SearchManager(QObject):
         }
         # preview_search_result 方法已经完整渲染并显示了地图，包含选中点和搜索结果
         # 因此不需要再调用 update_map_preview
-        self.ui_updater['preview_search_result'](coords, clean_name, level, type_info, radius, result_data)
+        self.ui_updater.preview_search_result(coords, clean_name, level, type_info, radius, result_data)
 
     def _save_to_history(self, search_text: str, result: dict):
         """
@@ -426,7 +426,7 @@ class SearchManager(QObject):
         self.logger.debug(f"[搜索历史] search_results 内容: {self.data_manager.search_results}")
 
         # 直接在地图上预览（不需要搜索）
-        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius)
+        self.ui_updater.preview_search_result(coords, name, level, type_info, radius)
 
     def select_result_from_dropdown(self, result: dict, search_text: str):
         """
@@ -454,7 +454,7 @@ class SearchManager(QObject):
         self._save_to_history(search_text, result)
 
         # 在地图上预览并缩放到对应范围，传递完整的result作为result_data
-        self.ui_updater['preview_search_result'](coords, name, level, type_info, radius, result)
+        self.ui_updater.preview_search_result(coords, name, level, type_info, radius, result)
 
     def clear_search_results(self):
         """清空搜索结果
@@ -462,5 +462,5 @@ class SearchManager(QObject):
         清除所有搜索结果，并重置界面显示。
         """
         self.data_manager.clear_search_results()
-        self.ui_updater['clear_results_list']()
-        self.ui_updater['set_results_title']("搜索结果")
+        self.ui_updater.clear_results_list()
+        self.ui_updater.set_results_title("搜索结果")

@@ -14,7 +14,10 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
 import sys
 import os
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.ui_callbacks import UICallbacks
 
 # 确保日志重定向生效 - 必须在其他导入之前执行
 import core.logging_setup
@@ -119,7 +122,7 @@ class GpxStudio(InitMixin, HiddenUIMixin, SearchMixin, UICallbacksMixin,
     last_window_geometry: Any
     logger_callbacks: Optional[dict]
     active_popups: Optional[list]
-    ui_updater: Optional[dict]
+    ui_updater: Optional["UICallbacks"]
 
     def __init__(self, splash_screen=None):
         """

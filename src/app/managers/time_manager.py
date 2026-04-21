@@ -39,16 +39,16 @@ class TimeManager:
             time_type: 时间类型，目前只支持 "start"（起始时间）
         """
         # 自动关闭已打开的时间选择面板
-        self.ui_updater['hide_time_panel']()
+        self.ui_updater.hide_time_panel()
 
         self.time_type = time_type
-        self.ui_updater['setup_date_panel_callback'](self.on_date_selected)
+        self.ui_updater.setup_date_panel_callback(self.on_date_selected)
 
         # 设置当前选中的日期
-        current_date = self.ui_updater['get_start_time']().date()
+        current_date = self.ui_updater.get_start_time().date()
 
         # 显示日期面板
-        self.ui_updater['show_date_panel'](current_date)
+        self.ui_updater.show_date_panel(current_date)
 
     def on_date_selected(self, selected_date):
         """
@@ -60,12 +60,12 @@ class TimeManager:
         # 只处理起始时间
         if self.time_type == "start":
             # 更新起始日期
-            current_time = self.ui_updater['get_start_time']().time()
+            current_time = self.ui_updater.get_start_time().time()
             new_datetime = QDateTime(
                 selected_date.year, selected_date.month, selected_date.day,
                 current_time.hour(), current_time.minute()
             )
-            self.ui_updater['set_start_time'](new_datetime)
+            self.ui_updater.set_start_time(new_datetime)
 
             # 自动计算结束时间
             self.calculate_times()
@@ -78,16 +78,16 @@ class TimeManager:
             time_type: 时间类型，目前只支持 "start"（起始时间）
         """
         # 自动关闭已打开的日期选择面板
-        self.ui_updater['hide_date_panel']()
+        self.ui_updater.hide_date_panel()
 
         self.time_type = time_type
-        self.ui_updater['setup_time_panel_callback'](self.on_time_selected)
+        self.ui_updater.setup_time_panel_callback(self.on_time_selected)
 
         # 设置当前选中的时间
-        current_time = self.ui_updater['get_start_time']().time()
+        current_time = self.ui_updater.get_start_time().time()
 
         # 显示时间面板
-        self.ui_updater['show_time_panel'](current_time)
+        self.ui_updater.show_time_panel(current_time)
 
     def on_time_selected(self, selected_time):
         """
@@ -99,12 +99,12 @@ class TimeManager:
         # 只处理起始时间
         if self.time_type == "start":
             # 更新起始时间
-            current_date = self.ui_updater['get_start_time']().date()
+            current_date = self.ui_updater.get_start_time().date()
             new_datetime = QDateTime(
                 current_date.year(), current_date.month(), current_date.day(),
                 selected_time.hour, selected_time.minute
             )
-            self.ui_updater['set_start_time'](new_datetime)
+            self.ui_updater.set_start_time(new_datetime)
 
             # 自动计算结束时间
             self.calculate_times()
@@ -123,10 +123,10 @@ class TimeManager:
         """
         try:
             # 获取起始时间
-            start_datetime = self.ui_updater['get_start_time']()
+            start_datetime = self.ui_updater.get_start_time()
 
             # 从文本框获取经历小时数
-            duration_text = self.ui_updater['get_duration']().strip()
+            duration_text = self.ui_updater.get_duration().strip()
             if not duration_text:
                 duration_hours = 1  # 默认1小时
             else:
@@ -141,7 +141,7 @@ class TimeManager:
             end_datetime = start_datetime.addSecs(duration_seconds)
 
             # 更新结束时间显示
-            self.ui_updater['set_end_time'](end_datetime)
+            self.ui_updater.set_end_time(end_datetime)
 
         except Exception as e:
             self.logger.warning(f"计算时间时出错: {str(e)}")
