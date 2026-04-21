@@ -5,8 +5,8 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QCursor
 from PyQt5.QtCore import QRect
 
-from modules.map.js_bridge import MapJsBridge
-from modules.map.map_renderer import MapRenderer
+from modules.map import MapJsBridge
+from modules.map import MapRenderer
 from services.config.map_config import map_config
 
 

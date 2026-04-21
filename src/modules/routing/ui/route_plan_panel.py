@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
 from ui.popups.location_history_popup import LocationHistoryPopup
-from modules.search.storage.geo_info_storage import GeoInfoStorage
+from modules.search import GeoInfoStorage
 
 
 class RouteHistoryItem(QWidget):
@@ -2148,7 +2148,7 @@ class RoutePlanPanel(QWidget):
             self.load_history(self._last_history_list)
         else:
             # 如果没有保存的历史记录，从存储中加载
-            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            from modules.routing import RouteHistoryStorage
             storage = RouteHistoryStorage()
             history_list = storage.get_history(10)
             self.load_history(history_list)

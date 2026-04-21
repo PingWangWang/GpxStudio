@@ -26,6 +26,7 @@ import hashlib
 from typing import Optional, Callable, List, Tuple
 
 from domain.services.routing_service import IRoutingService
+from modules.geolocation import CoordinateTransform
 
 
 class GaodeRoutingService(IRoutingService):
@@ -611,7 +612,6 @@ class GaodeRoutingService(IRoutingService):
                 # 保存原始GCJ-02坐标，用于高德地图直接渲染
                 # 同时将GCJ-02坐标转换为WGS-84坐标，以便统一存储和导出
                 # 所有保存在本地的路线都应该使用国际坐标系WGS-84坐标
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 original_gcj02_points = route_points.copy()
                 wgs84_route_points = []
                 for point in route_points:

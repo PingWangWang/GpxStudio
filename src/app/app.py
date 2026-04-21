@@ -26,10 +26,10 @@ import core.logging_setup
 from core.signals import SignalManager
 
 # 导入模块
-from modules.geolocation.geolocation import GeolocationHandler
-from modules.map.webengine import ConsoleWebEnginePage
-from modules.map.map_renderer import MapRenderer
-from modules.map.js_bridge import MapJsBridge
+from modules.geolocation import GeolocationHandler
+from modules.map import ConsoleWebEnginePage
+from modules.map import MapRenderer
+from modules.map import MapJsBridge
 from services.config.map_config import map_config
 from ui.icons.icon_manager import create_icon_button
 

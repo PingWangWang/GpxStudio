@@ -8,6 +8,7 @@ from typing import List, Optional
 from PyQt5.QtWidgets import QMessageBox, QListWidgetItem, QApplication
 from PyQt5.QtCore import Qt, QObject, pyqtSlot
 from services.config.map_config import map_config
+from modules.geolocation import CoordinateTransform
 from core.background_task import TaskPriority
 from ..storage import GeoInfoStorage
 
@@ -382,7 +383,6 @@ class SearchManager(QObject):
         # 检查当前地图源需要的坐标系统
         from services.config.map_config import map_config
         current_map_source = map_config.get_map_source()
-        from modules.geolocation.coordinate_transform import CoordinateTransform
         current_coord_system = CoordinateTransform.coord_system_for_map_source(current_map_source)
 
         # 如果坐标系统不匹配，需要转换

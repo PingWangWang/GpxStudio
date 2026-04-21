@@ -7,7 +7,7 @@
 from typing import Optional, Callable
 from PyQt5.QtWidgets import QMessageBox, QApplication
 from PyQt5.QtCore import QObject, pyqtSlot
-from modules.geolocation.location_helper import LocationHelper
+from modules.geolocation import LocationHelper
 from services.config.map_config import map_config
 from core.background_task import TaskPriority
 

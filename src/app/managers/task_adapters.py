@@ -4,7 +4,9 @@
 """
 
 from typing import Optional, Dict, Any, Callable
-from modules.geolocation.location_helper import LocationHelper
+from modules.geolocation import LocationHelper
+from modules.geolocation import CoordinateTransform
+from modules.map import MapRenderer
 from services.config.map_config import map_config
 
 
@@ -285,9 +287,6 @@ class MapRenderTaskAdapter:
             if cancel_check():
                 return None
 
-            # 导入MapRenderer
-            from modules.map.map_renderer import MapRenderer
-
             # 确定坐标系统（高德路线规划结果为GCJ-02）
             is_route_planned = hasattr(data_manager, 'route_alternatives') and data_manager.route_alternatives
             coord_system = 'GCJ-02' if map_source == 'gaode' and is_route_planned else 'WGS-84'
@@ -344,7 +343,6 @@ class MapRenderTaskAdapter:
 
             # 处理坐标转换：仅当使用高德且路线点为WGS-84时转换
             if map_source == 'gaode' and coord_system == 'WGS-84':
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 transformed_route_points = []
                 for point in route_points:
                     if point:
@@ -370,7 +368,6 @@ class MapRenderTaskAdapter:
             bounds_points = route_points
             if map_source == 'gaode' and coord_system == 'WGS-84':
                 # 当前地图源是高德地图，路线点为WGS-84时需要转换为GCJ-02坐标
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 transformed_bounds_points = []
                 for point in bounds_points:
                     if point:

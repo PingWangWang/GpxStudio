@@ -23,7 +23,7 @@ from .time_manager import TimeManager
 from .update_manager import UpdateManager
 
 # 为了向后兼容，从新位置导入 SearchManager
-from modules.search.managers import SearchManager
+from modules.search import SearchManager
 
 __all__ = [
     'WindowManager',

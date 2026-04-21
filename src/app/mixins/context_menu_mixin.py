@@ -1,6 +1,7 @@
 """ContextMenuMixin — 右键菜单及地图点击相关处理方法"""
 from PyQt5.QtCore import Qt
-from modules.map.map_renderer import MapRenderer
+from modules.map import MapRenderer
+from modules.geolocation import CoordinateTransform
 from services.config.map_config import map_config
 
 
@@ -136,7 +137,6 @@ class ContextMenuMixin:
     def _resolve_map_click_address(self, lat: float, lon: float) -> dict:
         """将地图点击坐标解析为地址信息（含逆地理编码）。"""
         map_source = map_config.get_map_source()
-        from modules.geolocation.coordinate_transform import CoordinateTransform
         coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
 
         address_name = f'位置 ({lat:.6f}, {lon:.6f})'
@@ -326,7 +326,7 @@ class ContextMenuMixin:
 
         self.center_point_marker = (lat, lon)
 
-        from modules.map.webengine import MapJsBridge
+        from modules.map import MapJsBridge
         if self.map_view and self.map_view.page():
             MapJsBridge.pan_to_center(self.map_view.page(), lat, lon)
             self.logger.info(f"[右键菜单] 已执行地图中心点平移和箭头标记 JavaScript 代码")

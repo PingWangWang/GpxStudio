@@ -10,7 +10,7 @@ class UpdateMixin:
     def _on_history_delete_clicked(self, history_data: dict):
         """删除历史记录"""
         from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot
-        from modules.routing.storage.route_history_storage import RouteHistoryStorage
+        from modules.routing import RouteHistoryStorage
 
         # 1. 立即从界面中删除该记录
         current_history = []
@@ -48,7 +48,7 @@ class UpdateMixin:
     def _on_history_clear_all_clicked(self):
         """清空所有历史记录"""
         from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot
-        from modules.routing.storage.route_history_storage import RouteHistoryStorage
+        from modules.routing import RouteHistoryStorage
 
         # 1. 立即清空界面
         self.route_plan_panel.load_history([])

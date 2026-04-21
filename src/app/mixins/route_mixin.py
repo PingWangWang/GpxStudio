@@ -1,4 +1,6 @@
 """RouteMixin — 路线规划面板事件处理方法"""
+from modules.geolocation import CoordinateTransform
+from modules.map import MapRenderer
 from services.config.map_config import map_config
 
 
@@ -27,7 +29,7 @@ class RouteMixin:
                 500
             )
 
-            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            from modules.routing import RouteHistoryStorage
             fresh_storage = RouteHistoryStorage()
             history_list = fresh_storage.get_history(10)
             self.route_plan_panel.load_history(history_list)
@@ -262,7 +264,6 @@ class RouteMixin:
             self.logger.debug(f"[坐标系] 历史记录坐标系: {saved_coord_system}, 当前地图坐标系: {current_coord_system}")
 
             if saved_coord_system != current_coord_system:
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 lat_float, lng_float = CoordinateTransform.convert(lat_float, lng_float, saved_coord_system, current_coord_system)
                 self.logger.info(f"[坐标转换] {saved_coord_system} -> {current_coord_system}: ({address_data.get('lat')}, {address_data.get('lon')}) -> ({lat_float}, {lng_float})")
 
@@ -322,7 +323,6 @@ class RouteMixin:
                 self.data_manager.last_selected_type = address_data.get('type')
                 self.data_manager.last_map_center = (lat_float, lng_float)
 
-                from modules.map.map_renderer import MapRenderer
                 zoom_level = MapRenderer.get_zoom_by_level(
                     address_data.get('level'),
                     address_data.get('type'),
@@ -396,7 +396,6 @@ class RouteMixin:
                 saved_coord_system = start_coord_system or 'WGS-84'
 
                 if saved_coord_system != current_coord_system:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     lat, lon = CoordinateTransform.convert(start_coords[0], start_coords[1], saved_coord_system, current_coord_system)
                     start_coords = (lat, lon)
                     self.logger.info(f"[路线面板] 起点坐标已转换: {saved_coord_system} → {current_coord_system}")
@@ -410,7 +409,6 @@ class RouteMixin:
                 saved_coord_system = end_coord_system or 'WGS-84'
 
                 if saved_coord_system != current_coord_system:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     lat, lon = CoordinateTransform.convert(end_coords[0], end_coords[1], saved_coord_system, current_coord_system)
                     end_coords = (lat, lon)
                     self.logger.info(f"[路线面板] 终点坐标已转换: {saved_coord_system} → {current_coord_system}")
@@ -435,7 +433,6 @@ class RouteMixin:
                             saved_coord_system = waypoint_coord_systems[i] or 'WGS-84'
 
                         if saved_coord_system != current_coord_system:
-                            from modules.geolocation.coordinate_transform import CoordinateTransform
                             lat, lon = CoordinateTransform.convert(coords[0], coords[1], saved_coord_system, current_coord_system)
                             coords = (lat, lon)
                             self.logger.info(f"[路线面板] 途径点{i+1}坐标已转换: {saved_coord_system} → {current_coord_system}")

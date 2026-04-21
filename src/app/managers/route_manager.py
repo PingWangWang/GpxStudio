@@ -9,6 +9,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QApplication
 from PyQt5.QtCore import QDateTime, QObject, pyqtSlot
 from services.config.map_config import map_config
+from modules.geolocation import CoordinateTransform
 from core.background_task import TaskPriority
 
 
@@ -352,7 +353,6 @@ class RouteManager(QObject):
                             # 路线历史存储的add_record方法只涉及文件IO操作
                             if self.route_history_storage:
                                 map_source = map_config.get_map_source()
-                                from modules.geolocation.coordinate_transform import CoordinateTransform
                                 coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                                 # 直接调用存储的add_record方法
                                 info = {
@@ -416,7 +416,6 @@ class RouteManager(QObject):
                 def save_history():
                     try:
                         map_source = map_config.get_map_source()
-                        from modules.geolocation.coordinate_transform import CoordinateTransform
                         coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                         # 直接调用存储的add_record方法
                         info = {

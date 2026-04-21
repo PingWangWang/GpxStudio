@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QApplication, QDialog)
 from PyQt5.QtCore import QTimer, QPoint
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 
-from modules.map.js_bridge import MapJsBridge
+from modules.map import MapJsBridge
 from services.config.map_config import map_config
 from app.ui_callbacks import UICallbacks
 
@@ -125,7 +125,7 @@ class InitMixin:
 
     def _init_signals(self):
         from core.signals import SignalManager
-        from modules.geolocation.geolocation import GeolocationHandler
+        from modules.geolocation import GeolocationHandler
         print("开始初始化信号系统")
         self.signal_manager = SignalManager()
         self.geolocation_handler = GeolocationHandler(signal_manager=self.signal_manager)
@@ -157,8 +157,8 @@ class InitMixin:
 
     def _init_search_popups(self):
         try:
-            from modules.search.ui.search_history_popup import SearchHistoryPopup
-            from modules.search.ui.search_results_popup import SearchResultsPopup
+            from modules.search import SearchHistoryPopup
+            from modules.search import SearchResultsPopup
             self.search_history_popup = SearchHistoryPopup(self)
             self.search_history_popup.history_selected.connect(self._on_history_selected)
             self.search_results_popup = SearchResultsPopup(self)
@@ -186,8 +186,8 @@ class InitMixin:
 
     def _init_route_plan_panel(self):
         try:
-            from modules.routing.ui.route_plan_panel import RoutePlanPanel
-            from modules.routing.storage.route_history_storage import RouteHistoryStorage
+            from modules.routing import RoutePlanPanel
+            from modules.routing import RouteHistoryStorage
 
             self.route_history_storage = RouteHistoryStorage()
             self.route_plan_panel = RoutePlanPanel(self)
@@ -211,7 +211,7 @@ class InitMixin:
     # ------------------------------------------------------------------ #
 
     def _recreate_map_view(self):
-        from modules.map.webengine import ConsoleWebEnginePage
+        from modules.map import ConsoleWebEnginePage
         try:
             self.logger.info("开始重新创建地图视图")
             self.map_view = QWebEngineView(self)
@@ -232,7 +232,7 @@ class InitMixin:
             return False
 
     def _create_map_view(self):
-        from modules.map.webengine import ConsoleWebEnginePage
+        from modules.map import ConsoleWebEnginePage
         QApplication.processEvents()
         self.map_view = QWebEngineView(self)
         if self._widget_refs is None:

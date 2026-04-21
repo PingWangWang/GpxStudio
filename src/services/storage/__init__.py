@@ -6,6 +6,6 @@
 """
 
 # 为了向后兼容，从新位置导入
-from modules.search.storage import GeoInfoStorage
+from modules.search import GeoInfoStorage
 
 __all__ = ['GeoInfoStorage']

@@ -5,7 +5,8 @@
 
 from typing import List, Tuple, Optional
 from PyQt5.QtCore import QUrl
-from modules.map.map_renderer import MapRenderer
+from modules.map import MapRenderer
+from modules.geolocation import CoordinateTransform
 from services.config.map_config import map_config
 from .map_view_state_manager import MapViewStateManager
 
@@ -217,7 +218,6 @@ class MapManager:
 
                 # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:
@@ -351,7 +351,6 @@ class MapManager:
             
             # 只有当坐标系不正确时才进行转换
             if not has_correct_coord_system:
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 # 转换地图中心点坐标
                 center_lat, center_lon = CoordinateTransform.wgs84_to_gcj02(center_lat, center_lon)
                 center_coord_system = 'GCJ-02'  # 转换后坐标系为GCJ-02
@@ -403,7 +402,6 @@ class MapManager:
 
                 # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:
@@ -434,7 +432,6 @@ class MapManager:
                     # 如果路线是通过路线规划服务获取的，那么边界点坐标已经是GCJ-02坐标，不需要转换
                     # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
                     if not is_route_planned:
-                        from modules.geolocation.coordinate_transform import CoordinateTransform
                         # 转换边界点坐标
                         transformed_bounds_coords = []
                         for coords in bounds_coords:
@@ -506,7 +503,6 @@ class MapManager:
                 self.logger.debug(f"[重载地图] JavaScript返回坐标系: WGS-84 (当前是OSM地图)")
             else:
                 # 首次加载或未知，根据目标地图源推测
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
                 self.logger.warning(f"[重载地图] 无法确定当前坐标系，根据目标地图源推测: {coord_system}")
         else:
@@ -567,7 +563,6 @@ class MapManager:
                         pass
                 
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:
@@ -622,7 +617,6 @@ class MapManager:
 
         # 推断坐标系：右键菜单传入的坐标与当前地图源一致
         # 高德地图：GCJ-02，OSM地图：WGS-84
-        from modules.geolocation.coordinate_transform import CoordinateTransform
         coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
 
         # 获取地图模式
@@ -666,7 +660,6 @@ class MapManager:
 
                 # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:
@@ -888,7 +881,6 @@ class MapManager:
 
             # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
             if not has_original_gcj02:
-                from modules.geolocation.coordinate_transform import CoordinateTransform
                 transformed_route_points = []
                 for point in route_points_to_render:
                     if point is not None:
@@ -917,7 +909,6 @@ class MapManager:
         bounds_points = valid_points
         if map_source == 'gaode':
             # 当前地图源是高德地图，所有存储的路线数据都是WGS-84坐标，需要转换为GCJ-02坐标
-            from modules.geolocation.coordinate_transform import CoordinateTransform
             # 转换边界点坐标
             transformed_bounds_points = []
             for point in bounds_points:
@@ -1023,7 +1014,6 @@ class MapManager:
 
                 # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:
@@ -1093,7 +1083,6 @@ class MapManager:
             if not self.data_manager.route_points:
                 return default
             # 使用路线点（WGS-84）与GCJ->WGS转换后距离判断
-            from modules.geolocation.coordinate_transform import CoordinateTransform
 
             # 取路线起终点作为参考
             route_points = [p for p in self.data_manager.route_points if p is not None]
@@ -1417,7 +1406,7 @@ class MapManager:
         当JavaScript更新失败时，快速重建地图但保持当前视图
         """
         import time
-        from modules.map.map_renderer import MapRenderer
+        from modules.map import MapRenderer
         from services.config.map_config import map_config
 
         start_time = time.time()
@@ -1475,7 +1464,7 @@ class MapManager:
             title: 地图标题
             coord_system: 传入坐标的坐标系统 ('WGS-84' 或 'GCJ-02')，默认 'WGS-84'
         """
-        from modules.map.map_renderer import MapRenderer
+        from modules.map import MapRenderer
         from services.config.map_config import map_config
 
         # 获取地图模式
@@ -1537,7 +1526,6 @@ class MapManager:
 
                 # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
                 if not has_original_gcj02:
-                    from modules.geolocation.coordinate_transform import CoordinateTransform
                     transformed_route_points = []
                     for point in route_points_to_render:
                         if point is not None:

@@ -9,6 +9,7 @@ import tempfile
 from PyQt5.QtCore import QUrl
 
 from .gaode_tiles import GaodeTileService
+from modules.geolocation import CoordinateTransform
 from services.config.map_config import map_config
 
 
@@ -215,7 +216,6 @@ class MapRenderer:
         map_center = center
         target_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
         if coord_system != target_system:
-            from modules.geolocation.coordinate_transform import CoordinateTransform
             converted = CoordinateTransform.convert(center[0], center[1], coord_system, target_system)
             map_center = list(converted)
         # 否则直接使用（坐标系统匹配）
@@ -582,7 +582,6 @@ class MapRenderer:
         marker_location = location
         target_system = 'GCJ-02' if map_source == 'gaode' else 'WGS-84'
         if coord_system != target_system:
-            from modules.geolocation.coordinate_transform import CoordinateTransform
             converted = CoordinateTransform.convert(location[0], location[1], coord_system, target_system)
             marker_location = list(converted)
         # 否则直接使用（坐标系统匹配）

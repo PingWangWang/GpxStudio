@@ -7,8 +7,8 @@ from services.gaode.gaode_geocoding import GaodeGeocodingService
 from services.gaode.gaode_routing import GaodeRoutingService
 from services.osm.osm_geocoding import OsmGeocodingService
 from services.osm.osm_routing import OsmRoutingService
-from modules.gpx.gpx_export import GpxExportService
-from modules.geolocation.windows_location import WindowsLocationService
+from modules.gpx import GpxExportService
+from modules.geolocation import WindowsLocationService
 from services.config.map_config import map_config
 from core.di import di_container
 from domain.services.geocoding_service import IGeocodingService

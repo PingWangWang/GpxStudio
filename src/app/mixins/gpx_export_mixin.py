@@ -1,4 +1,7 @@
 """GpxExportMixin — GPX 导出功能相关方法"""
+import os
+from modules.gpx import GpxExportService
+from services.config.map_config import map_config
 
 
 class GpxExportMixin:
@@ -118,8 +121,6 @@ class GpxExportMixin:
         """执行GPX文件导出"""
         try:
             from PyQt5.QtWidgets import QFileDialog
-            from modules.gpx.gpx_export import GpxExportService
-            import os
             from PyQt5.QtCore import QThread, pyqtSignal
 
             self.logger.info(f"[GPX导出] 开始导出GPX文件，导出海拔数据: {export_elevation}")
