@@ -144,7 +144,8 @@ def run_pyinstaller():
     data_files = [
         ("src/services/config/config", "services/config/config"),
         ("src/ui", "ui"), ("src/modules", "modules"), ("src/services", "services"),
-        ("src/core", "core"), ("src/app", "app"), ("version.py", "."),
+        ("src/core", "core"), ("src/app", "app"), ("src/infrastructure", "infrastructure"),
+        ("src/domain", "domain"), ("version.py", "."),
         ("res/GPXStudio.png", "res"), ("res/GPXStudio.ico", "res"),
         ("res/icons/Loading.svg", "res/icons")
     ]
@@ -161,7 +162,12 @@ def run_pyinstaller():
         "geopy.distance", "geopy.geocoders", "gpxpy", "folium", "folium.plugins",
         "xyzservices", "jinja2", "branca", "core.resource_path", "version",
         "PyQt5.QtWebKit", "winrt.windows.devices.geolocation",
-        "http.server", "socketserver", "tempfile", "threading"
+        "winrt.windows.foundation", "winrt.windows.foundation.collections",
+        "http.server", "socketserver", "tempfile", "threading",
+        "injector",
+        "timezonefinder", "pytz",
+        "numpy", "pandas",
+        "pkg_resources", "pkg_resources.py2_compat",
     ]
     for imp in hidden_imports:
         command.extend(["--hidden-import", imp])
@@ -169,10 +175,16 @@ def run_pyinstaller():
     command.append("main.py")
     
     print("[GPXStudio] 正在构建...")
-    build_steps = {
-        "analyzing": 10, "collecting": 25, "building exe": 40, "building pkg": 55,
-        "copying": 70, "extracting": 85, "completed successfully": 100
-    }
+    # 按阶段顺序排列，确保进度单调递增
+    build_steps = [
+        ("analyzing",            10),
+        ("collecting",           25),
+        ("building exe",         40),
+        ("building pkg",         55),
+        ("copying",              70),
+        ("extracting",           85),
+        ("completed successfully", 99),
+    ]
     
     current_progress = 0
     start_time = time.time()
@@ -185,12 +197,17 @@ def run_pyinstaller():
         line_lower = line.strip().lower()
         current_time = time.time()
         
-        matched_progress = next((p for k, p in build_steps.items() if k in line_lower), 0)
-        if matched_progress > 0:
-            current_progress = matched_progress
-        elif current_time - last_update_time > 2 and current_progress < 90:
-            current_progress += 2
-            last_update_time = current_time
+        # 只取比当前进度更大的匹配值，保证单调递增
+        for keyword, progress in build_steps:
+            if keyword in line_lower and progress > current_progress:
+                current_progress = progress
+                last_update_time = current_time
+                break
+        else:
+            # 无关键词匹配时，每2秒小步递增（上限90）
+            if current_time - last_update_time > 2 and current_progress < 90:
+                current_progress += 1
+                last_update_time = current_time
             
         bar_length = 50
         filled_length = int(bar_length * min(current_progress, 99) // 100)
@@ -198,7 +215,7 @@ def run_pyinstaller():
         elapsed_time = current_time - start_time
         
         ts = datetime.now().strftime("%H:%M:%S")
-        sys.stdout.write(f"\r[{ts}] 构建中 [{bar}] {current_progress:.0f}% ({elapsed_time:.0f}s) ")
+        sys.stdout.write(f"\r[{ts}] 构建中 [{bar}] {current_progress}% ({elapsed_time:.0f}s) ")
         sys.stdout.flush()
     
     process.wait()
