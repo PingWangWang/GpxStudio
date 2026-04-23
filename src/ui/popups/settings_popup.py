@@ -251,7 +251,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 250)  # 减少高度
+        self.setFixedSize(300, 280)  # 容纳海拔获取下拉框
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -655,6 +655,41 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 添加关闭动作行
         config_layout.addLayout(close_action_row)
 
+        # 海拔获取方式下拉框
+        self.elevation_mode_combo = QComboBox()
+        self.elevation_mode_combo.addItem("优化模式（最多1000点）", True)
+        self.elevation_mode_combo.addItem("全量模式（按实际点数）", False)
+        self.elevation_mode_combo.setFixedHeight(30)
+        self.elevation_mode_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.elevation_mode_combo.setStyleSheet(self.map_source_combo.styleSheet())
+
+        elevation_mode_container = QWidget()
+        elevation_mode_layout = QHBoxLayout(elevation_mode_container)
+        elevation_mode_layout.setContentsMargins(0, 0, 0, 0)
+        elevation_mode_layout.addWidget(self.elevation_mode_combo)
+        elevation_mode_placeholder = QPushButton()
+        elevation_mode_placeholder.setFixedSize(30, 30)
+        elevation_mode_placeholder.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
+        elevation_mode_placeholder.setEnabled(False)
+        elevation_mode_layout.addWidget(elevation_mode_placeholder)
+        elevation_mode_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        elevation_row = QHBoxLayout()
+        elevation_label = QLabel("海拔获取:")
+        elevation_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        elevation_label.setFixedWidth(80)
+        elevation_label.setFixedHeight(30)
+        elevation_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        elevation_row.addWidget(elevation_label)
+        elevation_row.addSpacing(10)
+        elevation_row.addWidget(elevation_mode_container)
+        elevation_row.setContentsMargins(0, 0, 0, 0)
+        elevation_row.setSpacing(0)
+        elevation_row.setStretch(0, 0)
+        elevation_row.setStretch(1, 0)
+        elevation_row.setStretch(2, 1)
+        config_layout.addLayout(elevation_row)
+
         main_layout.addLayout(config_layout)
 
         # 添加分隔线，美化布局并增加与底部按钮的间距
@@ -777,6 +812,11 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.saved_security_key = security_key
         self.on_map_source_changed(self.map_source_combo.currentIndex())
 
+        # 加载海拔获取方式
+        elevation_optimize = map_config.get_elevation_optimize()
+        idx = self.elevation_mode_combo.findData(elevation_optimize)
+        self.elevation_mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
 
     def save_config(self):
         """保存配置"""
@@ -812,7 +852,8 @@ class MapSettingsPopup(BaseSettingsPopup):
             "map_source": map_source,
             "close_action": close_action,
             "api_key": api_key,
-            "security_key": security_key
+            "security_key": security_key,
+            "elevation_optimize": self.elevation_mode_combo.currentData()
         }
 
         if map_config.save_config(config):
