@@ -60,6 +60,7 @@ class LocationInfoPopup(QWidget):
         
         # 关闭按钮
         close_button = QPushButton("✕")
+        close_button.setToolTip("关闭")
         close_button.setFixedSize(24, 24)
         close_button.setStyleSheet("""
             QPushButton {

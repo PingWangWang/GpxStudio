@@ -489,6 +489,8 @@ class AddressSuggestionItem(QWidget):
 
 # 驾车模式途径点最大数量（高德 API 限制为 16）
 MAX_WAYPOINTS = 16
+# 途径点每行估算高度（含间距），用于滚动区域高度计算
+WAYPOINT_ROW_HEIGHT = 48
 
 
 class RoutePlanPanel(QWidget):
@@ -750,8 +752,8 @@ class RoutePlanPanel(QWidget):
         self.waypoints_scroll.setWidgetResizable(True)
         self.waypoints_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.waypoints_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.waypoints_scroll.setMaximumHeight(200)
         self.waypoints_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }"
+                                            "QScrollArea > QWidget > QWidget { background: transparent; }"
                                             "QScrollBar:vertical { width: 6px; }")
         self.waypoints_scroll.setWidget(self.waypoints_container)
         self.waypoints_scroll.setVisible(False)
@@ -823,6 +825,7 @@ class RoutePlanPanel(QWidget):
 
         # 清除路线按钮（左对齐）
         self.clear_button = QPushButton("清除路线")
+        self.clear_button.setToolTip("清除当前路线和所有标记")
         self.clear_button.setFixedWidth(110)
         self.clear_button.setStyleSheet("""
             QPushButton {
@@ -848,6 +851,7 @@ class RoutePlanPanel(QWidget):
 
         # 开车去按钮（右对齐，与终点文本框右对齐）
         self.plan_button = QPushButton("开车去")
+        self.plan_button.setToolTip("规划路线")
         self.plan_button.setFixedWidth(110)
         self.plan_button.setStyleSheet("""
             QPushButton {
@@ -1495,6 +1499,9 @@ class RoutePlanPanel(QWidget):
             self.add_waypoint_button.setEnabled(False)
             self.add_waypoint_button.setToolTip(f"最多添加{MAX_WAYPOINTS}个途径点")
 
+        # 动态调整滚动区域高度
+        self._update_waypoints_scroll_height()
+
     def _remove_waypoint(self, container):
         """删除途径点"""
         # 找到对应的widget
@@ -1534,7 +1541,25 @@ class RoutePlanPanel(QWidget):
                     self.add_waypoint_button.setEnabled(True)
                     self.add_waypoint_button.setToolTip("添加途径点")
 
+                # 动态调整滚动区域高度
+                self._update_waypoints_scroll_height()
+
                 break
+
+    def _update_waypoints_scroll_height(self):
+        """根据途径点数量动态调整滚动区域高度
+
+        途径点 ≤ 5 个时：固定高度为途径点总行数，完整显示全部途径点
+        途径点 > 5 个时：固定高度为 5 行，超出部分滚动查看
+        """
+        waypoint_count = len(self.waypoint_widgets)
+        if waypoint_count == 0:
+            return
+        if waypoint_count <= 5:
+            height = waypoint_count * WAYPOINT_ROW_HEIGHT
+        else:
+            height = 5 * WAYPOINT_ROW_HEIGHT
+        self.waypoints_scroll.setFixedHeight(height)
 
     def _renumber_waypoints(self):
         """重新编号途径点"""

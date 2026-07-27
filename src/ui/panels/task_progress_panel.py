@@ -71,6 +71,7 @@ class TaskProgressWidget(QWidget):
         cancel_layout.setContentsMargins(0, 0, 0, 0)
 
         self.cancel_button = QPushButton("✕")
+        self.cancel_button.setToolTip("取消任务")
         self.cancel_button.setFixedSize(24, 24)
         self.cancel_button.setStyleSheet("""
             QPushButton {

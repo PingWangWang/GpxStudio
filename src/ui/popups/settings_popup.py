@@ -80,6 +80,7 @@ class CustomMessageBox(QWidget):
 
         ok_button = QPushButton(button_text)
         ok_button.clicked.connect(self.close)
+        ok_button.setToolTip("确认并保存设置")
         button_layout.addWidget(ok_button)
 
         button_layout.addStretch()
@@ -350,6 +351,7 @@ class MapSettingsPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)
@@ -474,6 +476,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.api_key_eye_btn = QPushButton("👁️")
         self.api_key_eye_btn.setFixedSize(30, 30)
         self.api_key_eye_btn.clicked.connect(self.toggle_api_key_visibility)
+        self.api_key_eye_btn.setToolTip("显示/隐藏API密钥")
         self.api_key_eye_btn.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -513,6 +516,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.security_key_eye_btn = QPushButton("👁️")
         self.security_key_eye_btn.setFixedSize(30, 30)
         self.security_key_eye_btn.clicked.connect(self.toggle_security_key_visibility)
+        self.security_key_eye_btn.setToolTip("显示/隐藏安全密钥")
         self.security_key_eye_btn.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -706,6 +710,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
+        self.save_btn.setToolTip("保存当前配置")
         self.save_btn.setMinimumWidth(80)
         self.save_btn.setMinimumHeight(30)
         self.save_btn.setStyleSheet("""
@@ -1003,6 +1008,7 @@ class LogSettingsPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)
@@ -1073,6 +1079,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.open_log_btn = QPushButton("打开目录")
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
+        self.open_log_btn.setToolTip("打开日志文件所在目录")
         self.open_log_btn.setFixedHeight(30)
         self.open_log_btn.setStyleSheet("""
             QPushButton {
@@ -1116,6 +1123,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_log_btn = QPushButton("清理日志")
         self.clean_log_btn.clicked.connect(self.on_clean_logs)
+        self.clean_log_btn.setToolTip("清理日志文件")
         self.clean_log_btn.setFixedHeight(30)
         self.clean_log_btn.setStyleSheet("""
             QPushButton {
@@ -1159,6 +1167,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_geo_info_btn = QPushButton("清理信息")
         self.clean_geo_info_btn.clicked.connect(self.on_clean_geo_info)
+        self.clean_geo_info_btn.setToolTip("清理地理信息缓存")
         self.clean_geo_info_btn.setFixedHeight(30)
         self.clean_geo_info_btn.setStyleSheet("""
             QPushButton {
@@ -1202,6 +1211,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_route_history_btn = QPushButton("清理文件")
         self.clean_route_history_btn.clicked.connect(self.on_clean_route_history)
+        self.clean_route_history_btn.setToolTip("清理路线历史记录文件")
         self.clean_route_history_btn.setFixedHeight(30)
         self.clean_route_history_btn.setStyleSheet("""
             QPushButton {
@@ -1248,6 +1258,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_cache_btn = QPushButton("清理缓存")
         self.clean_cache_btn.clicked.connect(self.on_clean_cache)
+        self.clean_cache_btn.setToolTip("清理地图瓦片缓存")
         self.clean_cache_btn.setFixedHeight(30)
         self.clean_cache_btn.setStyleSheet("""
             QPushButton {
@@ -1485,6 +1496,7 @@ class AboutPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)

@@ -111,16 +111,19 @@ class MapContextMenu(QWidget):
 
         # 设为起点按钮
         self.start_button = QPushButton("🚩 设为起点")
+        self.start_button.setToolTip("在地图上标记起点位置")
         self.start_button.clicked.connect(self._on_set_as_start)
         button_layout.addWidget(self.start_button)
 
         # 添加途径点按钮
         self.waypoint_button = QPushButton("📌 添加途径点")
+        self.waypoint_button.setToolTip("在地图上添加一个途径点")
         self.waypoint_button.clicked.connect(self._on_add_as_waypoint)
         button_layout.addWidget(self.waypoint_button)
 
         # 设为终点按钮
         self.end_button = QPushButton("🏁 设为终点")
+        self.end_button.setToolTip("在地图上标记终点位置")
         self.end_button.clicked.connect(self._on_set_as_end)
         button_layout.addWidget(self.end_button)
 

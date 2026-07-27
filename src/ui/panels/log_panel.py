@@ -158,6 +158,7 @@ class LogPanel(QWidget):
         header_layout.addWidget(self.level_combo)
 
         clear_button = QPushButton("清空")
+        clear_button.setToolTip("清空日志内容")
         clear_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f0f0;

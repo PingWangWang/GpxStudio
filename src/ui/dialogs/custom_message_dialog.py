@@ -96,6 +96,7 @@ class CustomMessageDialog(QDialog):
         
         # 关闭按钮
         close_btn = QPushButton("✕")
+        close_btn.setToolTip("关闭")
         close_btn.setObjectName("closeButton")
         close_btn.setFixedSize(24, 24)
         close_btn.clicked.connect(self.reject)
@@ -131,11 +132,13 @@ class CustomMessageDialog(QDialog):
         
         if show_cancel:
             cancel_btn = QPushButton(cancel_text)
+            cancel_btn.setToolTip("取消")
             cancel_btn.setObjectName("secondaryButton")
             cancel_btn.clicked.connect(self.reject)
             button_layout.addWidget(cancel_btn)
         
         ok_btn = QPushButton(ok_text)
+        ok_btn.setToolTip("确认")
         ok_btn.setObjectName("primaryButton")
         ok_btn.clicked.connect(self.accept)
         button_layout.addWidget(ok_btn)
