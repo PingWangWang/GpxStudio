@@ -2,6 +2,7 @@
 from modules.geolocation import CoordinateTransform
 from modules.map import MapRenderer
 from services.config.map_config import map_config
+from modules.routing.ui.route_plan_panel import MAX_WAYPOINTS
 
 
 class RouteMixin:
@@ -452,9 +453,9 @@ class RouteMixin:
             if self.route_plan_panel is not None:
                 if mode == "driving":
                     waypoint_count = len(waypoint_coords)
-                    if waypoint_count >= 5:
+                    if waypoint_count >= MAX_WAYPOINTS:
                         self.route_plan_panel.add_waypoint_button.setEnabled(False)
-                        self.route_plan_panel.add_waypoint_button.setToolTip("最多添加5个途径点")
+                        self.route_plan_panel.add_waypoint_button.setToolTip(f"最多添加{MAX_WAYPOINTS}个途径点")
                     else:
                         self.route_plan_panel.add_waypoint_button.setEnabled(True)
                         self.route_plan_panel.add_waypoint_button.setToolTip("添加途径点")

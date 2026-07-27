@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt
 from modules.map import MapRenderer
 from modules.geolocation import CoordinateTransform
 from services.config.map_config import map_config
+from modules.routing.ui.route_plan_panel import MAX_WAYPOINTS
 
 
 class ContextMenuMixin:
@@ -207,8 +208,8 @@ class ContextMenuMixin:
             self.route_plan_panel.show()
             self._update_route_panel_position()
 
-        if len(self.route_plan_panel.waypoint_widgets) >= 5:
-            self.logger.warning("[右键菜单] 途径点已达到5个上限，无法添加")
+        if len(self.route_plan_panel.waypoint_widgets) >= MAX_WAYPOINTS:
+            self.logger.warning(f"[右键菜单] 途径点已达到{MAX_WAYPOINTS}个上限，无法添加")
             return
 
         geo = self._resolve_map_click_address(lat, lon)

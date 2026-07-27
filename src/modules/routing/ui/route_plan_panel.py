@@ -487,6 +487,10 @@ class AddressSuggestionItem(QWidget):
         """)
 
 
+# 驾车模式途径点最大数量（高德 API 限制为 16）
+MAX_WAYPOINTS = 16
+
+
 class RoutePlanPanel(QWidget):
     """路线规划面板"""
 
@@ -736,14 +740,22 @@ class RoutePlanPanel(QWidget):
 
         center_layout.addLayout(self.start_layout)
 
-        # 途径点容器
+        # 途径点容器（包裹在 QScrollArea 中，支持较多途径点时滚动查看）
         self.waypoints_container = QWidget()
         self.waypoints_layout = QVBoxLayout(self.waypoints_container)
         self.waypoints_layout.setContentsMargins(0, 0, 0, 0)
         self.waypoints_layout.setSpacing(8)
-        # 初始化时隐藏，确保不占用空间
         self.waypoints_container.setVisible(False)
-        center_layout.addWidget(self.waypoints_container)
+        self.waypoints_scroll = QScrollArea()
+        self.waypoints_scroll.setWidgetResizable(True)
+        self.waypoints_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.waypoints_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.waypoints_scroll.setMaximumHeight(200)
+        self.waypoints_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }"
+                                            "QScrollBar:vertical { width: 6px; }")
+        self.waypoints_scroll.setWidget(self.waypoints_container)
+        self.waypoints_scroll.setVisible(False)
+        center_layout.addWidget(self.waypoints_scroll)
 
         # 终点行（保存引用以便后续添加按钮）
         self.end_layout = QHBoxLayout()
@@ -1392,8 +1404,8 @@ class RoutePlanPanel(QWidget):
 
     def _add_waypoint(self):
         """添加途径点"""
-        # 检查途径点数量限制（最多5个）
-        if len(self.waypoint_widgets) >= 5:
+        # 检查途径点数量限制（最多 MAX_WAYPOINTS 个）
+        if len(self.waypoint_widgets) >= MAX_WAYPOINTS:
             return
 
         # 创建途径点行
@@ -1471,16 +1483,17 @@ class RoutePlanPanel(QWidget):
         # 将删除按钮添加到布局（在输入框右侧）
         waypoint_layout.addWidget(delete_button)
 
-        # 显示途径点容器
+        # 显示途径点容器和滚动区域
         self.waypoints_container.setVisible(True)
+        self.waypoints_scroll.setVisible(True)
 
         # 更新添加按钮位置
         self._update_add_button_position()
 
-        # 如果达到5个途径点，禁用添加按钮
-        if len(self.waypoint_widgets) >= 5:
+        # 如果达到上限，禁用添加按钮
+        if len(self.waypoint_widgets) >= MAX_WAYPOINTS:
             self.add_waypoint_button.setEnabled(False)
-            self.add_waypoint_button.setToolTip("最多添加5个途径点")
+            self.add_waypoint_button.setToolTip(f"最多添加{MAX_WAYPOINTS}个途径点")
 
     def _remove_waypoint(self, container):
         """删除途径点"""
@@ -1508,15 +1521,16 @@ class RoutePlanPanel(QWidget):
                 # 重新编号
                 self._renumber_waypoints()
 
-                # 如果没有途径点了，隐藏途径点容器
+                # 如果没有途径点了，隐藏途径点容器和滚动区域
                 if len(self.waypoint_widgets) == 0:
                     self.waypoints_container.setVisible(False)
+                    self.waypoints_scroll.setVisible(False)
 
                 # 更新添加按钮位置
                 self._update_add_button_position()
 
                 # 重新启用添加按钮（如果之前被禁用）
-                if len(self.waypoint_widgets) < 5:
+                if len(self.waypoint_widgets) < MAX_WAYPOINTS:
                     self.add_waypoint_button.setEnabled(True)
                     self.add_waypoint_button.setToolTip("添加途径点")
 
