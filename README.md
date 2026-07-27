@@ -118,7 +118,7 @@ python scripts/clean.py --cache    # 只清理缓存
 
 ```bash
 # 生成 onedir 目录（启动更快，适合制作安装包）
-python build/build_release_pyinstaller.py
+python build/build_pyinstaller.py
 
 # 生成安装包（Inno Setup）
 # 1) 先运行上面的打包脚本
@@ -138,6 +138,13 @@ python build/build_release_pyinstaller.py
 - **GPX**: gpxpy | **定位**: winrt (Windows原生)
 
 ## 版本历史
+
+**v2.1.0** (2026-07-27) - 途径点上限于涨至16个，支持滚动查看
+
+- 🗺️ **途径点扩展**：驾车途径点上限于涨至16个（原5个），对齐高德API能力
+- 🔄 **滚动适配**：途径点列表包裹QScrollArea，支持滚动查看，面板不溢出
+- 🔧 **常量化管理**：将硬编码5提取为MAX_WAYPOINTS常量，集中管理，方便后续调整
+- 📦 **依赖补全**：requirements.txt补全缺失的injector依赖
 
 **v2.0.36** (2026-02-20) - 定位功能优化与可靠性提升
 
