@@ -121,6 +121,7 @@ from core.logging_setup import clean_logs, open_log_directory, get_log_size, set
 from services.config import about_config
 import os
 from app.data_paths import get_geo_info_file, get_route_history_file, get_cache_dir, get_gaode_cache_dir, get_osm_cache_dir
+from core.resource_path import resource_path  # [修改] 用于动态获取图标文件绝对路径
 
 
 class CustomArrowButton(QPushButton):
@@ -373,6 +374,8 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.map_source_combo.setContentsMargins(0, 0, 0, 0)  # 移除所有内边距
 
         # 设置下拉框样式
+        # [修改] 箭头图标路径由 resource_path 动态生成，兼容开发/打包环境
+        _arrow_path = resource_path("res/icons/arrow-down.svg").replace("\\", "/")
         self.map_source_combo.setStyleSheet("""
             QComboBox {
                 padding: 0px 30px 0px 8px; /* 调整padding避免影响高度 */
@@ -400,7 +403,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 top: 0px;
             }
             QComboBox::down-arrow {
-                image: url(:/icons/arrow-down-white.png);
+                image: url(__ARROW_PATH__);
                 width: 10px;
                 height: 10px;
                 margin: auto;
@@ -421,7 +424,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 height: 30px;
                 padding: 0px;
             }
-        """)
+        """.replace("__ARROW_PATH__", _arrow_path))
 
         # 创建下拉框容器
         combo_container = QWidget()
