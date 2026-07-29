@@ -166,23 +166,26 @@ class WindowManager:
     def close_application(self):
         """关闭应用程序
         
-        隐藏托盘图标并退出应用程序。
+        隐藏托盘图标并退出应用程序。退出前保存地图视口状态。
         """
         print("[WindowManager] Closing application...")
         
-        # 1. 先关闭所有弹出窗口和面板
+        # 1. 先保存地图视口状态（须在关闭面板之前读取 DataManager）
+        self._save_map_view_state()
+        
+        # 2. 关闭所有弹出窗口和面板
         try:
             self._close_all_windows_and_panels()
         except Exception as e:
             print(f"[WindowManager] Error closing windows: {e}")
         
-        # 2. 不再需要停止地图服务，因为已移除HTTP服务器
+        # 3. 不再需要停止地图服务，因为已移除HTTP服务器
             
-        # 3. 隐藏托盘图标
+        # 4. 隐藏托盘图标
         if self.tray_icon:
             self.tray_icon.hide()
         
-        # 4. 关闭主窗口
+        # 5. 关闭主窗口
         try:
             print("[WindowManager] Closing main window...")
             self.main_window.close()
@@ -192,9 +195,31 @@ class WindowManager:
         print("[WindowManager] Quitting QApplication...")
         QApplication.quit()
         
-        # 5. 确保进程退出（如果QApplication.quit()没有生效）
+        # 6. 确保进程退出（如果QApplication.quit()没有生效）
         import sys
         QTimer.singleShot(500, lambda: sys.exit(0))
+
+    def _save_map_view_state(self):
+        """保存地图视口状态到配置文件"""
+        try:
+            from services.config.map_config import map_config
+            dm = getattr(self.main_window, 'data_manager', None)
+            if dm is None:
+                print("[WindowManager] ⚠️ 无法保存地图视口状态：data_manager 不可用")
+                return
+
+            center = getattr(dm, 'last_map_center', None)
+            zoom = getattr(dm, 'last_map_zoom_level', None)
+            if center is not None:
+                lat, lon = center
+                # 传入当前地图源，用于加载时判断坐标系
+                map_source = map_config.get_map_source()
+                map_config.set_last_view_state(lat, lon, zoom, map_source)
+                print(f"[WindowManager] ✅ 已保存地图视口: center=({lat:.4f}, {lon:.4f}), zoom={zoom}, map_source={map_source}")
+            else:
+                print("[WindowManager] ℹ️ 无地图视口状态需要保存")
+        except Exception as e:
+            print(f"[WindowManager] ❌ 保存地图视口状态失败: {e}")
 
     def _close_all_windows_and_panels(self):
         """关闭所有弹出窗口和面板

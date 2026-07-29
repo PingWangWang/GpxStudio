@@ -90,6 +90,20 @@ class MapConfig(IConfigService):
                 self._config_data['osm']['security_key'] = ""
                 config_updated = True
 
+        # 确保包含最后地图中心点配置
+        if 'last_center_lat' not in self._config_data:
+            self._config_data['last_center_lat'] = None
+            config_updated = True
+        if 'last_center_lon' not in self._config_data:
+            self._config_data['last_center_lon'] = None
+            config_updated = True
+        if 'last_zoom_level' not in self._config_data:
+            self._config_data['last_zoom_level'] = None
+            config_updated = True
+        if 'last_map_source' not in self._config_data:
+            self._config_data['last_map_source'] = None
+            config_updated = True
+
         # 如果配置有更新，保存到文件
         if config_updated:
             try:
@@ -264,6 +278,55 @@ class MapConfig(IConfigService):
         try:
             self._config_data[key] = value
             return self.save_config(self._config_data)
+        except Exception:
+            return False
+
+    # ── 地图视口状态持久化 ────────────────────────────────────────
+
+    def get_last_view_center(self):
+        """
+        获取上次保存的地图中心点坐标及当时的地图源
+
+        返回:
+            (lat, lon, map_source) 三元组，或 None（从未保存过）
+            map_source 为 'gaode'/'osm' 等，用于加载时判断坐标系
+        """
+        lat = self._config_data.get('last_center_lat')
+        lon = self._config_data.get('last_center_lon')
+        ms = self._config_data.get('last_map_source')
+        if lat is not None and lon is not None:
+            return (lat, lon, ms)
+        return None
+
+    def get_last_view_zoom(self) -> Optional[int]:
+        """
+        获取上次保存的地图缩放级别
+
+        返回:
+            缩放级别整数，或 None（从未保存过）
+        """
+        return self._config_data.get('last_zoom_level')
+
+    def set_last_view_state(self, lat: float, lon: float, zoom: Optional[int], map_source: Optional[str] = None) -> bool:
+        """
+        保存地图视口状态（中心点 + 缩放级别 + 地图源）
+
+        参数:
+            lat:        中心点纬度
+            lon:        中心点经度
+            zoom:       缩放级别（可能为 None）
+            map_source: 当前地图源（'gaode'/'osm' 等），用于加载时判断坐标系
+
+        返回:
+            True 保存成功，False 保存失败
+        """
+        try:
+            return self.save_config({
+                'last_center_lat': lat,
+                'last_center_lon': lon,
+                'last_zoom_level': zoom,
+                'last_map_source': map_source
+            })
         except Exception:
             return False
 

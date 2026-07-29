@@ -367,6 +367,7 @@ class InitMixin:
         self.signal_manager.geolocation_success.connect(self._on_geolocation_success)
         self.signal_manager.geolocation_error.connect(self._on_geolocation_error)
         self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
+        self.signal_manager.map_center_changed.connect(self.on_map_center_changed)
         self.signal_manager.map_right_click.connect(self._on_map_right_click)
         self.signal_manager.map_loaded.connect(self._on_map_loaded)
 

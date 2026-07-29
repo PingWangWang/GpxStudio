@@ -46,14 +46,43 @@ class MapManager:
         self._current_map_source = None
 
     def show_initial_map(self):
-        """显示初始地图（默认北京中心）"""
+        """显示初始地图（优先恢复上次浏览位置，否则使用北京默认）"""
         # 获取当前配置的地图数据源
         map_source = map_config.get_map_source()
         # 获取地图模式
         map_mode = map_config.get_map_mode()
 
-        # 创建以北京为中心的基础地图
-        m = MapRenderer.create_base_map([39.9042, 116.4074], zoom_start=10, map_type=map_mode, map_source=map_source)
+        # 尝试从配置文件恢复上次的地图视口
+        saved = map_config.get_last_view_center()  # (lat, lon, saved_map_source) or None
+        saved_zoom = map_config.get_last_view_zoom()
+        if saved is not None:
+            saved_lat, saved_lon, saved_map_source = saved
+            # 校验地图源一致性：仅当保存时的地图源与当前一致时才能复用坐标
+            # 不一致（用户切换了地图源）时丢弃，因为坐标系可能不同
+            if saved_map_source is not None and saved_map_source == map_source:
+                init_center = [saved_lat, saved_lon]
+                init_zoom = saved_zoom if saved_zoom is not None else 10
+                # 根据地图源确定传入的坐标系
+                init_coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
+                self.logger.info(f"恢复上次地图视口: center=({saved_lat:.6f}, {saved_lon:.6f}), "
+                                f"zoom={init_zoom}, coord_system={init_coord_system}")
+            else:
+                # 地图源不匹配或未记录，降级到北京默认
+                init_center = [39.9042, 116.4074]
+                init_zoom = 10
+                init_coord_system = 'WGS-84'
+                reason = "地图源不匹配" if saved_map_source is not None else "无地图源记录"
+                self.logger.info(f"保存的视口与当前地图源{reason}，使用默认北京中心")
+        else:
+            init_center = [39.9042, 116.4074]  # 北京默认
+            init_zoom = 10
+            init_coord_system = 'WGS-84'
+            self.logger.info("无保存的地图视口，使用默认北京中心")
+
+        # 创建基础地图（传递正确的坐标系，避免重复转换）
+        m = MapRenderer.create_base_map(init_center, zoom_start=init_zoom,
+                                        map_type=map_mode, map_source=map_source,
+                                        coord_system=init_coord_system)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
@@ -67,8 +96,11 @@ class MapManager:
             if self.map_view:
                 self.map_view.setUrl(url)
                 # 保存当前中心和缩放级别
-                self.current_center = [39.9042, 116.4074]
-                self.current_zoom = 10
+                self.current_center = init_center
+                self.current_zoom = init_zoom
+                # 同步到 DataManager，确保后续预览操作一致
+                self.data_manager.last_map_center = tuple(init_center)
+                self.data_manager.last_map_zoom_level = init_zoom
                 # 记录当前地图源
                 self._current_map_source = map_source
                 self.logger.info("初始地图已加载")
@@ -83,8 +115,11 @@ class MapManager:
                 try:
                     self.map_view.setUrl(url)
                     # 保存当前中心和缩放级别
-                    self.current_center = [39.9042, 116.4074]
-                    self.current_zoom = 10
+                    self.current_center = init_center
+                    self.current_zoom = init_zoom
+                    # 同步到 DataManager
+                    self.data_manager.last_map_center = tuple(init_center)
+                    self.data_manager.last_map_zoom_level = init_zoom
                     # 记录当前地图源
                     self._current_map_source = map_source
                     self.logger.info("重新创建地图视图成功，初始地图已加载")
@@ -1241,6 +1276,20 @@ class MapManager:
         # 1. Leaflet的Canvas渲染器可以高效渲染数千个点
         # 2. 避免每次缩放都重新计算导致的卡顿（1-2秒）
         # 3. 参考官方GPXStudio，缩放时无延迟，体验流畅
+
+    def on_map_center_changed(self, lat: float, lon: float):
+        """
+        地图中心点变化时的处理方法
+        用户拖拽/平移地图时由前端 moveend 事件触发，更新运行时记录的中心坐标。
+        该坐标将在退出时由 _save_map_view_state 持久化到 map_config.json。
+
+        参数:
+            lat: 新中心点纬度
+            lon: 新中心点经度
+        """
+        self.data_manager.last_map_center = (lat, lon)
+        self.current_center = [lat, lon]
+        self.logger.debug(f"[MapManager] 地图中心更新: ({lat:.6f}, {lon:.6f})")
 
     def _rerender_route_on_map(self):
         """

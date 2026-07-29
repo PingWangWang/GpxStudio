@@ -191,6 +191,15 @@ class MapMixin:
         except Exception as e:
             self.logger.error(f"动态路线渲染出错: {e}")
 
+    def on_map_center_changed(self, lat: float, lon: float):
+        """地图中心点变化时的处理方法（用户拖拽/平移地图时触发）"""
+        self.logger.debug(f"[主应用] 地图中心变化: ({lat:.6f}, {lon:.6f})")
+        try:
+            if self.map_manager is not None:
+                self.map_manager.on_map_center_changed(lat, lon)
+        except Exception as e:
+            self.logger.error(f"处理地图中心变化出错: {e}")
+
     def _get_scale_text(self, zoom_level: int) -> str:
         scale_map = {3:"1:40000000",4:"1:20000000",5:"1:10000000",6:"1:5000000",
                      7:"1:2500000",8:"1:1250000",9:"1:625000",10:"1:300000",

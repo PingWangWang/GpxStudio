@@ -502,6 +502,8 @@ class MapRenderer:
                     console.log('[地图移动] 移动结束，中心点: [' + center.lat.toFixed(4) + ', ' + center.lng.toFixed(4) + ']');
                     console.log('[地图移动] 视口范围: SW[' + bounds.getSouthWest().lat.toFixed(4) + ',' + bounds.getSouthWest().lng.toFixed(4) + 
                                 '] - NE[' + bounds.getNorthEast().lat.toFixed(4) + ',' + bounds.getNorthEast().lng.toFixed(4) + ']');
+                    // 结构化输出，供 webengine 解析回传后端
+                    console.log('地图中心:' + center.lat.toFixed(6) + ',' + center.lng.toFixed(6));
                 });
 
                 // 5. 设置瓦片加载监听 (针对所有TileLayer)

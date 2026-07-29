@@ -149,6 +149,22 @@ class ConsoleWebEnginePage(QWebEnginePage):
                 import traceback
                 traceback.print_exc()
 
+        # 处理地图中心变化消息（用户拖拽地图时触发）
+        if message.startswith('地图中心:'):
+            try:
+                parts = message[len('地图中心:'):].split(',')
+                lat = float(parts[0].strip())
+                lon = float(parts[1].strip())
+                print(f"[地图中心] 捕获到中心点变化: {lat}, {lon}")
+                if self.signal_manager:
+                    self.signal_manager.map_center_changed.emit(lat, lon)
+                else:
+                    signal_manager.map_center_changed.emit(lat, lon)
+            except Exception as e:
+                print(f"[地图中心] 解析中心点坐标失败: {e}")
+                import traceback
+                traceback.print_exc()
+
         # 处理地图右键点击消息
         if message.startswith('右键点击:'):
             try:
