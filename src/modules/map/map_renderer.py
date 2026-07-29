@@ -584,6 +584,10 @@ class MapRenderer:
         if coord_system != target_system:
             converted = CoordinateTransform.convert(location[0], location[1], coord_system, target_system)
             marker_location = list(converted)
+        import logging as _lg; _lg.getLogger(__name__).info(
+            f"[DEBUG漂移] 7_add_marker: input={location}, coord_system={coord_system}, "
+            f"target={target_system}, converted={'是' if coord_system != target_system else '否'}, "
+            f"result={marker_location}, number={number}")
         # 否则直接使用（坐标系统匹配）
         
         # 如果提供了序号，使用自定义DivIcon显示带序号的标记
@@ -605,7 +609,7 @@ class MapRenderer:
                 box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             ">{number}</div>
             '''
-            marker_icon = folium.DivIcon(html=html)
+            marker_icon = folium.DivIcon(html=html, icon_anchor=(15, 15))
         else:
             marker_icon = folium.Icon(color=color, icon=icon)
         

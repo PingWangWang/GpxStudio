@@ -213,6 +213,8 @@ class ContextMenuMixin:
             return
 
         geo = self._resolve_map_click_address(lat, lon)
+        self.logger.info(f"[DEBUG漂移] 3_waypoint_resolve后坐标=({lat:.10f}, {lon:.10f}) "
+                        f"coord_system={geo['coord_system']} map_source={geo['map_source']}")
 
         self.route_plan_panel._add_waypoint()
         if self.route_plan_panel.waypoint_widgets:
@@ -226,8 +228,6 @@ class ContextMenuMixin:
         if not hasattr(self.data_manager, 'waypoints_level'):
             self.data_manager.waypoints_level = []
         self.data_manager.waypoints_level.append(geo['level'])
-        if not hasattr(self.data_manager, 'waypoint_coord_systems'):
-            self.data_manager.waypoint_coord_systems = []
         self.data_manager.waypoint_coord_systems.append(geo['coord_system'])
         self.logger.debug(f"[右键菜单] 保存途径点坐标系: {geo['coord_system']}")
 
