@@ -722,7 +722,7 @@ class MapManager:
                     route_points_to_render = transformed_route_points
                     self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
 
-            MapRenderer.add_route(m, route_points_to_render)
+            MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
@@ -1076,7 +1076,7 @@ class MapManager:
                     route_points_to_render = transformed_route_points
                     self.logger.info(f"[路线预览] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
 
-            MapRenderer.add_route(m, route_points_to_render)
+            MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
 
         self.logger.debug("[MapManager] 保存地图并获取URL")
 
@@ -1512,7 +1512,7 @@ class MapManager:
                     route_points_to_render = transformed_route_points
 
             # 添加路线到地图
-            MapRenderer.add_route(m, route_points_to_render)
+            MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
