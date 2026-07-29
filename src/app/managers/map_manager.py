@@ -276,12 +276,15 @@ class MapManager:
         # 确定地图中心，优先级：保存的地图中心 > 最后选中的点 > 起点 > 终点 > 第一个途径点
         if self.data_manager.last_map_center:
             center_lat, center_lon = self.data_manager.last_map_center
+            center_source = "last_map_center"
         elif self.data_manager.last_selected_coords:
             center_lat, center_lon = self.data_manager.last_selected_coords
+            center_source = "last_selected_coords"
             center_level = self.data_manager.last_selected_level
             center_type = self.data_manager.last_selected_type
         elif self.data_manager.start_coords:
             center_lat, center_lon = self.data_manager.start_coords
+            center_source = "start_coords"
             center_level = self.data_manager.start_level
         elif self.data_manager.end_coords:
             center_lat, center_lon = self.data_manager.end_coords
@@ -326,6 +329,10 @@ class MapManager:
         if map_source == 'gaode':
             # 检查坐标系标记：如果已经设置了坐标系且为GCJ-02，说明坐标已经转换过了
             has_correct_coord_system = False
+            self.logger.info(f"[DEBUG漂移] 5a_update_map_preview_enter: center_source={center_source}, "
+                            f"center=({center_lat:.10f},{center_lon:.10f}), "
+                            f"last_map_center={self.data_manager.last_map_center}, "
+                            f"last_selected_coords={self.data_manager.last_selected_coords}")
             if self.data_manager.last_map_center:
                 # 检查是否从路线规划或已标记的起点/终点/途径点来的坐标
                 if is_route_planned:
@@ -352,15 +359,25 @@ class MapManager:
             # 只有当坐标系不正确时才进行转换
             if not has_correct_coord_system:
                 # 转换地图中心点坐标
+                _before_lat, _before_lon = center_lat, center_lon
                 center_lat, center_lon = CoordinateTransform.convert(center_lat, center_lon, 'WGS-84', 'GCJ-02')
                 center_coord_system = 'GCJ-02'  # 转换后坐标系为GCJ-02
+                self.logger.info(f"[DEBUG漂移] 5b_update_map_preview: center_source={center_source}, "
+                                f"has_correct_sys=False → 已转换, before=({_before_lat:.10f},{_before_lon:.10f}), "
+                                f"after=({center_lat:.10f},{center_lon:.10f})")
                 self.logger.debug(f"[地图预览] 转换坐标系 WGS-84 -> GCJ-02: ({self.data_manager.last_map_center}) -> ({center_lat}, {center_lon})")
             else:
+                self.logger.info(f"[DEBUG漂移] 5b_update_map_preview: center_source={center_source}, "
+                                f"has_correct_sys=True → 跳过转换, center=({center_lat:.10f},{center_lon:.10f}), "
+                                f"center_coord_system={center_coord_system}")
                 self.logger.debug(f"[地图预览] 坐标已是GCJ-02，跳过转换")
 
         # 获取地图模式
         map_mode = map_config.get_map_mode()
         
+        self.logger.info(f"[DEBUG漂移] 5c_create_base_map: center=({center_lat:.10f},{center_lon:.10f}), "
+                        f"coord_system={center_coord_system}, map_source={map_source}, auto_fit={auto_fit}, zoom={calculated_zoom_level}")
+
         # 创建基础地图（传递正确的坐标系信息，避免重复转换）
         # center_coord_system 表示当前 center_lat, center_lon 的坐标系
         # 传递给 create_base_map 后，它会根据 map_source 和 coord_system 判断是否需要再次转换
@@ -426,20 +443,10 @@ class MapManager:
         if auto_fit:
             all_coords = self._get_all_selected_coords()
             if len(all_coords) >= 2:
-                # 处理坐标转换：当使用高德地图时，需要将WGS-84坐标转换为GCJ-02坐标
+                # 直接使用原始坐标传递给 fit_bounds，与标记坐标保持一致
+                # 高德地图下标记以原始坐标渲染（WGS-84），此处不应做额外 GCJ-02 转换
                 bounds_coords = all_coords
-                if map_source == 'gaode':
-                    # 如果路线是通过路线规划服务获取的，那么边界点坐标已经是GCJ-02坐标，不需要转换
-                    # 只有当路线是通过其他方式获取的（如历史记录），才需要将WGS-84坐标转换为GCJ-02坐标
-                    if not is_route_planned:
-                        # 转换边界点坐标
-                        transformed_bounds_coords = []
-                        for coords in bounds_coords:
-                            if coords:
-                                lat, lon = coords
-                                gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
-                                transformed_bounds_coords.append((gcj_lat, gcj_lon))
-                        bounds_coords = transformed_bounds_coords
+                self.logger.info(f"[DEBUG漂移] 5d_auto_fit: bounds_coords={bounds_coords}")
                 MapRenderer.fit_bounds(m, bounds_coords)
                 # fit_bounds会改变缩放级别，但我们无法获取新的级别，所以清除保存的值
                 self.data_manager.last_map_zoom_level = None
@@ -618,6 +625,8 @@ class MapManager:
         # 推断坐标系：右键菜单传入的坐标与当前地图源一致
         # 高德地图：GCJ-02，OSM地图：WGS-84
         coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
+        self.logger.info(f"[DEBUG漂移] 4_update_map_preview_simple: center=({center_coords[0]:.10f}, {center_coords[1]:.10f}), "
+                        f"coord_system={coord_system}, map_source={map_source}, zoom={zoom_level}")
 
         # 获取地图模式
         map_mode = map_config.get_map_mode()
@@ -1127,6 +1136,9 @@ class MapManager:
             # 如果没有保存的坐标系信息，则推断
             if not waypoint_coord_system:
                 waypoint_coord_system = infer_coord_system(waypoint)
+            
+            self.logger.info(f"[DEBUG漂移] 6_add_marker_wp{i}: coord={waypoint}, "
+                            f"coord_system={waypoint_coord_system}, map_source={map_source}")
             
             MapRenderer.add_marker(
                 map_obj, waypoint, display_name,

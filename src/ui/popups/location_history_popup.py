@@ -163,6 +163,7 @@ class LocationHistoryPopup(QWidget):
         
         # 清空历史按钮
         clear_button = QPushButton("清空")
+        clear_button.setToolTip("清空历史记录")
         clear_button.clicked.connect(self.clear_history_clicked.emit)
         header_layout.addWidget(clear_button)
         

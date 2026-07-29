@@ -53,6 +53,7 @@ class CustomDateTimeEdit(QWidget):
         
         # 下拉按钮
         self.dropdown_button = QPushButton()
+        self.dropdown_button.setToolTip("选择日期时间")
         self.dropdown_button.setFixedSize(24, 32)  # 与输入框高度匹配
         self.dropdown_button.setStyleSheet("""
             QPushButton {

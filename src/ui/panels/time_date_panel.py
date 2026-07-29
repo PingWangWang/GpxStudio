@@ -39,6 +39,7 @@ class DateSelectPanel(QWidget):
         header_layout.addStretch()
 
         close_button = QPushButton("关闭")
+        close_button.setToolTip("关闭面板")
         close_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f0f0;
@@ -161,6 +162,7 @@ class TimeSelectPanel(QWidget):
         header_layout.addStretch()
 
         close_button = QPushButton("关闭")
+        close_button.setToolTip("关闭面板")
         close_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f0f0;

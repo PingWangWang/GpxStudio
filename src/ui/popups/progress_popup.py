@@ -124,6 +124,7 @@ class ProgressPopup(QWidget):
 
         # 取消按钮
         self.cancel_button = QPushButton("取消")
+        self.cancel_button.setToolTip("取消当前任务")
         self.cancel_button.setObjectName("cancelButton")
         self.cancel_button.clicked.connect(self._on_cancel_clicked)
         self.cancel_button.setStyleSheet("""
@@ -142,6 +143,7 @@ class ProgressPopup(QWidget):
 
         # 完成按钮（默认隐藏）
         self.complete_button = QPushButton("确认")
+        self.complete_button.setToolTip("确认完成")
         self.complete_button.clicked.connect(self._on_complete_clicked)
         self.complete_button.setVisible(False)
         button_layout.addWidget(self.complete_button)

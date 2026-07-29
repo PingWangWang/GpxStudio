@@ -220,11 +220,18 @@ class MapMixin:
 
     def _on_map_right_click(self, lat: float, lon: float):
         self.logger.info(f"[地图右键] 收到右键点击信号: {lat}, {lon}")
+        # [DEBUG漂移] 记录原始坐标和地图源信息，用于定位漂移问题
+        self.logger.info(f"[DEBUG漂移] 1_Leaflet原始坐标=({lat:.10f}, {lon:.10f})")
+        from modules.geolocation.coordinate_transform import CoordinateTransform as _CT
+        _ms = map_config.get_map_source()
+        _cs = _CT.coord_system_for_map_source(_ms)
+        self.logger.info(f"[DEBUG漂移] 1b_当前地图源={_ms}, 推断坐标系={_cs}")
         location_info = {'success': False, 'name': f'位置 ({lat:.6f}, {lon:.6f})',
                          'lat': lat, 'lon': lon, 'type': '', 'level': None}
         self._show_context_menu(location_info)
 
     def _show_context_menu(self, location_info: dict):
+        self.logger.info(f"[DEBUG漂移] 2_show_menu传入坐标=({location_info['lat']:.10f}, {location_info['lon']:.10f})")
         self.logger.debug(f"[地图右键] 显示右键菜单: {location_info}")
         self._context_menu_location_info = location_info
         cursor_pos = QCursor.pos()

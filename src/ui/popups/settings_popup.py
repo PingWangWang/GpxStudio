@@ -80,6 +80,7 @@ class CustomMessageBox(QWidget):
 
         ok_button = QPushButton(button_text)
         ok_button.clicked.connect(self.close)
+        ok_button.setToolTip("确认并保存设置")
         button_layout.addWidget(ok_button)
 
         button_layout.addStretch()
@@ -120,6 +121,7 @@ from core.logging_setup import clean_logs, open_log_directory, get_log_size, set
 from services.config import about_config
 import os
 from app.data_paths import get_geo_info_file, get_route_history_file, get_cache_dir, get_gaode_cache_dir, get_osm_cache_dir
+from core.resource_path import resource_path  # [修改] 用于动态获取图标文件绝对路径
 
 
 class CustomArrowButton(QPushButton):
@@ -251,7 +253,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 250)  # 减少高度
+        self.setFixedSize(300, 280)  # 容纳海拔获取下拉框
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -350,6 +352,7 @@ class MapSettingsPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)
@@ -371,9 +374,11 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.map_source_combo.setContentsMargins(0, 0, 0, 0)  # 移除所有内边距
 
         # 设置下拉框样式
+        # [修改] 箭头图标路径由 resource_path 动态生成，兼容开发/打包环境
+        _arrow_path = resource_path("res/icons/arrow-down.svg").replace("\\", "/")
         self.map_source_combo.setStyleSheet("""
             QComboBox {
-                padding: 0px 30px 0px 8px; /* 调整padding避免影响高度 */
+                padding: 0px 4px 0px 4px; /* 左右留4px内边距 */
                 border: 0px;
                 border-radius: 3px;
                 background-color: rgba(255, 255, 255, 0.9);
@@ -382,8 +387,6 @@ class MapSettingsPopup(BaseSettingsPopup):
                 min-height: 30px;
                 max-height: 30px;
                 height: 30px;
-                line-height: 30px;
-                vertical-align: middle;
             }
             QComboBox:focus {
                 background-color: white;
@@ -393,12 +396,9 @@ class MapSettingsPopup(BaseSettingsPopup):
                 background-color: transparent;
                 width: 30px;
                 height: 30px;
-                position: absolute;
-                right: 0px;
-                top: 0px;
             }
             QComboBox::down-arrow {
-                image: url(:/icons/arrow-down-white.png);
+                image: url(__ARROW_PATH__);
                 width: 10px;
                 height: 10px;
                 margin: auto;
@@ -419,7 +419,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 height: 30px;
                 padding: 0px;
             }
-        """)
+        """.replace("__ARROW_PATH__", _arrow_path))
 
         # 创建下拉框容器
         combo_container = QWidget()
@@ -474,6 +474,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.api_key_eye_btn = QPushButton("👁️")
         self.api_key_eye_btn.setFixedSize(30, 30)
         self.api_key_eye_btn.clicked.connect(self.toggle_api_key_visibility)
+        self.api_key_eye_btn.setToolTip("显示/隐藏API密钥")
         self.api_key_eye_btn.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -513,6 +514,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.security_key_eye_btn = QPushButton("👁️")
         self.security_key_eye_btn.setFixedSize(30, 30)
         self.security_key_eye_btn.clicked.connect(self.toggle_security_key_visibility)
+        self.security_key_eye_btn.setToolTip("显示/隐藏安全密钥")
         self.security_key_eye_btn.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -655,6 +657,41 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 添加关闭动作行
         config_layout.addLayout(close_action_row)
 
+        # 海拔获取方式下拉框
+        self.elevation_mode_combo = QComboBox()
+        self.elevation_mode_combo.addItem("优化模式（最多1000点）", True)
+        self.elevation_mode_combo.addItem("全量模式（按实际点数）", False)
+        self.elevation_mode_combo.setFixedHeight(30)
+        self.elevation_mode_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.elevation_mode_combo.setStyleSheet(self.map_source_combo.styleSheet())
+
+        elevation_mode_container = QWidget()
+        elevation_mode_layout = QHBoxLayout(elevation_mode_container)
+        elevation_mode_layout.setContentsMargins(0, 0, 0, 0)
+        elevation_mode_layout.addWidget(self.elevation_mode_combo)
+        elevation_mode_placeholder = QPushButton()
+        elevation_mode_placeholder.setFixedSize(30, 30)
+        elevation_mode_placeholder.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
+        elevation_mode_placeholder.setEnabled(False)
+        elevation_mode_layout.addWidget(elevation_mode_placeholder)
+        elevation_mode_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        elevation_row = QHBoxLayout()
+        elevation_label = QLabel("海拔获取:")
+        elevation_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        elevation_label.setFixedWidth(80)
+        elevation_label.setFixedHeight(30)
+        elevation_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        elevation_row.addWidget(elevation_label)
+        elevation_row.addSpacing(10)
+        elevation_row.addWidget(elevation_mode_container)
+        elevation_row.setContentsMargins(0, 0, 0, 0)
+        elevation_row.setSpacing(0)
+        elevation_row.setStretch(0, 0)
+        elevation_row.setStretch(1, 0)
+        elevation_row.setStretch(2, 1)
+        config_layout.addLayout(elevation_row)
+
         main_layout.addLayout(config_layout)
 
         # 添加分隔线，美化布局并增加与底部按钮的间距
@@ -671,6 +708,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_config)
+        self.save_btn.setToolTip("保存当前配置")
         self.save_btn.setMinimumWidth(80)
         self.save_btn.setMinimumHeight(30)
         self.save_btn.setStyleSheet("""
@@ -777,6 +815,11 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.saved_security_key = security_key
         self.on_map_source_changed(self.map_source_combo.currentIndex())
 
+        # 加载海拔获取方式
+        elevation_optimize = map_config.get_elevation_optimize()
+        idx = self.elevation_mode_combo.findData(elevation_optimize)
+        self.elevation_mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
 
     def save_config(self):
         """保存配置"""
@@ -812,7 +855,8 @@ class MapSettingsPopup(BaseSettingsPopup):
             "map_source": map_source,
             "close_action": close_action,
             "api_key": api_key,
-            "security_key": security_key
+            "security_key": security_key,
+            "elevation_optimize": self.elevation_mode_combo.currentData()
         }
 
         if map_config.save_config(config):
@@ -962,6 +1006,7 @@ class LogSettingsPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)
@@ -1032,6 +1077,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.open_log_btn = QPushButton("打开目录")
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
+        self.open_log_btn.setToolTip("打开日志文件所在目录")
         self.open_log_btn.setFixedHeight(30)
         self.open_log_btn.setStyleSheet("""
             QPushButton {
@@ -1075,6 +1121,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_log_btn = QPushButton("清理日志")
         self.clean_log_btn.clicked.connect(self.on_clean_logs)
+        self.clean_log_btn.setToolTip("清理日志文件")
         self.clean_log_btn.setFixedHeight(30)
         self.clean_log_btn.setStyleSheet("""
             QPushButton {
@@ -1118,6 +1165,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_geo_info_btn = QPushButton("清理信息")
         self.clean_geo_info_btn.clicked.connect(self.on_clean_geo_info)
+        self.clean_geo_info_btn.setToolTip("清理地理信息缓存")
         self.clean_geo_info_btn.setFixedHeight(30)
         self.clean_geo_info_btn.setStyleSheet("""
             QPushButton {
@@ -1161,6 +1209,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_route_history_btn = QPushButton("清理文件")
         self.clean_route_history_btn.clicked.connect(self.on_clean_route_history)
+        self.clean_route_history_btn.setToolTip("清理路线历史记录文件")
         self.clean_route_history_btn.setFixedHeight(30)
         self.clean_route_history_btn.setStyleSheet("""
             QPushButton {
@@ -1207,6 +1256,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         self.clean_cache_btn = QPushButton("清理缓存")
         self.clean_cache_btn.clicked.connect(self.on_clean_cache)
+        self.clean_cache_btn.setToolTip("清理地图瓦片缓存")
         self.clean_cache_btn.setFixedHeight(30)
         self.clean_cache_btn.setStyleSheet("""
             QPushButton {
@@ -1444,6 +1494,7 @@ class AboutPopup(BaseSettingsPopup):
             }
         """)
         close_btn.clicked.connect(self.hide)
+        close_btn.setToolTip("关闭")
         title_layout.addWidget(close_btn)
 
         main_layout.addLayout(title_layout)

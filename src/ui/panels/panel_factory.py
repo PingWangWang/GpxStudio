@@ -44,6 +44,7 @@ class PanelFactory:
         search_input.returnPressed.connect(lambda: parent.search_location(location_type))
 
         search_button = QPushButton("搜索")
+        search_button.setToolTip("搜索地点")
         search_button.clicked.connect(lambda: parent.search_location(location_type))
 
         search_layout.addWidget(search_input)
@@ -125,6 +126,7 @@ class PanelFactory:
         waypoint_input.returnPressed.connect(parent.search_waypoint)
 
         search_button = QPushButton("搜索")
+        search_button.setToolTip("搜索地点")
         search_button.clicked.connect(parent.search_waypoint)
 
         search_layout.addWidget(waypoint_input)
@@ -141,11 +143,13 @@ class PanelFactory:
 
         # 删除按钮
         remove_button = QPushButton("删除选中的途径点")
+        remove_button.setToolTip("删除选中的途径点")
         remove_button.clicked.connect(parent.remove_waypoint)
         button_layout.addWidget(remove_button)
 
         # 清空所有按钮
         clear_all_button = QPushButton("清空所有途径点")
+        clear_all_button.setToolTip("清空所有途径点")
         clear_all_button.clicked.connect(parent.clear_all_waypoints)
         button_layout.addWidget(clear_all_button)
 
@@ -228,6 +232,7 @@ class PanelFactory:
         buttons_layout.setContentsMargins(0, 0, 0, 0)
 
         parent.start_date_button = QPushButton("选择日期")
+        parent.start_date_button.setToolTip("选择出发日期")
         parent.start_date_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f0f0;
@@ -243,6 +248,7 @@ class PanelFactory:
         buttons_layout.addWidget(parent.start_date_button, 1)
 
         parent.start_time_button = QPushButton("选择时间")
+        parent.start_time_button.setToolTip("选择出发时间")
         parent.start_time_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f0f0;

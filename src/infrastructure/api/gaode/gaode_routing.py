@@ -148,7 +148,13 @@ class GaodeRoutingService(IRoutingService):
         MAX_POINTS_PER_REQUEST = 500  # 减小每批处理的点数量，避免服务器拒绝连接
         MAX_RETRY_COUNT = 3
         REQUEST_INTERVAL = 2  # 增加请求间隔时间（秒）
-        MAX_ELEVATION_POINTS = 1000  # 最大获取海拔的点数量
+        # 根据配置决定是否启用点数优化
+        try:
+            from services.config.map_config import map_config as _map_config
+            _elevation_optimize = _map_config.get_elevation_optimize()
+        except Exception:
+            _elevation_optimize = True
+        MAX_ELEVATION_POINTS = 1000 if _elevation_optimize else len(points)
 
         try:
             def log_cb(level, message):

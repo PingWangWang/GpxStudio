@@ -4,6 +4,9 @@
 PyQt5>=5.15.0
 PyQtWebEngine>=5.15.0
 
+# Dependency Injection
+injector>=0.24.0
+
 # Map Related
 folium>=0.14.0
 xyzservices>=2025.11.0

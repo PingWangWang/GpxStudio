@@ -82,7 +82,13 @@ class OsmRoutingService(IRoutingService):
         if not points:
             return []
 
-        MAX_ELEVATION_POINTS = 1000  # 最大获取海拔的点数量
+        # 根据配置决定是否启用点数优化
+        try:
+            from services.config.map_config import map_config as _map_config
+            _elevation_optimize = _map_config.get_elevation_optimize()
+        except Exception:
+            _elevation_optimize = True
+        MAX_ELEVATION_POINTS = 1000 if _elevation_optimize else len(points)
 
         # 1. 从缓存中获取已有海拔数据
         cached_points = []

@@ -53,6 +53,11 @@ class MapConfig(IConfigService):
             self._config_data['close_action'] = "exit"  # 默认为直接退出
             config_updated = True
 
+        # 确保包含海拔数据获取优化开关
+        if 'elevation_optimize' not in self._config_data:
+            self._config_data['elevation_optimize'] = True  # 默认启用优化（最多1000点）
+            config_updated = True
+
         # 确保包含高德地图配置
         if 'gaode' not in self._config_data:
             self._config_data['gaode'] = {
@@ -338,6 +343,17 @@ class MapConfig(IConfigService):
         try:
             # 只传递需要修改的字段，避免覆盖API Key等其他配置
             return self.save_config({'close_action': action})
+        except Exception:
+            return False
+
+    def get_elevation_optimize(self) -> bool:
+        """获取海拔数据获取优化开关（True=最多1000点，False=按实际点数）"""
+        return self._config_data.get('elevation_optimize', True)
+
+    def set_elevation_optimize(self, enabled: bool) -> bool:
+        """设置海拔数据获取优化开关"""
+        try:
+            return self.save_config({'elevation_optimize': enabled})
         except Exception:
             return False
 

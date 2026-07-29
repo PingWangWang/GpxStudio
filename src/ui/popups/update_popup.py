@@ -121,6 +121,7 @@ class UpdatePopup(QDialog):
         close_btn = QPushButton("✕")
         close_btn.setObjectName("closeButton")
         close_btn.setFixedSize(24, 24)
+        close_btn.setToolTip("关闭")
         close_btn.clicked.connect(self.reject)
         title_layout.addWidget(close_btn)
         
@@ -161,6 +162,7 @@ class UpdatePopup(QDialog):
         # 跳过按钮
         self.skip_btn = QPushButton("跳过此版本")
         self.skip_btn.setObjectName("secondaryButton")
+        self.skip_btn.setToolTip("跳过此版本，下次不再提示")
         self.skip_btn.clicked.connect(self.on_skip_clicked)
         button_layout.addWidget(self.skip_btn)
         
@@ -169,12 +171,14 @@ class UpdatePopup(QDialog):
         # 稍后按钮
         self.later_btn = QPushButton("稍后再说")
         self.later_btn.setObjectName("secondaryButton")
+        self.later_btn.setToolTip("稍后提醒我")
         self.later_btn.clicked.connect(self.reject)
         button_layout.addWidget(self.later_btn)
         
         # 更新按钮
         self.update_btn = QPushButton("立即更新")
         self.update_btn.setObjectName("primaryButton")
+        self.update_btn.setToolTip("立即下载并安装更新")
         self.update_btn.clicked.connect(self.on_update_clicked)
         button_layout.addWidget(self.update_btn)
         
@@ -330,6 +334,7 @@ class DownloadProgressDialog(QDialog):
         close_btn = QPushButton("✕")
         close_btn.setObjectName("closeButton")
         close_btn.setFixedSize(24, 24)
+        close_btn.setToolTip("关闭")
         close_btn.clicked.connect(self.on_cancel_clicked)
         title_layout.addWidget(close_btn)
         
@@ -363,6 +368,7 @@ class DownloadProgressDialog(QDialog):
         
         cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("secondaryButton")
+        cancel_btn.setToolTip("取消更新")
         cancel_btn.clicked.connect(self.on_cancel_clicked)
         button_layout.addWidget(cancel_btn)
         

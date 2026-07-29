@@ -25,10 +25,10 @@ class _WaypointCoordSystemsProxy(list):
             self._waypoints[index].coord_system = value
 
     def append(self, value: str):
-        # append 只能影响已有 Location 对象；若列表比 waypoints 短则扩展
-        idx = len(self)
+        # append 只能影响已有 Location 对象；更新最后一个途径点的坐标系
         super().append(value)
-        if idx < len(self._waypoints):
+        idx = len(self._waypoints) - 1  # 最后一条途径点的索引
+        if idx >= 0:
             self._waypoints[idx].coord_system = value
 
 

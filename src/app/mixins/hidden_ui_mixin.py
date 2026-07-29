@@ -68,9 +68,11 @@ class HiddenUIMixin:
 
         # 创建隐藏的按钮
         self.plan_button = QPushButton("规划路线", self)
+        self.plan_button.setToolTip("规划路线")
         self.plan_button.clicked.connect(self.on_plan_route_clicked)
         self.plan_button.hide()
 
         self.export_button = QPushButton("导出GPX", self)
+        self.export_button.setToolTip("导出GPX文件")
         self.export_button.clicked.connect(self.on_export_gpx_clicked)
         self.export_button.hide()

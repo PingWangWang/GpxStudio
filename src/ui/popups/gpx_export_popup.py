@@ -284,12 +284,14 @@ class GpxExportPopup(QWidget):
 
         # 取消按钮
         cancel_button = QPushButton("取消")
+        cancel_button.setToolTip("取消导出")
         cancel_button.setObjectName("cancelButton")
         cancel_button.clicked.connect(self._on_cancel_clicked)
         button_layout.addWidget(cancel_button)
 
         # 确认导出按钮
         export_button = QPushButton("确认导出")
+        export_button.setToolTip("确认导出GPX文件")
         export_button.clicked.connect(self._on_export_clicked)
         export_button.setDefault(True)
         button_layout.addWidget(export_button)
