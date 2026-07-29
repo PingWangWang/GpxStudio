@@ -378,7 +378,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         _arrow_path = resource_path("res/icons/arrow-down.svg").replace("\\", "/")
         self.map_source_combo.setStyleSheet("""
             QComboBox {
-                padding: 0px 30px 0px 8px; /* 调整padding避免影响高度 */
+                padding: 0px 4px 0px 4px; /* 左右留4px内边距 */
                 border: 0px;
                 border-radius: 3px;
                 background-color: rgba(255, 255, 255, 0.9);
@@ -387,8 +387,6 @@ class MapSettingsPopup(BaseSettingsPopup):
                 min-height: 30px;
                 max-height: 30px;
                 height: 30px;
-                line-height: 30px;
-                vertical-align: middle;
             }
             QComboBox:focus {
                 background-color: white;
@@ -398,9 +396,6 @@ class MapSettingsPopup(BaseSettingsPopup):
                 background-color: transparent;
                 width: 30px;
                 height: 30px;
-                position: absolute;
-                right: 0px;
-                top: 0px;
             }
             QComboBox::down-arrow {
                 image: url(__ARROW_PATH__);
