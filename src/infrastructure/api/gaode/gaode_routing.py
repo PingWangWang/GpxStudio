@@ -118,7 +118,7 @@ class GaodeRoutingService(IRoutingService):
         # 3. 生成MD5签名并返回
         return hashlib.md5(sign_str.encode()).hexdigest()
 
-    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None) -> List[Tuple[float, float, float]]:
+    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None, cancel_check=None) -> List[Tuple[float, float, float]]:
         """
         获取多个坐标点的海拔数据
 
@@ -127,10 +127,11 @@ class GaodeRoutingService(IRoutingService):
         Args:
             points (List[Tuple[float, float]]): 坐标点列表，格式为 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
             progress_callback: 进度回调函数，参数为(progress, message)，progress为0-100的进度值
+            cancel_check: 取消检查回调，返回 True 时立即返回已获取的部分数据
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表，格式为 [(lat, lon, elevation), ...]
-            失败时返回默认海拔为0的点列表
+            失败时返回默认海拔为0的点列表；取消时返回已获取的部分数据
         """
         if not points:
             return []
@@ -171,6 +172,11 @@ class GaodeRoutingService(IRoutingService):
                 total_batches = (len(points) + MAX_POINTS_PER_REQUEST - 1) // MAX_POINTS_PER_REQUEST
 
                 for batch_index in range(total_batches):
+                    # 取消检查：每批开始时检查
+                    if cancel_check and cancel_check():
+                        log_cb("INFO", f"用户取消了海拔数据获取，已获取 {len(points_with_elevation)}/{len(points)} 个点的数据")
+                        return points_with_elevation
+
                     start_idx = batch_index * MAX_POINTS_PER_REQUEST
                     end_idx = min((batch_index + 1) * MAX_POINTS_PER_REQUEST, len(points))
                     batch_points = points[start_idx:end_idx]
@@ -259,6 +265,14 @@ class GaodeRoutingService(IRoutingService):
                 total_batches = (len(sampled_points) + MAX_POINTS_PER_REQUEST - 1) // MAX_POINTS_PER_REQUEST
 
                 for batch_index in range(total_batches):
+                    # 取消检查：每批开始时检查
+                    if cancel_check and cancel_check():
+                        log_cb("INFO", f"用户取消了海拔数据获取（采样路径），已获取部分数据，准备插值")
+                        # 使用已有采样点数据对原始全部点进行插值
+                        if sampled_points_with_elevation:
+                            return self._interpolate_elevation(points, sampled_points_with_elevation)
+                        return []
+
                     start_idx = batch_index * MAX_POINTS_PER_REQUEST
                     end_idx = min((batch_index + 1) * MAX_POINTS_PER_REQUEST, len(sampled_points))
                     batch_points = sampled_points[start_idx:end_idx]

@@ -182,7 +182,25 @@ class GpxExportMixin:
                 def __init__(self, parent, route_points, start_time, file_path,
                              start_name, end_name, export_elevation,
                              total_duration_seconds, total_distance_meters=None,
-                             route_history_storage=None, route_data=None):
+                             route_history_storage=None, route_data=None,
+                             cancel_check=None):
+                    """
+                    初始化导出线程
+
+                    Args:
+                        parent: 父对象
+                        route_points: 路线点列表
+                        start_time: 起始时间
+                        file_path: 保存路径
+                        start_name: 起点名称
+                        end_name: 终点名称
+                        export_elevation: 是否导出海拔数据
+                        total_duration_seconds: 总时长（秒）
+                        total_distance_meters: 总距离（米）
+                        route_history_storage: 历史记录存储
+                        route_data: 路线数据
+                        cancel_check: 取消检查回调，返回 True 表示已取消
+                    """
                     super().__init__(parent)
                     self.route_points = route_points
                     self.start_time = start_time
@@ -194,6 +212,7 @@ class GpxExportMixin:
                     self.total_distance_meters = total_distance_meters
                     self.route_history_storage = route_history_storage
                     self.route_data = route_data
+                    self._cancel_check = cancel_check if cancel_check else lambda: False
 
                 def run(self):
                     try:
@@ -202,6 +221,12 @@ class GpxExportMixin:
                             log_func(f"[GPX导出] {message}")
 
                         gpx_service = GpxExportService(logger=log_callback)
+
+                        # 取消检查：海拔获取前
+                        if self._cancel_check():
+                            self.parent().logger.info("[GPX导出] 用户取消了导出（海拔获取前）")
+                            self.export_completed.emit(False, "用户取消了导出")
+                            return
 
                         elevation_data_obtained = False
                         if self.export_elevation:
@@ -216,6 +241,12 @@ class GpxExportMixin:
                                             break
 
                             if not has_cached_elevation:
+                                # 取消检查：开始获取海拔前
+                                if self._cancel_check():
+                                    self.parent().logger.info("[GPX导出] 用户取消了导出（海拔获取开始前）")
+                                    self.export_completed.emit(False, "用户取消了导出")
+                                    return
+
                                 self.progress_updated.emit(20, "正在获取海拔数据...")
 
                                 from services.config.map_config import map_config
@@ -228,8 +259,16 @@ class GpxExportMixin:
 
                                         route_points_with_elevation = routing_service._get_elevation(
                                             self.route_points,
-                                            progress_callback=elevation_progress_callback
+                                            progress_callback=elevation_progress_callback,
+                                            cancel_check=self._cancel_check
                                         )
+
+                                        # 取消检查：海拔获取返回后（可能已被取消，返回部分数据）
+                                        if self._cancel_check():
+                                            self.parent().logger.info("[GPX导出] 用户取消了导出（海拔获取阶段）")
+                                            self.export_completed.emit(False, "用户取消了导出")
+                                            return
+
                                         self.route_points = route_points_with_elevation
                                         elevation_data_obtained = True
                                         self.progress_updated.emit(50, "海拔数据获取完成，正在导出GPX文件...")
@@ -243,6 +282,12 @@ class GpxExportMixin:
                         else:
                             self.progress_updated.emit(50, "正在导出GPX文件...")
 
+                        # 取消检查：GPX 导出前
+                        if self._cancel_check():
+                            self.parent().logger.info("[GPX导出] 用户取消了导出（GPX文件写入前）")
+                            self.export_completed.emit(False, "用户取消了导出")
+                            return
+
                         success = gpx_service.export_to_gpx(
                             route_points=self.route_points,
                             start_datetime=self.start_time,
@@ -254,8 +299,23 @@ class GpxExportMixin:
                             total_distance_meters=self.total_distance_meters,
                             transport_mode=self.route_data.get('mode') if self.route_data else None,
                             waypoint_names=self.route_data.get('waypoints') if self.route_data else None,
-                            description=f"{self.start_name} → {self.end_name}" if self.start_name and self.end_name else None
+                            description=f"{self.start_name} → {self.end_name}" if self.start_name and self.end_name else None,
+                            cancel_check=self._cancel_check
                         )
+
+                        # 取消检查：导出返回后检查是否因取消而失败
+                        if not success and self._cancel_check():
+                            self.parent().logger.info("[GPX导出] 用户取消了导出（GPX文件写入阶段）")
+                            # 清理不完整的文件
+                            try:
+                                import os
+                                if os.path.exists(self.file_path):
+                                    os.remove(self.file_path)
+                                    self.parent().logger.info(f"[GPX导出] 已删除不完整的文件: {self.file_path}")
+                            except Exception as cleanup_err:
+                                self.parent().logger.warning(f"[GPX导出] 删除不完整文件失败: {cleanup_err}")
+                            self.export_completed.emit(False, "用户取消了导出")
+                            return
 
                         if success and elevation_data_obtained and self.route_history_storage and self.route_data:
                             try:
@@ -316,7 +376,8 @@ class GpxExportMixin:
             export_thread = ExportThread(
                 self, route_points, start_time, file_path, start_name, end_name,
                 export_elevation, total_duration_seconds, total_distance_meters,
-                route_history_storage, enhanced_route_data
+                route_history_storage, enhanced_route_data,
+                cancel_check=progress_popup.is_cancelled
             )
 
             def on_progress_updated(value, message):

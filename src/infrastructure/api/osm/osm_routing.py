@@ -57,7 +57,7 @@ class OsmRoutingService(IRoutingService):
         if self.logger:
             self.logger(level, message)
 
-    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None) -> List[Tuple[float, float, float]]:
+    def _get_elevation(self, points: List[Tuple[float, float]], progress_callback=None, cancel_check=None) -> List[Tuple[float, float, float]]:
         """
         获取多个点的海拔数据
 
@@ -67,9 +67,11 @@ class OsmRoutingService(IRoutingService):
         Args:
             points: 坐标点列表 [(lat, lon), ...] 或 [(lat, lon, elevation), ...]
             progress_callback: 进度回调函数，参数为(progress, message)，progress为0-100的进度值
+            cancel_check: 取消检查回调，返回 True 时立即返回已获取的部分数据
 
         Returns:
             List[Tuple[float, float, float]]: 带海拔的点列表 [(lat, lon, elevation), ...]
+            取消时返回已获取的部分数据
         """
         # 处理可能带有海拔数据的点列表，确保只使用前两个元素(lat, lon)
         def get_lat_lon(point):
@@ -135,6 +137,11 @@ class OsmRoutingService(IRoutingService):
 
                 # 2.2 处理每一批点
                 for batch_index, batch in enumerate(batches):
+                    # 取消检查：每批开始时检查
+                    if cancel_check and cancel_check():
+                        self._log("INFO", f"用户取消了海拔数据获取，已获取 {len(cached_points)}/{len(points)} 个点的数据")
+                        return cached_points
+
                     self._log("DEBUG", f"处理第 {batch_index + 1}/{len(batches)} 批，点数: {len(batch)}")
                     
                     # 更新进度：20-40% 用于批量获取海拔数据
@@ -216,6 +223,24 @@ class OsmRoutingService(IRoutingService):
                 # 2.2 处理每一批采样点
                 sampled_points_with_elevation = []
                 for batch_index, batch in enumerate(batches):
+                    # 取消检查：每批开始时检查
+                    if cancel_check and cancel_check():
+                        self._log("INFO", f"用户取消了海拔数据获取（采样路径），已获取部分采样点，准备插值")
+                        if sampled_points_with_elevation:
+                            interpolated = self._interpolate_elevation(uncached_points, sampled_points_with_elevation)
+                            for pt in interpolated:
+                                lat, lon, elevation = pt
+                                self._elevation_cache[(lat, lon)] = elevation
+                                cached_points.append(pt)
+                        # 按原始顺序重排返回
+                        cached_dict = {(p[0], p[1]): p for p in cached_points}
+                        result = []
+                        for pt in points:
+                            key = (get_lat_lon(pt)[0], get_lat_lon(pt)[1])
+                            found = cached_dict.get(key)
+                            result.append(found if found else (key[0], key[1], 0.0))
+                        return result
+
                     self._log("DEBUG", f"处理采样点批次 {batch_index + 1}/{len(batches)}，点数: {len(batch)}")
                     
                     # 更新进度：20-35% 用于获取采样点海拔数据

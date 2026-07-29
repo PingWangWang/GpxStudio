@@ -205,6 +205,13 @@ class ProgressPopup(QWidget):
         self.hide()
         self.closed.emit()
 
+    def closeEvent(self, event):
+        """窗口关闭事件（X按钮点击时触发）"""
+        self._is_cancelled = True
+        self.hide()
+        self.closed.emit()
+        event.accept()
+
     def _on_complete_clicked(self):
         """完成按钮点击"""
         self.hide()

@@ -55,7 +55,7 @@ class GpxExportService:
                 self.logger("WARNING", f"时区检测失败: {str(e)}，使用东八区")
             return timezone(timedelta(hours=8))
 
-    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None, total_distance_meters=None, transport_mode=None, waypoint_names=None, description=None):
+    def export_to_gpx(self, route_points, start_datetime, file_path, start_name=None, end_name=None, export_elevation=False, total_duration_seconds=None, total_distance_meters=None, transport_mode=None, waypoint_names=None, description=None, cancel_check=None):
         """
         导出路线为GPX文件
 
@@ -71,6 +71,7 @@ class GpxExportService:
             transport_mode: 交通方式 (driving/cycling/walking)
             waypoint_names: 途径点名称列表
             description: 路线描述
+            cancel_check: 取消检查回调，返回 True 时取消导出
 
         Returns:
             bool: 是否成功
@@ -186,7 +187,11 @@ class GpxExportService:
             # 添加轨迹点
             route_segment = []
             point_count = 0
-            for point in route_points:
+            for point_idx, point in enumerate(route_points):
+                # 每 500 个点检查一次取消标志
+                if point_idx % 500 == 0 and cancel_check and cancel_check():
+                    log_cb("INFO", f"用户取消了GPX导出（写入阶段，已处理 {point_count} 个点）")
+                    return False
                 if point is None:
                     # 处理完一个段
                     if len(route_segment) >= 1:
