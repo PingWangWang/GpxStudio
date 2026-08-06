@@ -71,6 +71,14 @@ def main():
     # 禁止最后一个窗口关闭时自动退出程序（为了支持最小化到托盘功能）
     app.setQuitOnLastWindowClosed(False)
 
+    # 应用已保存的主题（在任何界面创建前，避免闪烁；"跟随系统"在此解析）
+    try:
+        from ui.theme import theme
+        from infrastructure.config.map_config import map_config
+        theme.set_theme(map_config.get('theme', 'light'))
+    except Exception as e:
+        print(f"警告: 应用主题失败: {e}")
+
     # 第二步：立即导入并显示启动画面（轻量级，不依赖重模块）
     from ui.dialogs.splash_screen import SplashScreen
     splash = SplashScreen()

@@ -3,12 +3,12 @@
 
 ; 定义安装程序名称和版本
 !define PRODUCT_NAME "GPX Studio"
-!define PRODUCT_VERSION "2.1.11"
+!define PRODUCT_VERSION "2.1.13"
 !define PRODUCT_PUBLISHER "PingWangWang"
 !define PRODUCT_URL "https://github.com/PingWangWang/GpxStudio"
 !define PRODUCT_ICON "..\res\GPXStudio.ico"
-!define PRODUCT_EXE "GPXStudio_2.1.11.exe"
-!define BUILD_DIR "..\dist\GPXStudio_2.1.10"
+!define PRODUCT_EXE "GPXStudio_2.1.13.exe"
+!define BUILD_DIR "..\dist\GPXStudio_2.1.13"
 
 ; 定义注册表路径
 !define REG_ROOT "HKCU"

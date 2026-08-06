@@ -69,6 +69,8 @@ class DateSelectPanel(QWidget):
                 alternate-background-color: __WINDOW_BG__;
             }
             QCalendarWidget QAbstractItemView {
+                background-color: __INPUT_BG__;
+                color: __TEXT__;
                 selection-background-color: __ACCENT__;
                 selection-color: __TEXT_ON_ACCENT__;
             }

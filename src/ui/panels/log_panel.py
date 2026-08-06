@@ -23,6 +23,8 @@ LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL
 }
 
+# 日志级别颜色（WARNING/ERROR/CRITICAL 语义色，深浅两模式均可见；
+# INFO/DEBUG 颜色在 _append_formatted 中按主题占位符渲染，此处不再使用）
 LOG_COLORS = {
     logging.DEBUG: QColor(128, 128, 128),
     logging.INFO: QColor(0, 0, 0),
@@ -80,15 +82,23 @@ class LogDisplayWidget(QTextEdit):
         self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
     def _append_formatted(self, message: LogMessage):
-        """格式化输出消息"""
+        """格式化输出消息（颜色经主题占位符渲染，深色模式下自动换浅色文字）"""
         time_str = message.timestamp.strftime("%H:%M:%S")
         level_short = message.get_level_short()
-        color = LOG_COLORS.get(message.level, QColor(0, 0, 0))
+
+        # 时间戳与正文颜色跟随主题（浅色模式深字 / 深色模式浅字）
+        time_color = theme.apply('__TEXT_TERTIARY__')
+        msg_color = theme.apply('__TEXT__')
+        # 级别色：INFO/DEBUG 用主题次要色；WARNING/ERROR 保留语义色（深浅两模式均可见）
+        if message.level in (logging.INFO, logging.DEBUG):
+            level_color = theme.apply('__TEXT_SECONDARY__' if message.level == logging.INFO else '__TEXT_TERTIARY__')
+        else:
+            level_color = LOG_COLORS.get(message.level, QColor(0, 0, 0)).name()
 
         html = f'''
-        <span style="color: #008000;">[{time_str}]</span>
-        <span style="color: {color.name()}; font-weight: bold;">[{level_short}]</span>
-        <span style="color: #000000;">{message.message}</span><br>
+        <span style="color: {time_color};">[{time_str}]</span>
+        <span style="color: {level_color}; font-weight: bold;">[{level_short}]</span>
+        <span style="color: {msg_color};">{message.message}</span><br>
         '''
         self.insertHtml(html)
 

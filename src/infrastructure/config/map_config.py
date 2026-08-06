@@ -58,6 +58,11 @@ class MapConfig(IConfigService):
             self._config_data['close_action'] = "exit"  # 默认为直接退出
             config_updated = True
 
+        # 确保包含主题配置（light / dark / system，默认为浅色）
+        if 'theme' not in self._config_data:
+            self._config_data['theme'] = 'light'
+            config_updated = True
+
         # 确保包含海拔数据获取优化开关
         if 'elevation_optimize' not in self._config_data:
             self._config_data['elevation_optimize'] = True  # 默认启用优化（最多1000点）

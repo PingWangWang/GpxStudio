@@ -12,9 +12,20 @@
        （同样注册，切主题时自动刷新）
     3. 控件销毁时通过 destroyed 信号自动注销，无需手动 unregister
 
-后续切换入口：theme.set_theme('dark' / 'light')，由设置面板的
-"外观 → 主题"选项触发，并将选择持久化到配置文件。
+主题模式（theme.set_theme 的入参）：
+    'light'  / 'dark'          —— 固定浅色 / 深色
+    'system'                   —— 跟随系统（Windows 浅/深色偏好，见 ui.system_theme）
+    theme.requested 保存用户选择，theme.current 为实际生效主题
+    （'system' 模式下系统主题变化时，主窗口通过 nativeEvent 调用 theme.apply_system_theme()）
+
+切换入口由设置面板的"主题"下拉框触发，选择经 map_config 持久化，
+应用启动时（QApplication 创建后）读取并应用，避免界面闪烁。
 """
+
+from ui.system_theme import detect_system_theme
+
+# 可选主题模式（固定模式 + 跟随系统）
+THEME_NAMES = ('light', 'dark', 'system')
 
 # 主题颜色表：light（浅色，本次默认）与 dark（原深色值回填，供后续切换）
 THEMES = {
@@ -55,7 +66,7 @@ THEMES = {
         # 背景
         'PANEL_BG': '#3b4453',
         'WINDOW_BG': '#2b3240',
-        'INPUT_BG': 'rgba(255, 255, 255, 0.9)',
+        'INPUT_BG': '#232a36',          # 输入框背景（深色，配 __TEXT__ 白字可读）
         # 文字
         'TEXT': '#ffffff',
         'TEXT_SECONDARY': '#aaaaaa',
@@ -99,9 +110,14 @@ _PLACEHOLDERS = (
 
 
 class _Theme:
-    """主题单例：占位符替换 + 控件注册刷新"""
+    """主题单例：占位符替换 + 控件注册刷新
+
+    requested: 用户选择的主题模式（light / dark / system）
+    current:   当前实际生效的主题（light / dark，system 已解析为实际值）
+    """
 
     def __init__(self):
+        self.requested = 'light'
         self.current = 'light'
         self._registered = []  # 已注册控件（destroyed 时自动注销）
 
@@ -158,10 +174,18 @@ class _Theme:
         self.register(widget)
 
     def set_theme(self, name: str):
-        """切换主题并刷新所有已注册控件"""
-        if name not in THEMES:
+        """切换主题并刷新所有已注册控件
+
+        Args:
+            name: 'light' / 'dark' / 'system'（跟随系统，自动解析为实际主题）
+
+        Raises:
+            ValueError: 未知主题模式
+        """
+        if name not in THEME_NAMES:
             raise ValueError(f"未知主题: {name}")
-        self.current = name
+        self.requested = name
+        self.current = name if name != 'system' else detect_system_theme()
         for widget in list(self._registered):
             try:
                 template = getattr(widget, '_theme_qss_template', None)
@@ -172,6 +196,15 @@ class _Theme:
             except RuntimeError:
                 # 控件已销毁（C++ 对象释放），跳过并从注册表移除
                 self.unregister(widget)
+
+    def apply_system_theme(self):
+        """按当前系统主题重新应用（仅"跟随系统"模式）
+
+        系统主题变化（WM_SETTINGCHANGE）时由主窗口调用；
+        非"跟随系统"模式下不产生任何效果。
+        """
+        if self.requested == 'system':
+            self.set_theme('system')
 
 
 theme = _Theme()

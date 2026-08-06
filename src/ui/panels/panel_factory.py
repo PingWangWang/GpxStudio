@@ -70,7 +70,10 @@ class PanelFactory:
         # 设置省略号模式（右侧省略）
         address_line_edit.setPlaceholderText("未选择地址")
         # 使用PyQt5的CSS样式（占位符接入主题，切主题自动刷新）
-        theme.apply_to_sub(address_line_edit, "QLineEdit { background-color: __INPUT_BG__; color: __TEXT__; border: 1px solid __BORDER__; padding: 5px 10px; font-size: 9pt; }")
+        theme.apply_to_sub(address_line_edit, """
+            QLineEdit { background-color: __INPUT_BG__; color: __TEXT__; border: 1px solid __BORDER__; padding: 5px 10px; font-size: 9pt; }
+            QLineEdit::placeholder { color: __TEXT_TERTIARY__; }
+        """)
         # 设置固定高度确保文本不会换行
         address_line_edit.setFixedHeight(30)
         # 允许标签收缩

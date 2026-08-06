@@ -152,8 +152,9 @@ class LocationHistoryPopup(QWidget):
                 background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: #e6f7ff;
-                border: 1px solid #91d5ff;
+                background-color: __ACCENT__;
+                color: __TEXT_ON_ACCENT__;
+                border: 1px solid __ACCENT__;
             }
         """)
         

@@ -216,9 +216,11 @@ class MapToolbar:
             QLineEdit {
                 background-color: __INPUT_BG__; border: none; border-radius: 4px;
                 padding: 0px 12px; font-size: 13px;
+                color: __TEXT__;
                 min-width: 250px; max-width: 250px;
             }
             QLineEdit:focus { background-color: __WINDOW_BG__; }
+            QLineEdit::placeholder { color: __TEXT_TERTIARY__; }
         """)
         self.search_input.setFixedHeight(h)
         self.search_input.returnPressed.connect(self._app.on_search_button_clicked)

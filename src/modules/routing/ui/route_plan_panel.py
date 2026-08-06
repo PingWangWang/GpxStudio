@@ -589,6 +589,9 @@ class RoutePlanPanel(QWidget):
             QLineEdit:focus {
                 background-color: __INPUT_BG__;
             }
+            QLineEdit::placeholder {
+                color: __TEXT_TERTIARY__;
+            }
             QPushButton {
                 background-color: transparent;
                 border: none;

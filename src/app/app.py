@@ -35,6 +35,7 @@ from ui.icons.icon_manager import create_icon_button
 
 # 导入UI组件
 from ui.styles import UIStyles
+from ui.theme import theme
 from ui.panels.panel_factory import PanelFactory
 from ui.panels.log_panel import LogPanel, setup_logger
 from ui.panels.scale_panel import ScalePanel
@@ -185,6 +186,29 @@ class GpxStudio(InitMixin, HiddenUIMixin, SearchMixin, UICallbacksMixin,
 
         # 启动定时检查更新的任务
         self.start_update_check()
+
+    def nativeEvent(self, eventType, message):
+        """处理 Windows 系统消息：跟随系统主题时响应系统主题切换（WM_SETTINGCHANGE）
+
+        Args:
+            eventType: 事件类型（windows_generic_MSG 表示 Windows 消息）
+            message: 消息结构体指针（MSG）
+
+        Returns:
+            tuple: (是否已处理, 返回值)，未处理时交回父类默认实现
+        """
+        try:
+            if eventType == b"windows_generic_MSG":
+                import ctypes
+                from ctypes import wintypes
+                msg = wintypes.MSG.from_address(int(message))
+                # WM_SETTINGCHANGE = 0x001A：系统级设置变化（含浅/深色主题切换）
+                if msg.message == 0x001A and theme.requested == 'system':
+                    theme.apply_system_theme()
+        except Exception:
+            # 消息解析失败不影响正常事件处理
+            pass
+        return super().nativeEvent(eventType, message)
 
 
 if __name__ == "__main__":

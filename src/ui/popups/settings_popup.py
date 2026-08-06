@@ -116,7 +116,7 @@ try:
 except ImportError:
     pass
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
-from PyQt5.QtGui import QIcon, QKeyEvent, QPainter, QPen, QBrush, QPolygon
+from PyQt5.QtGui import QIcon, QKeyEvent, QPainter, QPen, QBrush, QPolygon, QColor
 from PyQt5.QtCore import QPoint
 from services.config.map_config import map_config
 from core.logging_setup import clean_logs, open_log_directory, get_log_size, set_log_level
@@ -155,13 +155,16 @@ class CustomArrowButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 设置箭头颜色
+        # 箭头颜色随主题（浅色模式深箭头 / 深色模式浅箭头）
+        normal = QColor(theme.apply('__TEXT_TERTIARY__'))
+        hover = QColor(theme.apply('__TEXT_SECONDARY__'))
+        pressed = QColor(theme.apply('__TEXT__'))
         if self.isDown():
-            color = Qt.black
+            color = pressed
         elif self.underMouse():
-            color = Qt.darkGray
+            color = hover
         else:
-            color = Qt.gray
+            color = normal
 
         painter.setPen(QPen(color, 2))
         painter.setBrush(QBrush(color))
@@ -255,7 +258,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 310)  # 容纳海拔获取下拉框与收藏点开关
+        self.setFixedSize(300, 345)  # 容纳主题下拉框、海拔获取下拉框与收藏点开关
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -409,6 +412,7 @@ class MapSettingsPopup(BaseSettingsPopup):
                 border: 1px solid __BORDER__;
                 border-radius: 3px;
                 background-color: __INPUT_BG__;
+                color: __TEXT__;
                 selection-background-color: __ACCENT__;
                 selection-color: __TEXT_ON_ACCENT__;
                 font-size: 12px;
@@ -465,6 +469,9 @@ class MapSettingsPopup(BaseSettingsPopup):
             QLineEdit:focus {
                 background-color: __INPUT_BG__;
             }
+            QLineEdit::placeholder {
+                color: __TEXT_TERTIARY__;
+            }
         """)
         # 设置文本边距，为右侧的眼睛按钮留出空间
         self.api_key_edit.setTextMargins(0, 2, 0, 2)  # 减小上下边距以防止提示语被截断
@@ -508,6 +515,9 @@ class MapSettingsPopup(BaseSettingsPopup):
             }
             QLineEdit:focus {
                 background-color: __INPUT_BG__;
+            }
+            QLineEdit::placeholder {
+                color: __TEXT_TERTIARY__;
             }
         """)
         # 设置文本边距，为右侧的眼睛按钮留出空间
@@ -573,6 +583,44 @@ class MapSettingsPopup(BaseSettingsPopup):
         config_layout = QVBoxLayout()
         config_layout.setSpacing(-1)  # 设置为-1表示尽可能小的间距
         config_layout.setContentsMargins(0, 0, 0, 0)  # 清除布局的外边距
+
+        # 主题行（外观设置：浅色/深色/跟随系统，切换即时生效）
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("浅色", "light")
+        self.theme_combo.addItem("深色", "dark")
+        self.theme_combo.addItem("跟随系统", "system")
+        self.theme_combo.setFixedHeight(30)
+        self.theme_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        theme.apply_to_sub(self.theme_combo, self.map_source_combo.styleSheet())
+        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
+
+        theme_row = QHBoxLayout()
+        theme_label = QLabel("主题:")
+        theme.apply_to_sub(theme_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme_label.setFixedWidth(80)
+        theme_label.setFixedHeight(30)
+        theme_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        theme_row.addWidget(theme_label)
+        theme_row.addSpacing(10)
+
+        theme_container = QWidget()
+        theme_container_layout = QHBoxLayout(theme_container)
+        theme_container_layout.setContentsMargins(0, 0, 0, 0)
+        theme_container_layout.addWidget(self.theme_combo)
+        theme_placeholder = QPushButton()
+        theme_placeholder.setFixedSize(30, 30)
+        theme_placeholder.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
+        theme_placeholder.setEnabled(False)
+        theme_container_layout.addWidget(theme_placeholder)
+        theme_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        theme_row.addWidget(theme_container)
+        theme_row.setContentsMargins(0, 0, 0, 0)  # 清除行布局的边距
+        theme_row.setSpacing(0)  # 清除行内间距
+        theme_row.setStretch(0, 0)  # 确保标签不拉伸
+        theme_row.setStretch(1, 0)  # 确保间距不拉伸
+        theme_row.setStretch(2, 1)  # 确保容器拉伸
+        config_layout.addLayout(theme_row)
 
         # 地图数据源行
         source_row = QHBoxLayout()
@@ -837,6 +885,11 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def load_current_config(self):
         """加载当前配置"""
+        # 加载主题配置（浅色/深色/跟随系统）
+        theme_name = map_config.get('theme', 'light')
+        idx = self.theme_combo.findData(theme_name)
+        self.theme_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
         map_source = map_config.get_map_source()
         
         # 加载关闭动作配置
@@ -872,6 +925,19 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 加载收藏点显示开关
         self.show_favorites_check.setChecked(map_config.get_show_favorites())
 
+
+    def on_theme_changed(self, index: int):
+        """主题切换：即时应用并持久化
+
+        Args:
+            index: 主题下拉框选中项索引（-1 表示清空，忽略）
+        """
+        theme_name = self.theme_combo.currentData()
+        if theme_name:
+            theme.set_theme(theme_name)
+            # 仅当与已保存值不同时写回配置，避免加载配置时冗余写文件
+            if map_config.get('theme', 'light') != theme_name:
+                map_config.set('theme', theme_name)
 
     def save_config(self):
         """保存配置"""
@@ -1090,6 +1156,9 @@ class LogSettingsPopup(BaseSettingsPopup):
                 min-height: 30px;
                 max-height: 30px;
             }
+            QLineEdit::placeholder {
+                color: __TEXT_TERTIARY__;
+            }
         """)
         row1_layout.addWidget(log_size_text, 2)
 
@@ -1119,6 +1188,7 @@ class LogSettingsPopup(BaseSettingsPopup):
                 border: 1px solid __BORDER__;
                 border-radius: 3px;
                 background-color: __INPUT_BG__;
+                color: __TEXT__;
                 selection-background-color: __ACCENT__;
                 selection-color: __TEXT_ON_ACCENT__;
                 font-size: 12px;

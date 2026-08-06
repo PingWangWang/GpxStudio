@@ -251,15 +251,17 @@ class TaskProgressWidget(QWidget):
         self.timer.stop()
 
     def add_log(self, level: str, message: str):
-        """添加日志信息"""
+        """添加日志信息（文字颜色经主题占位符渲染，深色模式自动换浅字）"""
+        # INFO/DEBUG 用主题次要色（浅色深字 / 深色浅字）；
+        # WARNING/ERROR/CRITICAL 保留语义色，深浅两模式均可见
         color_map = {
-            "DEBUG": "#999999",
-            "INFO": "#333333",
+            "DEBUG": theme.apply('__TEXT_TERTIARY__'),
+            "INFO": theme.apply('__TEXT_SECONDARY__'),
             "WARNING": "#ff9800",
             "ERROR": "#f44336",
             "CRITICAL": "#f44336"
         }
-        color = color_map.get(level, "#333333")
+        color = color_map.get(level, theme.apply('__TEXT_SECONDARY__'))
 
         icon_map = {
             "DEBUG": "◦",
@@ -275,7 +277,8 @@ class TaskProgressWidget(QWidget):
     def _add_detail(self, text: str, color: str):
         """添加详细信息（内部方法）"""
         timestamp = datetime.now().strftime("%H:%M:%S")
-        html = f'<span style="color: #999999;">[{timestamp}]</span> <span style="color: {color};">{text}</span><br>'
+        ts_color = theme.apply('__TEXT_TERTIARY__')
+        html = f'<span style="color: {ts_color};">[{timestamp}]</span> <span style="color: {color};">{text}</span><br>'
 
         # 使用insertHtml而不是append，避免QTextCursor信号问题
         cursor = self.detail_text.textCursor()
