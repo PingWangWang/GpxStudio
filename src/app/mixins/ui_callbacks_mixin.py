@@ -153,6 +153,17 @@ class UICallbacksMixin:
 
     def _show_location_on_map(self, lat: float, lon: float, popup_text: str):
         self.logger.debug(f"[UI回调] 收到显示位置请求: {lat}, {lon}")
+        # 路线面板"我的位置"待填状态：定位成功后填充当前输入框
+        route_plan_panel = getattr(self, 'route_plan_panel', None)
+        if route_plan_panel is not None and route_plan_panel.has_pending_location():
+            search_type = route_plan_panel.get_pending_search_type()
+            route_plan_panel.fill_pending_location(lat, lon)
+            # 同步数据管理器坐标（与右键设置起终点一致）
+            name = "我的位置"
+            if search_type == 'start':
+                self.data_manager.set_start_location((lat, lon), name)
+            elif search_type == 'end':
+                self.data_manager.set_end_location((lat, lon), name)
         self.map_manager.show_location_on_map(lat, lon, popup_text)
 
     def _show_route_on_map(self):

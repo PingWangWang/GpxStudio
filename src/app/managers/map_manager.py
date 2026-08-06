@@ -1152,7 +1152,7 @@ class MapManager:
             self.logger.error(f"[MapManager] 地图视图已被删除，无法显示位置: {e}")
 
     def add_favorite(self, lat: float, lon: float, name: str, address: str = '',
-                     coord_system: str = 'WGS-84') -> tuple:
+                     coord_system: str = 'WGS-84', type_text: str = '') -> tuple:
         """
         添加收藏点
 
@@ -1162,6 +1162,7 @@ class MapManager:
             name: 收藏点名称
             address: 收藏点地址
             coord_system: 传入坐标的坐标系统（统一转为 WGS-84 存储）
+            type_text: 地址类型（高德 type/type_info，用于列表条目图标）
 
         返回:
             (success, message): 是否成功及结果消息
@@ -1170,7 +1171,8 @@ class MapManager:
         if coord_system != 'WGS-84':
             lat, lon = CoordinateTransform.convert(lat, lon, coord_system, 'WGS-84')
 
-        success, message = self.favorites_storage.add_favorite(name, address, lat, lon)
+        success, message = self.favorites_storage.add_favorite(
+            name, address, lat, lon, type_text=type_text)
         if success:
             self.logger.info(f"[收藏点] 已添加收藏: {name} ({lat:.6f}, {lon:.6f})")
             # 保持当前视图刷新地图，显示新收藏点
@@ -1196,7 +1198,7 @@ class MapManager:
         return self.favorites_storage.is_favorited(lat, lon)
 
     def toggle_favorite(self, lat: float, lon: float, name: str, address: str = '',
-                        coord_system: str = 'WGS-84') -> str:
+                        coord_system: str = 'WGS-84', type_text: str = '') -> str:
         """
         切换收藏状态：未收藏则收藏，已收藏则取消收藏
 
@@ -1206,6 +1208,7 @@ class MapManager:
             name: 收藏点名称
             address: 收藏点地址
             coord_system: 传入坐标的坐标系统（统一转 WGS-84 存储）
+            type_text: 地址类型（高德 type/type_info，用于列表条目图标）
 
         返回:
             str: 'added' 已收藏 / 'removed' 已取消收藏 / 'failed' 操作失败
@@ -1225,7 +1228,8 @@ class MapManager:
             return 'failed'
         else:
             # 未收藏 → 收藏
-            success, message = self.favorites_storage.add_favorite(name, address, wgs_lat, wgs_lon)
+            success, message = self.favorites_storage.add_favorite(
+                name, address, wgs_lat, wgs_lon, type_text=type_text)
             if success:
                 self.logger.info(f"[收藏点] 已收藏: {name} ({wgs_lat:.6f}, {wgs_lon:.6f})")
                 self.reload_map()  # 保持当前视图刷新，显示星形标记

@@ -38,6 +38,22 @@ class MapMixin:
         if self.map_manager is not None:
             self.map_manager.show_map(center=center, zoom=zoom, title="地图")
 
+    def _on_search_history_my_location(self):
+        """搜索历史首行"我的位置"点击：触发定位"""
+        self.logger.info("[搜索历史] 点击我的位置，触发定位")
+        try:
+            self.on_locate_clicked()
+        except Exception as e:
+            self.logger.error(f"处理我的位置点击出错: {e}")
+
+    def _on_route_panel_locate(self):
+        """路线面板"我的位置"入口：触发定位（结果将填入待填输入框）"""
+        self.logger.info("[路线面板] 收到定位请求（我的位置）")
+        try:
+            self.on_locate_clicked()
+        except Exception as e:
+            self.logger.error(f"处理路线面板定位请求出错: {e}")
+
     # ── 地图模式 & 路网 ───────────────────────────────────────────────────
 
     def on_map_mode_toggled(self, checked):
@@ -251,14 +267,193 @@ class MapMixin:
         except Exception as e:
             self.logger.error(f"处理隐藏定位标识请求出错: {e}")
 
-    def _on_location_favorite_requested(self, lat: float, lon: float, name: str):
-        """定位 popup 内点击收藏按钮时的处理方法（切换收藏，成功不弹窗）"""
-        self.logger.info(f"[定位标识] 收到收藏当前位置请求: ({lat}, {lon}) {name}")
+    def _on_map_middle_double_click(self):
+        """地图中键双击：触发自动缩放（效果与工具栏按钮完全一致）"""
+        self.logger.info("[缩放] 收到中键双击请求，触发自动缩放")
+        try:
+            self.on_zoom_fit_clicked()
+        except Exception as e:
+            self.logger.error(f"处理中键双击缩放出错: {e}")
+
+    # ── 收藏夹弹窗 ──────────────────────────────────────────────────────
+
+    def _show_favorites_cancel_button(self):
+        """收藏夹弹窗展开：收藏夹按钮位切换为关闭按钮（路线按钮保持原样）"""
+        favorites_button = getattr(self, 'favorites_button', None)
+        if favorites_button is not None:
+            favorites_button.hide()
+        cancel_button = getattr(self, 'cancel_button', None)
+        if cancel_button is not None:
+            cancel_button.show()
+            cancel_button.raise_()
+
+    def _hide_favorites_cancel_button(self):
+        """收藏夹弹窗收起：隐藏关闭按钮，恢复收藏夹按钮"""
+        cancel_button = getattr(self, 'cancel_button', None)
+        if cancel_button is not None:
+            cancel_button.hide()
+        favorites_button = getattr(self, 'favorites_button', None)
+        if favorites_button is not None:
+            favorites_button.show()
+            favorites_button.raise_()
+
+    def on_favorites_button_clicked(self):
+        """工具栏收藏夹按钮：展开/收起收藏夹列表"""
+        self.logger.info("[收藏夹] 收藏夹按钮点击")
+
+        if not hasattr(self, 'favorites_popup') or self.favorites_popup is None:
+            from ui.popups.favorites_list_popup import FavoritesListPopup
+            self.favorites_popup = FavoritesListPopup(
+                self, map_manager=getattr(self, 'map_manager', None))
+            self.favorites_popup.favorite_selected.connect(self._on_favorites_selected)
+            self.favorites_popup.favorite_delete_requested.connect(self._on_favorites_delete)
+            self.favorites_popup.import_clicked.connect(self._on_favorites_import)
+            self.favorites_popup.export_clicked.connect(self._on_favorites_export)
+            self.favorites_popup.clear_clicked.connect(self._on_favorites_clear)
+            # 弹窗关闭（含失去焦点自动关闭）时恢复收藏夹按钮
+            self.favorites_popup.closed.connect(self._hide_favorites_cancel_button)
+
+        if self.favorites_popup.isVisible():
+            self.favorites_popup.hide()
+            self._hide_favorites_cancel_button()
+            return
+
+        self.favorites_popup.refresh()
+        # 先 show 再定位：update_search_popups_position 仅处理可见弹窗
+        # （isVisible 过滤），show 前调用会跳过导致弹窗落在残留位置
+        self.favorites_popup.show()
+        self.favorites_popup.raise_()
+        # 位置/宽度/高度与搜索历史列表一致（锚定搜索容器，宽度=整个工具条）
+        from ui.popups.popup_positioner import PopupPositioner
+        PopupPositioner.update_search_popups_position(
+            None, None, getattr(self, 'search_container', None),
+            self.logger, favorites_popup=self.favorites_popup)
+        # 弹窗展开时收藏夹按钮位切换为关闭按钮（路线按钮保持原样）
+        self._show_favorites_cancel_button()
+
+    def _on_favorites_selected(self, fav: dict):
+        """收藏夹条目点击：仅将地图缩放定位到该收藏点（不添加额外标记）
+
+        收藏点金星标识由收藏图层渲染（show_map 全量重建自带），
+        此处只移动地图中心，避免预览高亮标记与金星标识叠加。
+        """
+        name = fav.get('name', '收藏点')
+        self.logger.info(f"[收藏夹] 选择收藏点: {name}")
         try:
             if self.map_manager is not None:
-                action = self.map_manager.toggle_favorite(lat, lon, name, coord_system='WGS-84')
-                if action == 'failed':
-                    self.logger.error(f"[定位标识] 收藏当前位置失败")
+                # POI 级缩放（16），坐标按 WGS-84 处理（收藏统一存储坐标系）
+                self.map_manager.show_map(
+                    [fav.get('lat', 0), fav.get('lon', 0)], zoom=16,
+                    title=name, coord_system='WGS-84')
+        except Exception as e:
+            self.logger.error(f"处理收藏点选择出错: {e}")
+
+    def _on_favorites_delete(self, fav_id: int):
+        """收藏夹金星按钮：删除收藏（列表与地图同步）"""
+        self.logger.info(f"[收藏夹] 删除收藏: id={fav_id}")
+        try:
+            if self.map_manager is not None:
+                self.map_manager.delete_favorite(fav_id)
+            if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
+                self.favorites_popup.refresh()
+        except Exception as e:
+            self.logger.error(f"处理收藏删除出错: {e}")
+
+    def _on_favorites_import(self):
+        """收藏夹导入：选择 JSON 文件合并导入"""
+        self.logger.info("[收藏夹] 导入收藏")
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "导入收藏", "", "收藏文件 (*.json)")
+            if not file_path:
+                return
+
+            storage = self.map_manager.favorites_storage
+            imported, skipped, error = storage.import_from_file(file_path)
+            if error:
+                self._show_warning("导入失败", error)
+                return
+
+            self.map_manager.reload_map()
+            if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
+                self.favorites_popup.refresh()
+            self._show_info("导入完成", f"新增 {imported} 个收藏，跳过 {skipped} 个")
+        except Exception as e:
+            self.logger.error(f"处理收藏导入出错: {e}")
+
+    def _on_favorites_export(self):
+        """收藏夹导出：收藏列表写入 JSON 文件"""
+        self.logger.info("[收藏夹] 导出收藏")
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "导出收藏", "FavoritesList.json", "收藏文件 (*.json)")
+            if not file_path:
+                return
+
+            storage = self.map_manager.favorites_storage
+            if storage.export_to_file(file_path):
+                self._show_info("导出完成", f"已导出 {len(storage.get_all())} 个收藏")
+            else:
+                self._show_warning("导出失败", "写入文件失败，请查看日志")
+        except Exception as e:
+            self.logger.error(f"处理收藏导出出错: {e}")
+
+    def _on_favorites_clear(self):
+        """收藏夹清空（二次确认后执行，确认面板与项目其他弹窗风格一致）"""
+        self.logger.info("[收藏夹] 清空收藏")
+        try:
+            from PyQt5.QtWidgets import QDialog
+            from ui.dialogs.custom_message_dialog import CustomMessageDialog
+            reply = CustomMessageDialog(
+                self, title="确认清空", message="确定要清空全部收藏吗？此操作不可恢复。",
+                show_cancel=True, ok_text="清空", cancel_text="取消").exec_()
+            if reply != QDialog.Accepted:
+                return
+
+            self.map_manager.favorites_storage.clear_all()
+            self.map_manager.reload_map()
+            if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
+                self.favorites_popup.refresh()
+        except Exception as e:
+            self.logger.error(f"处理收藏清空出错: {e}")
+
+    def _on_location_favorite_requested(self, lat: float, lon: float, name: str):
+        """定位 popup 内点击收藏按钮时的处理方法（切换收藏，成功不弹窗）
+
+        收藏信息与右键"收藏此位置"保持一致：逆地理编码获取名称/地址
+        （高德源下定位坐标 WGS-84 先转 GCJ-02 再查询），失败降级为面板标题文本。
+        """
+        self.logger.info(f"[定位标识] 收到收藏当前位置请求: ({lat}, {lon}) {name}")
+        try:
+            if self.map_manager is None:
+                return
+
+            # 逆地理编码：复用右键收藏链路（_resolve_map_click_address 期望地图源坐标系）
+            from services.config.map_config import map_config
+            from modules.geolocation import CoordinateTransform
+
+            query_lat, query_lon = lat, lon
+            if map_config.get_map_source() == 'gaode':
+                # 定位坐标 WGS-84 → 高德 GCJ-02（逆地理编码 API 期望 GCJ-02 输入）
+                query_lat, query_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
+
+            try:
+                geo = self._resolve_map_click_address(query_lat, query_lon)
+                fav_name = geo['name']
+                fav_address = geo.get('address', '')
+                fav_type = geo.get('type_info', '') or ''
+            except Exception:
+                # 降级：面板标题文本（如"我的位置"），地址为空
+                self.logger.warning("[定位标识] 逆地理编码失败，使用面板标题作为收藏名称")
+                fav_name, fav_address, fav_type = name, '', ''
+
+            action = self.map_manager.toggle_favorite(
+                lat, lon, fav_name, address=fav_address, coord_system='WGS-84',
+                type_text=fav_type)
+            if action == 'failed':
+                self.logger.error(f"[定位标识] 收藏当前位置失败")
         except Exception as e:
             self.logger.error(f"处理收藏当前位置请求出错: {e}")
 

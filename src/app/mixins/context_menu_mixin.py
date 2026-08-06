@@ -326,7 +326,11 @@ class ContextMenuMixin:
             self.logger.error("[右键菜单] 位置信息面板不存在")
 
     def _on_context_menu_add_favorite(self, lat: float, lon: float):
-        """右键菜单：收藏此位置"""
+        """右键菜单：收藏此位置
+
+        收藏成功后不弹提示（地图刷新后金星标记即为反馈，与其他收藏入口一致）；
+        仅失败时显式警告。
+        """
         self.logger.info(f"[右键菜单] 收藏此位置: ({lat}, {lon})")
 
         # 复用逆地理编码解析名称（双地图源通用），失败时降级为坐标字符串
@@ -337,11 +341,10 @@ class ContextMenuMixin:
         coord_system = geo['coord_system']
 
         success, message = self.map_manager.add_favorite(
-            lat, lon, name, address=address, coord_system=coord_system)
+            lat, lon, name, address=address, coord_system=coord_system,
+            type_text=geo.get('type_info', '') or '')
 
-        if success:
-            self._show_info("收藏成功", f"已收藏：{name}")
-        else:
+        if not success:
             self._show_warning("收藏失败", message)
 
     def _on_context_menu_set_center(self, lat: float, lon: float):

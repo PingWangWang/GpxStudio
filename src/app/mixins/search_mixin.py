@@ -88,7 +88,7 @@ class SearchMixin:
         action = self.map_manager.toggle_favorite(
             float(result.get('lat', 0)), float(result.get('lon', 0)),
             name, address=result.get('address', ''),
-            coord_system=coord_system)
+            coord_system=coord_system, type_text=result.get('type', ''))
 
         if action == 'failed':
             self._show_warning("收藏操作失败", "请查看日志了解详情")
@@ -101,6 +101,12 @@ class SearchMixin:
 
     def on_cancel_button_clicked(self):
         self.logger.info("[搜索] ========== 关闭按钮点击 ==========")
+        # 收藏夹弹窗展开时：关闭按钮只负责收起弹窗并恢复收藏夹按钮
+        favorites_popup = getattr(self, 'favorites_popup', None)
+        if favorites_popup is not None and favorites_popup.isVisible():
+            favorites_popup.hide()
+            self._hide_favorites_cancel_button()
+            return
         if self.search_results_popup is not None:
             self.search_results_popup.hide()
         self.search_input.clear()

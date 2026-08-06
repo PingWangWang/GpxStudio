@@ -75,22 +75,37 @@ class LocationHistoryItem(QWidget):
 
 class LocationHistoryPopup(QWidget):
     """地点搜索历史弹出列表"""
-    
+
+    # 头部固定高度（标题行 + 边距），高度公式计入总高
+    HEADER_HEIGHT = 45
+
     # 信号
     location_selected = pyqtSignal(dict)  # 地点被选中：(地点数据)
-    clear_history_clicked = pyqtSignal()  # 清空历史按钮点击
+    my_location_clicked = pyqtSignal()  # 点击固定"我的位置"首行（定位当前位置并填入输入框）
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, map_manager=None):
         super().__init__(parent)
-        
+        self._map_manager = map_manager
+
         # 设置窗口标志 - 使用Tool而非Popup，避免捕获所有键盘事件导致输入框无法使用
         # Qt.Popup会捕获所有事件，导致输入框的退格键、回车键等按键无法工作
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # 不加 WindowStaysOnTopHint：置顶会使弹窗在切换其他软件时仍浮于最上层，
+        # Tool 子窗口层级随主窗口，切后台时自然下沉
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-        # 历史记录列表
+
+        # 历史记录列表（面板每次弹出时填充）
         self.history_items = []
-        
+
+        # 当前显示的列表项（用于 show_at 时计算高度）
+        self._current_items = []
+
+        # 锚点输入框（_reposition 重定位/重算高度用）
+        self._anchor_widget = None
+
+        # 当前 tab：history / favorites（保留上次选择，切换后再次弹出不重置）
+        self._current_tab = 'history'
+
         # 初始化UI
         self._init_ui()
     
@@ -145,28 +160,44 @@ class LocationHistoryPopup(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         
-        # 头部：标题和清空按钮
+        # 头部：最近搜索/收藏夹 tab 切换 + 清空按钮
         header_layout = QHBoxLayout()
-        header_layout.setSpacing(8)
-        
-        title_label = QLabel("🕒 最近搜索")
-        title_label.setStyleSheet("""
-            QLabel {
-                color: #666666;
+        header_layout.setSpacing(4)
+
+        # Tab 按钮样式：选中蓝色加粗 + 下划线，未选中灰色
+        tab_style = """
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #999999;
                 font-size: 13px;
-                font-weight: bold;
+                padding: 2px 6px;
             }
-        """)
-        header_layout.addWidget(title_label)
-        
+            QPushButton:hover {
+                color: #666666;
+            }
+            QPushButton:checked {
+                color: #1890ff;
+                font-weight: bold;
+                border-bottom: 2px solid #1890ff;
+            }
+        """
+
+        self.history_tab_btn = QPushButton("🕒 最近搜索")
+        self.history_tab_btn.setCheckable(True)
+        self.history_tab_btn.setChecked(True)
+        self.history_tab_btn.setStyleSheet(tab_style)
+        self.history_tab_btn.clicked.connect(lambda: self._switch_tab('history'))
+        header_layout.addWidget(self.history_tab_btn)
+
+        self.favorites_tab_btn = QPushButton("⭐ 收藏夹")
+        self.favorites_tab_btn.setCheckable(True)
+        self.favorites_tab_btn.setStyleSheet(tab_style)
+        self.favorites_tab_btn.clicked.connect(lambda: self._switch_tab('favorites'))
+        header_layout.addWidget(self.favorites_tab_btn)
+
         header_layout.addStretch()
-        
-        # 清空历史按钮
-        clear_button = QPushButton("清空")
-        clear_button.setToolTip("清空历史记录")
-        clear_button.clicked.connect(self.clear_history_clicked.emit)
-        header_layout.addWidget(clear_button)
-        
+
         layout.addLayout(header_layout)
         
         # 历史记录列表
@@ -191,28 +222,106 @@ class LocationHistoryPopup(QWidget):
         self.empty_label.setVisible(False)
         layout.addWidget(self.empty_label)
     
+    def _get_map_manager(self):
+        """获取 MapManager（构造注入优先，否则经父窗口链实时获取）
+
+        弹窗 parent 为 RoutePlanPanel，其 parent 为主窗口（持有 map_manager）。
+        """
+        if self._map_manager is not None:
+            return self._map_manager
+        parent = self.parent()
+        if parent is not None:
+            return getattr(getattr(parent, 'parent', lambda: None)(), 'map_manager', None)
+        return None
+
+    def _get_favorites_items(self) -> List[Dict]:
+        """从收藏存储构造列表项（与历史记录字段格式兼容）"""
+        map_manager = self._get_map_manager()
+        if map_manager is None:
+            return []
+        items = []
+        for fav in map_manager.favorites_storage.get_all():
+            items.append({
+                'name': fav.get('name', '收藏点'),
+                'address': fav.get('address', ''),
+                'lat': fav.get('lat', 0),
+                'lon': fav.get('lon', 0),
+                'coord_system': fav.get('coord_system', 'WGS-84'),
+                'data_source': 'favorite',
+            })
+        return items
+
+    def _switch_tab(self, mode: str):
+        """切换最近搜索/收藏夹 tab
+
+        Args:
+            mode: 'history' 或 'favorites'
+        """
+        self._current_tab = mode
+        is_history = (mode == 'history')
+        self.history_tab_btn.setChecked(is_history)
+        self.favorites_tab_btn.setChecked(not is_history)
+
+        if is_history:
+            self._update_list(self.history_items, '暂无搜索历史')
+        else:
+            self._update_list(self._get_favorites_items(), '暂无收藏地点')
+
     def set_history_items(self, items: List[Dict]):
         """设置历史记录列表
-        
+
         Args:
             items: 历史记录列表，每项包含 name, address, lat, lon 等字段
         """
         self.history_items = items
-        self._update_list()
-    
-    def _update_list(self):
-        """更新列表显示"""
+        # 仅当当前为最近搜索 tab 时刷新列表（收藏夹 tab 保留其显示）
+        if self._current_tab == 'history':
+            self._update_list(items, '暂无搜索历史')
+
+    def _update_list(self, items: List[Dict], empty_text: str = '暂无搜索历史'):
+        """更新列表显示
+
+        Args:
+            items: 列表项数据
+            empty_text: 空状态提示文案
+        """
+        self._current_items = items
         self.history_list.clear()
-        
-        if not self.history_items:
+
+        # 第一行固定"我的位置"（点击定位当前位置并填入输入框）
+        my_item = QListWidgetItem()
+        my_item.setData(Qt.UserRole, '__MY_LOCATION__')
+        my_item.setSizeHint(QSize(0, 40))
+
+        # 使用行控件与历史条目相同的边距/字体，保证文本左对齐
+        my_widget = QWidget()
+        my_layout = QHBoxLayout(my_widget)
+        my_layout.setContentsMargins(12, 8, 12, 8)
+        my_label = QLabel("📍 我的位置")
+        my_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+        my_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        my_layout.addWidget(my_label)
+        my_layout.addStretch()
+
+        self.history_list.addItem(my_item)
+        self.history_list.setItemWidget(my_item, my_widget)
+
+        if not items:
             self.history_list.setVisible(False)
+            self.empty_label.setText(empty_text)
             self.empty_label.setVisible(True)
             return
-        
+
         self.history_list.setVisible(True)
         self.empty_label.setVisible(False)
-        
-        for item_data in self.history_items:
+
+        for item_data in items:
             # 创建列表项
             list_item = QListWidgetItem()
             list_item.setData(Qt.UserRole, item_data)
@@ -234,7 +343,11 @@ class LocationHistoryPopup(QWidget):
     def _on_item_clicked(self, item: QListWidgetItem):
         """列表项被点击"""
         location_data = item.data(Qt.UserRole)
-        if location_data:
+        if location_data == '__MY_LOCATION__':
+            # 点击"我的位置"：定位当前位置并填入输入框（由面板处理）
+            self.my_location_clicked.emit()
+            self.hide()
+        elif location_data:
             self.location_selected.emit(location_data)
             self.hide()
     
@@ -245,22 +358,47 @@ class LocationHistoryPopup(QWidget):
     
     def show_at(self, widget: QWidget):
         """在指定widget下方显示
-        
+
         Args:
             widget: 目标输入框
         """
-        # 计算位置：在输入框下方
-        global_pos = widget.mapToGlobal(widget.rect().bottomLeft())
-        
-        # 设置固定宽度（与输入框宽度相同）
-        width = widget.width()
-        
-        # 设置最大高度（不超过5个项目的高度）
-        max_height = min(250, len(self.history_items) * 50 + 60)
-        
-        self.setFixedWidth(width)
-        self.setMaximumHeight(max_height)
-        
+        self._anchor_widget = widget
+        self._reposition()
+
+    def _reposition(self):
+        """按锚点输入框重算位置与尺寸（主窗口移动/缩放时联动调用）
+
+        高度逻辑与搜索/收藏列表同构：条目少时随条目数动态变化，
+        最大高度受主窗口底部边界约束（弹窗底不超主窗口底），超限滚动条生效。
+        """
+        if self._anchor_widget is None:
+            return
+
+        # 位置：输入框下方
+        global_pos = self._anchor_widget.mapToGlobal(self._anchor_widget.rect().bottomLeft())
+
+        # 宽度与输入框相同
+        self.setFixedWidth(self._anchor_widget.width())
+
+        # 高度：头部固定部分 + 列表条目自然高（逐条目 sizeHint 求和，含"我的位置"首行）
+        list_natural = sum(
+            self.history_list.item(i).sizeHint().height()
+            for i in range(self.history_list.count()))
+        target_height = self.HEADER_HEIGHT + list_natural
+
+        # 边界约束：主窗口底边 - 弹窗顶 - 4px（弹窗 parent 为路线面板，其 parent 为主窗口）
+        max_height = None
+        main_window = self.parent().parent() if self.parent() is not None else None
+        if main_window is not None:
+            top_y = global_pos.y()
+            max_height = main_window.frameGeometry().bottom() - top_y - 4
+            if max_height is not None:
+                target_height = min(target_height, max_height)
+
+        if max_height is not None:
+            self.setMaximumHeight(max_height)
+        self.resize(self.width(), max(target_height, self.HEADER_HEIGHT))
+
         # 显示在输入框下方
         self.move(global_pos)
         self.show()

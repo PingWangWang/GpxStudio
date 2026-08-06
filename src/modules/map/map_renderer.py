@@ -494,6 +494,23 @@ class MapRenderer:
                     console.log('右键点击:' + lat + ',' + lon);
                 });
 
+                // 3.1 中键双击检测（→ 自动缩放，效果与工具栏按钮一致）
+                // 浏览器 dblclick 事件仅对主按钮（左键）触发，中键双击需自行计数：
+                // DOM 原生 mousedown（button=1）两次点击间隔 < 500ms 判定为双击
+                var middleContainer = map.getContainer();
+                var lastMiddleDown = 0;
+                middleContainer.addEventListener('mousedown', function(e) {
+                    if (e.button === 1) {
+                        var now = Date.now();
+                        if (now - lastMiddleDown < 500) {
+                            console.log('中键双击缩放');
+                            lastMiddleDown = 0;  // 重置，避免三连击重复触发
+                        } else {
+                            lastMiddleDown = now;
+                        }
+                    }
+                });
+
                 // 4. 设置移动结束监听
                 map.on('moveend', function() {
                     var center = map.getCenter();

@@ -84,21 +84,24 @@ class PopupPositioner:
 
     @staticmethod
     def update_search_popups_position(search_history_popup, search_results_popup,
-                                      search_container, logger=None) -> None:
-        """主窗口移动/缩放后，按搜索容器锚点重算搜索下拉弹窗的位置与尺寸。
+                                      search_container, logger=None,
+                                      favorites_popup=None) -> None:
+        """主窗口移动/缩放后，按搜索容器锚点重算下拉弹窗的位置与尺寸。
 
         定位公式与弹窗 show 时一致（容器左下角 + 4px 垂直偏移）；
         尺寸规则：
-        - 宽度跟随搜索容器宽度
+        - 宽度跟随搜索容器宽度（与整个工具条等宽）
         - 最大高度 = 主窗口底部边界 - 弹窗顶部（同一屏幕坐标系，底部留 4px 边距），
           下限为 2 行保证滚动条可用；条目数少时高度随条目数变化，达上限时滚动条生效
         与路线规划面板的跟随机制同构（父窗口事件 → 锚点重算）。
+        搜索历史/搜索结果/收藏夹三个弹窗共用同一公式（锚点均为搜索容器）。
 
         参数:
             search_history_popup: SearchHistoryPopup 实例（可为 None）
             search_results_popup: SearchResultsPopup 实例（可为 None）
             search_container: 搜索容器 QWidget
             logger: 日志对象（可为 None）
+            favorites_popup: FavoritesListPopup 实例（可为 None）
         """
         try:
             if search_container is None:
@@ -106,7 +109,7 @@ class PopupPositioner:
 
             container_pos = search_container.mapToGlobal(search_container.rect().bottomLeft())
 
-            for popup in (search_history_popup, search_results_popup):
+            for popup in (search_history_popup, search_results_popup, favorites_popup):
                 if popup is None or not popup.isVisible():
                     continue
 
@@ -114,20 +117,15 @@ class PopupPositioner:
                 popup_y = container_pos.y() + 4
                 popup.move(popup_x, popup_y)
 
-                # 宽度跟随搜索容器
+                # 宽度跟随搜索容器（与整个工具条等宽）
                 popup.setFixedWidth(search_container.width())
 
-                # 最大高度受主窗口底部边界约束（弹窗 parent 即主窗口）
-                item_height = getattr(popup, 'ITEM_HEIGHT', 46)
+                # 最大高度受主窗口底部边界约束（弹窗 parent 即主窗口），
+                # 公式与收藏夹弹窗共用（_calc_popup_max_height/_apply_popup_height）
                 main_window = popup.parent()
                 if main_window is not None:
-                    max_height = main_window.frameGeometry().bottom() - popup_y - 4
-                    max_height = max(max_height, 2 * item_height)  # 下限 2 行
-                    target_height = min(popup.count() * item_height, max_height)
-                    popup.setMaximumHeight(max_height)
-                    # QListWidget 为滚动区域，sizeHint 固定不随内容变化，
-                    # 须显式 resize 到目标高度（条目驱动与边界驱动取小）
-                    popup.resize(popup.width(), target_height)
+                    max_height = PopupPositioner._calc_popup_max_height(popup, popup_y, main_window)
+                    PopupPositioner._apply_popup_height(popup, popup.count(), max_height)
 
                 if logger:
                     logger.debug(f"[面板位置] 搜索弹窗: ({popup_x}, {popup_y})")
@@ -138,6 +136,42 @@ class PopupPositioner:
                 logger.error(msg)
             else:
                 print(msg)
+
+    # ──────────────────────────────────────────────────────────────────
+    # 2.6 收藏夹弹窗
+    # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _calc_popup_max_height(popup, popup_top_y: int, main_window) -> int:
+        """计算弹窗最大高度：主窗口底边 - 弹窗顶（底部留 4px），下限 2 行
+
+        供搜索下拉弹窗与收藏夹弹窗共用，保证高度公式唯一。
+
+        Args:
+            popup: 弹窗控件（需有 ITEM_HEIGHT 类常量）
+            popup_top_y: 弹窗顶部 y（屏幕坐标）
+            main_window: 主窗口（frameGeometry 取底边）
+
+        Returns:
+            int: 最大高度（像素）
+        """
+        item_height = getattr(popup, 'ITEM_HEIGHT', 46)
+        max_height = main_window.frameGeometry().bottom() - popup_top_y - 4
+        return max(max_height, 2 * item_height)  # 下限 2 行保证滚动条可用
+
+    @staticmethod
+    def _apply_popup_height(popup, count: int, max_height: int):
+        """应用弹窗高度：条目驱动与边界驱动取小，显式 resize
+
+        QListWidget 为滚动区域，sizeHint 固定不随内容变化，须显式 resize。
+        收藏夹弹窗含顶部按钮行，通过 HEADER_HEIGHT 常量计入总高
+        （无该常量的弹窗视为无头部，与搜索弹窗行为一致）。
+        """
+        item_height = getattr(popup, 'ITEM_HEIGHT', 46)
+        header = getattr(popup, 'HEADER_HEIGHT', 0)
+        target_height = min(count * item_height + header, max_height)
+        popup.setMaximumHeight(max_height)
+        popup.resize(popup.width(), target_height)
 
     # ──────────────────────────────────────────────────────────────────
     # 3. 路线规划面板 / GPX 导出弹出面板
@@ -155,13 +189,23 @@ class PopupPositioner:
             logger: 日志对象（可为 None）
         """
         try:
-            # 路线规划面板
+            # 路线规划面板（顶部对齐工具栏下方，与地点搜索列表一致）
             if (route_plan_panel is not None and search_container is not None
                     and route_plan_panel.isVisible()):
-                pos = search_container.mapToGlobal(search_container.rect().topLeft())
-                route_plan_panel.move(pos.x(), pos.y())
+                pos = search_container.mapToGlobal(search_container.rect().bottomLeft())
+                route_plan_panel.move(pos.x(), pos.y() + 4)
+                # 面板位置变化后重算高度（途径点滚动区 + 面板总高，受主窗口底部边界约束）
+                if hasattr(route_plan_panel, '_update_waypoints_scroll_height'):
+                    route_plan_panel._update_waypoints_scroll_height()
+                if hasattr(route_plan_panel, '_update_panel_height'):
+                    route_plan_panel._update_panel_height()
+
+                # 最近搜索弹窗（面板输入框）随面板联动：重定位 + 按主窗口边界重算高度
+                location_popup = getattr(route_plan_panel, 'location_history_popup', None)
+                if location_popup is not None and location_popup.isVisible():
+                    location_popup._reposition()
                 if logger:
-                    logger.debug(f"[面板位置] 路线面板: ({pos.x()}, {pos.y()})")
+                    logger.debug(f"[面板位置] 路线面板: ({pos.x()}, {pos.y() + 4})")
 
             # GPX 导出弹出面板
             if (gpx_export_popup is not None and route_plan_panel is not None

@@ -27,7 +27,7 @@ class SearchManager(QObject):
     """
 
     def __init__(self, service_manager, data_manager, ui_updater, logger,
-                 task_manager=None, search_viewmodel=None):
+                 task_manager=None, search_viewmodel=None, geo_storage=None):
         """
         初始化搜索管理器
 
@@ -40,6 +40,8 @@ class SearchManager(QObject):
             search_viewmodel: SearchViewModel 实例（可选）；若提供，搜索结果将
                 通过 ``search_viewmodel.set_results()`` 信号驱动，而非直接调用
                 ``ui_updater['show_search_results_dropdown']``
+            geo_storage: 共享地点搜索历史存储（与路线面板最近搜索同一实例，
+                         数据源统一；未注入时自建）
         """
         super().__init__()
         self.service_manager = service_manager
@@ -50,8 +52,8 @@ class SearchManager(QObject):
         # ViewModel（Step 8 引入）：若提供则优先通过信号通知 UI
         self.search_viewmodel = search_viewmodel
 
-        # 初始化地理信息存储
-        self.geo_storage = GeoInfoStorage()
+        # 初始化地理信息存储（共享主窗口实例，数据源统一）
+        self.geo_storage = geo_storage or GeoInfoStorage()
         self.logger.info("[搜索管理器] 地理信息存储已初始化")
 
     def search_location(self, search_text: str, location_type: str):

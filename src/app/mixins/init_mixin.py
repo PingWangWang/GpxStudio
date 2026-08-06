@@ -91,6 +91,10 @@ class InitMixin:
 
         self.data_manager = DataManager()
 
+        # 共享地点搜索历史存储（主窗口搜索历史列表与路线面板最近搜索列表共用同一实例）
+        from modules.search.storage import GeoInfoStorage
+        self.geo_info_storage = GeoInfoStorage()
+
         self.logger_callbacks = {
             'geocoding': self._log_to_geocoding,
             'routing': self._log_to_routing,
@@ -165,6 +169,7 @@ class InitMixin:
             self.search_history_popup = SearchHistoryPopup(self, map_manager=map_manager)
             self.search_history_popup.history_selected.connect(self._on_history_selected)
             self.search_history_popup.favorite_requested.connect(self._on_favorite_requested)
+            self.search_history_popup.my_location_clicked.connect(self._on_search_history_my_location)
             self.search_results_popup = SearchResultsPopup(self, map_manager=map_manager)
             self.search_results_popup.result_selected.connect(self._on_result_selected)
             self.search_results_popup.favorite_requested.connect(self._on_favorite_requested)
@@ -195,8 +200,10 @@ class InitMixin:
             from modules.routing import RouteHistoryStorage
 
             self.route_history_storage = RouteHistoryStorage()
-            self.route_plan_panel = RoutePlanPanel(self)
+            self.route_plan_panel = RoutePlanPanel(
+                self, geo_info_storage=getattr(self, 'geo_info_storage', None))
             self.route_plan_panel.cancel_clicked.connect(self._on_route_panel_cancel)
+            self.route_plan_panel.locate_requested.connect(self._on_route_panel_locate)
             self.route_plan_panel.plan_route_clicked.connect(self._on_route_plan_clicked)
             self.route_plan_panel.clear_route_clicked.connect(self._on_route_clear_clicked)
             self.route_plan_panel.switch_start_end_clicked.connect(self._on_route_switch_start_end)
@@ -290,7 +297,8 @@ class InitMixin:
         self.search_manager = SearchManager(
             self.service_manager, self.data_manager,
             self.ui_updater, self.logger, self.task_manager,
-            search_viewmodel=self.app_viewmodel.search_vm
+            search_viewmodel=self.app_viewmodel.search_vm,
+            geo_storage=getattr(self, 'geo_info_storage', None)
         )
         self.route_manager = RouteManager(
             self.service_manager, self.data_manager,
@@ -374,6 +382,7 @@ class InitMixin:
         self.signal_manager.map_zoom_changed.connect(self.on_map_zoom_changed)
         self.signal_manager.map_center_changed.connect(self.on_map_center_changed)
         self.signal_manager.map_right_click.connect(self._on_map_right_click)
+        self.signal_manager.map_middle_double_click.connect(self._on_map_middle_double_click)
         self.signal_manager.map_loaded.connect(self._on_map_loaded)
         self.signal_manager.favorite_delete_requested.connect(self._on_favorite_delete_requested)
         self.signal_manager.location_marker_hidden.connect(self._on_location_marker_hidden)
@@ -529,13 +538,15 @@ class InitMixin:
         )
 
     def _update_search_popups_position(self):
-        """主窗口移动/缩放后，按搜索容器锚点重算搜索下拉弹窗位置（与路线面板同构）"""
+        """主窗口移动/缩放后，按搜索容器锚点重算下拉弹窗位置
+        （搜索历史/搜索结果/收藏夹三弹窗共用公式，与路线面板同构）"""
         from ui.popups.popup_positioner import PopupPositioner
         PopupPositioner.update_search_popups_position(
             getattr(self, 'search_history_popup', None),
             getattr(self, 'search_results_popup', None),
             getattr(self, 'search_container', None),
             self.logger,
+            favorites_popup=getattr(self, 'favorites_popup', None),
         )
 
     def _update_button_positions(self, container):
@@ -568,6 +579,11 @@ class InitMixin:
                     if hasattr(self.gpx_export_popup, 'picker_popup') and self.gpx_export_popup.picker_popup and self.gpx_export_popup.picker_popup.isVisible():
                         return super().eventFilter(obj, event)
                 self._close_all_popups()
+            elif event.type() == QEvent.WindowActivate:
+                # 收藏夹弹窗展开时，用户点击回主窗口（地图/其他区域）→ 弹窗自动关闭
+                favorites_popup = getattr(self, 'favorites_popup', None)
+                if favorites_popup is not None and favorites_popup.isVisible():
+                    favorites_popup.hide()
             elif event.type() == QEvent.Move:
                 self._update_popup_positions()
             elif event.type() == QEvent.Resize:

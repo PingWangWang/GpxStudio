@@ -503,6 +503,7 @@ class RoutePlanPanel(QWidget):
     history_selected = pyqtSignal(dict)  # 选择历史记录
     address_selected = pyqtSignal(dict, str, bool)  # 地址选中：(地址数据, 类型: start/end/waypoint, 是否缩放地图)
     clear_route_clicked = pyqtSignal()  # 清除路线按钮点击
+    locate_requested = pyqtSignal()  # 请求定位当前位置（"我的位置"入口）
     switch_start_end_clicked = pyqtSignal()  # 切换起止点按钮点击
     route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击：(路线数据, 按钮实例, 条目实例)
@@ -510,8 +511,14 @@ class RoutePlanPanel(QWidget):
     history_delete_clicked = pyqtSignal(dict)  # 删除历史记录：(历史记录数据)
     history_clear_all_clicked = pyqtSignal()  # 清空所有历史记录
 
-    def __init__(self, parent=None):
-        """初始化路线规划面板"""
+    def __init__(self, parent=None, geo_info_storage=None):
+        """初始化路线规划面板
+
+        Args:
+            parent: 父窗口（主窗口）
+            geo_info_storage: 共享地点搜索历史存储（与主窗口搜索历史列表同一实例，
+                              数据源统一；未注入时自建）
+        """
         super().__init__(parent)
 
         # 设置窗口标志 - 使用Tool而不是Popup，避免自动关闭
@@ -538,11 +545,15 @@ class RoutePlanPanel(QWidget):
         self.end_coords = None  # 终点坐标 (lat, lon)
         self.waypoint_coords = []  # 途径点坐标列表 [(lat, lon), ...]
 
-        # 地点搜索历史
-        self.geo_info_storage = GeoInfoStorage()
+        # 地点搜索历史（共享主窗口实例，数据源统一）
+        self.geo_info_storage = geo_info_storage or GeoInfoStorage()
         self.location_history_popup = None  # 延迟创建
         self.is_selecting_from_history = False  # 标志位：正在从历史记录选择
         self.is_searching = False  # 标志位：正在执行搜索操作
+
+        # "我的位置"待填状态：点击最近搜索首行后等待定位结果填入输入框
+        self._pending_location_input = None
+        self._pending_search_type = None
         
         # 初始化UI
         self._init_ui()
@@ -1015,7 +1026,8 @@ class RoutePlanPanel(QWidget):
         self.history_list.itemClicked.connect(self._on_history_clicked)
         history_container_layout.addWidget(self.history_list)
 
-        main_layout.addWidget(self.history_container)
+        # 历史区弹性占剩余空间（面板固定高度时被压缩，超界滚动条生效）
+        main_layout.addWidget(self.history_container, 1)
 
         # 初始化交通方式
         self._update_transport_mode_ui()
@@ -1546,20 +1558,75 @@ class RoutePlanPanel(QWidget):
 
                 break
 
-    def _update_waypoints_scroll_height(self):
-        """根据途径点数量动态调整滚动区域高度
+    def _update_panel_height(self):
+        """面板总高 = min(内容自然高, 主窗口底部边界约束)
 
-        途径点 ≤ 5 个时：固定高度为途径点总行数，完整显示全部途径点
-        途径点 > 5 个时：固定高度为 5 行，超出部分滚动查看
+        内容自然高 = 固定部分（交通方式/搜索/起终点等）+ 途径点滚动区
+                    + 路线搜索记录列表（history_list）自然高度；
+        边界约束 = 主窗口底边 - 面板顶部 - 4px（与搜索列表公式同构）。
+        面板固定后，弹性历史区被压缩，超界部分滚动条生效。
+        """
+        main_window = self.parent()
+        if main_window is None:
+            return
+
+        # 固定部分（布局完成后：面板高 - 弹性历史区高）
+        fixed_part = max(0, self.height() - self.history_list.height())
+
+        # 途径点滚动区（无途径点时隐藏，残留高度不计入）
+        waypoints_height = self.waypoints_scroll.height() if self.waypoints_scroll.isVisible() else 0
+
+        # 路线搜索记录自然高度（逐条目 sizeHint 求和）
+        history_natural = sum(
+            self.history_list.item(i).sizeHint().height()
+            for i in range(self.history_list.count()))
+
+        content_natural = fixed_part + waypoints_height + history_natural
+
+        # 边界约束：主窗口底边 - 面板顶部（屏幕坐标） - 4px
+        panel_top_y = self.mapToGlobal(self.rect().topLeft()).y()
+        main_bottom = main_window.frameGeometry().bottom()
+        max_height = main_bottom - panel_top_y - 4
+
+        height = max(fixed_part, min(content_natural, max_height))  # 下限：固定部分
+        self.setFixedHeight(height)
+
+    def _update_waypoints_scroll_height(self):
+        """根据途径点数量动态调整滚动区域高度（面板底部不超主窗口边界）
+
+        条目驱动：途径点少时高度 = 条目数 × 行高，完整显示全部途径点；
+        边界驱动：滚动区高度受限为主窗口底部边界（面板底部留 4px 边距，
+        与搜索列表高度公式同构），超出部分滚动查看。
+
+        设滚动区高度后面板总高 = 固定部分 + 滚动区（布局自动伸缩），
+        面板底部随之自动受限。
         """
         waypoint_count = len(self.waypoint_widgets)
         if waypoint_count == 0:
+            # 无途径点时恢复面板可伸缩（清除 setFixedHeight 残留约束）
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
             return
-        if waypoint_count <= 5:
-            height = waypoint_count * WAYPOINT_ROW_HEIGHT
+
+        natural_height = waypoint_count * WAYPOINT_ROW_HEIGHT
+
+        # 面板固定部分（滚动区以外：交通方式/搜索/起终点行等）。
+        # 须在 setFixedHeight 前计算（布局未完成时面板高度可能小于滚动区，取非负）
+        fixed_part = max(0, self.height() - self.waypoints_scroll.height())
+
+        # 边界约束：主窗口底边 - 面板顶部 - 4px - 固定部分
+        main_window = self.parent()
+        if main_window is not None and waypoint_count > 1:
+            panel_top_y = self.mapToGlobal(self.rect().topLeft()).y()
+            main_bottom = main_window.frameGeometry().bottom()
+            max_height = main_bottom - panel_top_y - 4 - fixed_part
+            height = max(WAYPOINT_ROW_HEIGHT, min(natural_height, max_height))  # 下限 1 行
         else:
-            height = 5 * WAYPOINT_ROW_HEIGHT
+            height = natural_height
+
         self.waypoints_scroll.setFixedHeight(height)
+        # 面板总高统一由 _update_panel_height 计算（含历史列表自然高与边界约束）
+        self._update_panel_height()
 
     def _renumber_waypoints(self):
         """重新编号途径点"""
@@ -1824,9 +1891,11 @@ class RoutePlanPanel(QWidget):
         """
         # 创建弹出窗口（如果还没创建）
         if not self.location_history_popup:
-            self.location_history_popup = LocationHistoryPopup(self)
+            # 注入 map_manager 供"收藏夹"tab 读取收藏数据（parent 链兜底见弹窗内 _get_map_manager）
+            self.location_history_popup = LocationHistoryPopup(
+                self, map_manager=getattr(self.parent(), 'map_manager', None))
             self.location_history_popup.location_selected.connect(self._on_history_location_selected)
-            self.location_history_popup.clear_history_clicked.connect(self._on_clear_location_history)
+            self.location_history_popup.my_location_clicked.connect(self._on_my_location_clicked)
         
         # 获取最近的搜索历史（限制10条）
         recent_history = self.geo_info_storage.get_recent_history(limit=10)
@@ -1835,9 +1904,47 @@ class RoutePlanPanel(QWidget):
         self.location_history_popup.set_history_items(recent_history)
         self.location_history_popup.show_at(input_widget)
     
+    def _on_my_location_clicked(self):
+        """最近搜索首行"我的位置"点击：请求定位当前位置，结果填入当前输入框"""
+        print("[路线面板] 点击我的位置，请求定位")
+        # 记录待填输入框（定位成功后填充）
+        self._pending_location_input = self.current_search_input
+        self._pending_search_type = self.current_search_type
+        self.locate_requested.emit()
+
+    def has_pending_location(self) -> bool:
+        """是否存在等待定位结果的"我的位置"填充请求"""
+        return self._pending_location_input is not None
+
+    def get_pending_search_type(self) -> str:
+        """获取待填输入框的类型（start/end/waypoint）"""
+        return self._pending_search_type or ''
+
+    def fill_pending_location(self, lat: float, lon: float):
+        """定位成功后填充"我的位置"到待填输入框
+
+        Args:
+            lat: 纬度
+            lon: 经度
+        """
+        target = self._pending_location_input
+        search_type = self._pending_search_type
+        self._pending_location_input = None
+        self._pending_search_type = None
+
+        if target is None:
+            return
+
+        target.setText("我的位置")
+        # 同步面板坐标（与右键设置起终点一致）
+        if search_type == 'start':
+            self.start_coords = (lat, lon)
+        elif search_type == 'end':
+            self.end_coords = (lat, lon)
+
     def _on_history_location_selected(self, location_data: dict):
         """从历史记录中选择了地点
-        
+
         Args:
             location_data: 地点数据，包含 name, address, lat, lon 等字段
         """
@@ -1901,12 +2008,18 @@ class RoutePlanPanel(QWidget):
     
     def _delayed_hide_history_popup(self):
         """延迟隐藏历史记录弹出窗口
-        
-        检查鼠标是否在历史记录弹出窗口内，如果不在则关闭
+
+        检查鼠标是否在历史记录弹出窗口内，如果不在则关闭。
+        若弹窗已被新的焦点输入框重新显示（当前输入框仍有焦点），不关闭
+        （修复：起点失焦的延迟隐藏误关终点输入框刚弹出的弹窗）。
         """
         if not self.location_history_popup or not self.location_history_popup.isVisible():
             return
-        
+
+        # 当前搜索输入框仍有焦点：弹窗是新输入框刚显示的，跳过延迟隐藏
+        if self.current_search_input is not None and self.current_search_input.hasFocus():
+            return
+
         # 获取鼠标当前位置
         from PyQt5.QtGui import QCursor
         cursor_pos = QCursor.pos()
@@ -1921,9 +2034,6 @@ class RoutePlanPanel(QWidget):
         if not popup_global_rect.contains(cursor_pos):
             self.location_history_popup.hide()
     
-    def _on_clear_location_history(self):
-        """清空地点搜索历史"""
-        self.geo_info_storage.clear_history()
         
         # 更新弹出列表
         if self.location_history_popup:
@@ -2191,6 +2301,9 @@ class RoutePlanPanel(QWidget):
             storage = RouteHistoryStorage()
             history_list = storage.get_history(10)
             self.load_history(history_list)
+
+        # 还原后按历史记录数量重算面板高度（清除待选方案模式的固定高度残留）
+        self._update_panel_height()
 
     def set_selected_history(self, selected_history_data: dict):
         """设置选中的历史记录"""

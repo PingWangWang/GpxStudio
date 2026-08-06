@@ -237,6 +237,11 @@ class MapToolbar:
         self.route_button.clicked.connect(self._app.on_route_button_clicked)
         layout.addWidget(self.route_button)
 
+        # 收藏夹按钮（点击展开收藏夹管理列表）
+        self.favorites_button = self._make_btn("⭐", "收藏夹", h)
+        self.favorites_button.clicked.connect(self._app.on_favorites_button_clicked)
+        layout.addWidget(self.favorites_button)
+
         # 关闭按钮（初始隐藏）
         self.cancel_button = self._make_btn("❌", "关闭", h)
         self.cancel_button.clicked.connect(self._app.on_cancel_button_clicked)
@@ -296,6 +301,6 @@ class MapToolbar:
             'zoom_in_button', 'zoom_out_button', 'locate_button', 'zoom_fit_button',
             'loading_button', 'scale_info_label',
             'search_container', 'search_input', 'search_button',
-            'route_button', 'cancel_button',
+            'route_button', 'favorites_button', 'cancel_button',
         ):
             setattr(app, attr, getattr(self, attr))

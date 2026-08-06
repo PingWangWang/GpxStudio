@@ -82,7 +82,7 @@ class FavoritesStorage:
         return -1
 
     def add_favorite(self, name: str, address: str, lat: float, lon: float,
-                     note: str = '') -> tuple:
+                     note: str = '', type_text: str = '') -> tuple:
         """
         添加收藏点
 
@@ -92,6 +92,7 @@ class FavoritesStorage:
             lat: 纬度（WGS-84）
             lon: 经度（WGS-84）
             note: 备注（预留字段，当前版本不收集）
+            type_text: 地址类型（高德 type/type_info，用于列表条目图标）
 
         Returns:
             (success, message): 是否添加成功及结果消息
@@ -113,6 +114,7 @@ class FavoritesStorage:
                 'lon': lon,
                 'coord_system': 'WGS-84',  # 统一以 WGS-84 存储
                 'note': note,
+                'type': type_text,  # 地址类型（列表条目图标用，旧数据为空）
                 'created_at': datetime.now().isoformat()
             }
 
@@ -195,3 +197,68 @@ class FavoritesStorage:
         self.favorites_list = []
         self._save()
         print("[收藏点存储] 已清空所有收藏点")
+
+    def export_to_file(self, file_path: str) -> bool:
+        """
+        导出全部收藏到 JSON 文件（与 FavoritesList.json 同结构，可直接再导入）
+
+        Args:
+            file_path: 目标文件路径
+
+        Returns:
+            bool: 是否导出成功
+        """
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(self.favorites_list, f, ensure_ascii=False, indent=2)
+            print(f"[收藏点存储] 已导出 {len(self.favorites_list)} 个收藏点到 {file_path}")
+            return True
+        except Exception as e:
+            print(f"[收藏点存储] 导出失败: {e}")
+            return False
+
+    def import_from_file(self, file_path: str) -> tuple:
+        """
+        从 JSON 文件导入收藏（逐条合并，坐标重复的跳过保留现有）
+
+        Args:
+            file_path: 源文件路径
+
+        Returns:
+            (imported, skipped, error): 导入数、跳过数、错误信息（无错误为 None）
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                records = json.load(f)
+        except Exception as e:
+            print(f"[收藏点存储] 读取导入文件失败: {e}")
+            return 0, 0, f"读取文件失败: {e}"
+
+        if not isinstance(records, list):
+            return 0, 0, "文件内容不是收藏列表（应为 JSON 数组）"
+
+        imported, skipped = 0, 0
+        for record in records:
+            if not isinstance(record, dict):
+                skipped += 1
+                continue
+            try:
+                lat = float(record.get('lat', 0))
+                lon = float(record.get('lon', 0))
+            except (TypeError, ValueError):
+                skipped += 1
+                continue
+            if lat == 0 and lon == 0:
+                skipped += 1
+                continue
+
+            name = record.get('name', '') or '收藏点'
+            address = record.get('address', '') or ''
+            success, _ = self.add_favorite(name, address, lat, lon)  # 坐标重复自动跳过
+            if success:
+                imported += 1
+            else:
+                skipped += 1
+
+        print(f"[收藏点存储] 导入完成: 新增 {imported} 个, 跳过 {skipped} 个")
+        return imported, skipped, None

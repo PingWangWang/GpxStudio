@@ -25,7 +25,8 @@ class RouteManager(QObject):
     支持后台线程异步执行，主线程快速响应用户操作
     """
 
-    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None, route_history_storage=None):
+    def __init__(self, service_manager, data_manager, ui_updater, logger, task_manager=None,
+                 route_history_storage=None):
         """
         初始化路线管理器
 

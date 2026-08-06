@@ -200,6 +200,13 @@ class ConsoleWebEnginePage(QWebEnginePage):
                 import traceback
                 traceback.print_exc()
 
+        # 处理地图中键双击消息（触发自动缩放）
+        if message.startswith('中键双击缩放'):
+            if self.signal_manager:
+                self.signal_manager.map_middle_double_click.emit()
+            else:
+                signal_manager.map_middle_double_click.emit()
+
         # 处理定位标识隐藏消息（定位 popup 内的隐藏按钮触发）
         if message.startswith('隐藏定位标识'):
             print("[定位标识] 捕获到隐藏标识请求")

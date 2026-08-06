@@ -20,15 +20,13 @@ class RouteMixin:
         if self.search_container is not None and self.route_plan_panel is not None:
             self.route_plan_panel.clear_all_inputs()
 
+            # 顶部对齐工具栏下方（与地点搜索列表一致），高度先取临时值便于布局测量
             container_rect = self.search_container.rect()
-            container_global_pos = self.search_container.mapToGlobal(container_rect.topLeft())
+            container_global_pos = self.search_container.mapToGlobal(container_rect.bottomLeft())
+            panel_x = container_global_pos.x()
+            panel_y = container_global_pos.y() + 4
 
-            self.route_plan_panel.setGeometry(
-                container_global_pos.x(),
-                container_global_pos.y(),
-                self.search_container.width(),
-                500
-            )
+            self.route_plan_panel.setGeometry(panel_x, panel_y, self.search_container.width(), 500)
 
             from modules.routing import RouteHistoryStorage
             fresh_storage = RouteHistoryStorage()
@@ -41,8 +39,12 @@ class RouteMixin:
             self.route_plan_panel.raise_()
             self.route_plan_panel.setFocus()
 
-            self.logger.debug(f"[路线面板] 面板位置: ({container_global_pos.x()}, {container_global_pos.y()})")
-            self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 500")
+            # 布局完成后按内容自然高与主窗口边界约束调整面板总高
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self.route_plan_panel._update_panel_height)
+
+            self.logger.debug(f"[路线面板] 面板位置: ({panel_x}, {panel_y})")
+            self.logger.debug(f"[路线面板] 面板大小: {self.search_container.width()} x 动态")
             self.logger.debug("[路线面板] 路线规划面板已显示并设置焦点")
 
     def _on_route_panel_cancel(self):

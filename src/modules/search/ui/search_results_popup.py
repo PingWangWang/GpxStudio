@@ -56,7 +56,9 @@ class SearchResultsPopup(QListWidget):
         # 设置属性
         # 使用 Qt.Tool 而非 Qt.ToolTip：Tool 类型在有父 widget 时随父窗口移动
         # （对齐 location_history_popup 先例），ToolTip 不会跟随导致拖动主窗口时弹窗滞留
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # 不加 WindowStaysOnTopHint：置顶会使弹窗在切换其他软件时仍浮于最上层，
+        # Tool 子窗口层级随主窗口，切后台时自然下沉
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # 显示时不激活窗口
         self.setFocusPolicy(Qt.StrongFocus)  # 改为StrongFocus以接收键盘事件
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -162,7 +164,9 @@ class SearchResultsPopup(QListWidget):
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(2)
 
-        name_label = QLabel(f"🔍 {name}")
+        # 左侧图标按地址类型分类（搜索/历史/收藏夹三处图标一致；名称兜底推断类型）
+        from modules.search.type_icons import get_type_emoji
+        name_label = QLabel(f"{get_type_emoji(result.get('type', ''), name)} {name}")
         name_label.setStyleSheet("""
             QLabel {
                 color: #333333;

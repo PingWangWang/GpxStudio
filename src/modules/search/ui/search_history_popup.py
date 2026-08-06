@@ -19,6 +19,7 @@ class SearchHistoryPopup(QListWidget):
     # 信号：用户选择了历史记录
     history_selected = pyqtSignal(dict)  # 传递完整的历史记录字典
     favorite_requested = pyqtSignal(dict)  # 用户点击收藏按钮（切换收藏），传递完整的历史记录字典
+    my_location_clicked = pyqtSignal()  # 点击固定"我的位置"首行（定位到当前位置）
 
     def __init__(self, parent=None, map_manager=None):
         """初始化搜索历史下拉列表
@@ -56,7 +57,9 @@ class SearchHistoryPopup(QListWidget):
         # 设置属性
         # 使用 Qt.Tool 而非 Qt.ToolTip：Tool 类型在有父 widget 时随父窗口移动
         # （对齐 location_history_popup 先例），ToolTip 不会跟随导致拖动主窗口时弹窗滞留
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # 不加 WindowStaysOnTopHint：置顶会使弹窗在切换其他软件时仍浮于最上层，
+        # Tool 子窗口层级随主窗口，切后台时自然下沉
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # 显示时不激活窗口
         self.setFocusPolicy(Qt.StrongFocus)  # 改为StrongFocus以接收键盘事件
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -89,6 +92,9 @@ class SearchHistoryPopup(QListWidget):
             self.hide()
             return
 
+        # 第一行固定"我的位置"（点击定位到当前位置）
+        self._add_my_location_item()
+
         # 添加历史记录项
         for record in history_list:
             self._add_history_item(record)
@@ -99,6 +105,32 @@ class SearchHistoryPopup(QListWidget):
         # 不要调用 raise_()，让按钮保持在上层
         from ui.popups.popup_positioner import PopupPositioner
         PopupPositioner.update_search_popups_position(self, None, search_container_widget)
+
+    def _add_my_location_item(self):
+        """添加第一行固定"我的位置"条目（点击定位到当前位置）"""
+        item = QListWidgetItem()
+        item.setSizeHint(QSize(0, 40))
+        # 特殊标记：与历史记录区分（历史记录 data 为 dict）
+        item.setData(Qt.UserRole, '__MY_LOCATION__')
+
+        # 使用行控件与历史条目相同的边距，保证文本左对齐
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(12, 5, 8, 5)
+        name_label = QLabel("📍 我的位置")
+        name_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row_layout.addWidget(name_label)
+        row_layout.addStretch()
+
+        self.addItem(item)
+        self.setItemWidget(item, row_widget)
 
     def _get_map_manager(self):
         """获取 MapManager（构造注入优先，否则从父窗口实时获取）
@@ -162,7 +194,9 @@ class SearchHistoryPopup(QListWidget):
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(2)
 
-        name_label = QLabel(f"📋 {name}")
+        # 左侧图标按地址类型分类（搜索/历史/收藏夹三处图标一致；名称兜底推断类型）
+        from modules.search.type_icons import get_type_emoji
+        name_label = QLabel(f"{get_type_emoji(record.get('type', ''), name)} {name}")
         name_label.setStyleSheet("""
             QLabel {
                 color: #333333;
@@ -215,7 +249,10 @@ class SearchHistoryPopup(QListWidget):
     def _on_item_clicked(self, item: QListWidgetItem):
         """处理项点击事件"""
         record = item.data(Qt.UserRole)
-        if record:
+        if record == '__MY_LOCATION__':
+            # 点击"我的位置"：定位到当前位置（由主窗口处理）
+            self.my_location_clicked.emit()
+        elif record:
             # 发送信号
             self.history_selected.emit(record)
 
