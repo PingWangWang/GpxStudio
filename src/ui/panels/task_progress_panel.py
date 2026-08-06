@@ -11,6 +11,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QColor, QTextCursor
 from datetime import datetime
 from typing import Optional
+from ui.theme import theme
 
 
 class TaskProgressWidget(QWidget):
@@ -53,14 +54,14 @@ class TaskProgressWidget(QWidget):
         info_layout.addWidget(self.task_icon)
 
         self.task_label = QLabel("准备就绪")
-        self.task_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
+        theme.apply_to_sub(self.task_label, "font-weight: bold; color: __TEXT__; font-size: 9pt;")
         info_layout.addWidget(self.task_label)
 
         info_layout.addStretch()
 
         # 执行时间
         self.time_label = QLabel("00:00")
-        self.time_label.setStyleSheet("color: #666666; font-family: Consolas; font-size: 9pt;")
+        theme.apply_to_sub(self.time_label, "color: __TEXT_SECONDARY__; font-family: Consolas; font-size: 9pt;")
         self.time_label.setFixedWidth(50)  # 固定宽度，避免时间变化导致布局跳变
         info_layout.addWidget(self.time_label)
 
@@ -73,19 +74,19 @@ class TaskProgressWidget(QWidget):
         self.cancel_button = QPushButton("✕")
         self.cancel_button.setToolTip("取消任务")
         self.cancel_button.setFixedSize(24, 24)
-        self.cancel_button.setStyleSheet("""
+        theme.apply_to_sub(self.cancel_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #cccccc;
+                background-color: __BTN_SECONDARY_BG__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
                 border-radius: 3px;
                 font-weight: bold;
-                color: #666666;
+                color: __TEXT_SECONDARY__;
                 font-size: 9pt;
             }
             QPushButton:hover {
-                background-color: #ff6b6b;
-                color: white;
-                border-color: #ff6b6b;
+                background-color: __DANGER__;
+                color: __TEXT_ON_ACCENT__;
+                border-color: __DANGER__;
             }
         """)
         self.cancel_button.clicked.connect(self._on_cancel_clicked)
@@ -100,16 +101,16 @@ class TaskProgressWidget(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFixedHeight(22)  # 固定高度
-        self.progress_bar.setStyleSheet("""
+        theme.apply_to_sub(self.progress_bar, """
             QProgressBar {
-                border: 1px solid #cccccc;
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
                 text-align: center;
-                background-color: #f5f5f5;
+                background-color: __WINDOW_BG__;
                 font-size: 9pt;
             }
             QProgressBar::chunk {
-                background-color: #3d93fd;
+                background-color: __ACCENT__;
                 border-radius: 2px;
             }
         """)
@@ -119,7 +120,7 @@ class TaskProgressWidget(QWidget):
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         self.status_label.setFixedHeight(40)  # 固定高度，可容纳2行文本
-        self.status_label.setStyleSheet("color: #666666; font-size: 9pt;")
+        theme.apply_to_sub(self.status_label, "color: __TEXT_SECONDARY__; font-size: 9pt;")
         layout.addWidget(self.status_label)
 
         # 详细信息展示区 - 固定高度
@@ -127,13 +128,13 @@ class TaskProgressWidget(QWidget):
         self.detail_text.setReadOnly(True)
         self.detail_text.setFixedHeight(100)  # 使用固定高度而不是最小/最大高度
         self.detail_text.setFont(QFont("Consolas", 9))
-        self.detail_text.setStyleSheet("""
+        theme.apply_to_sub(self.detail_text, """
             QTextEdit {
-                background-color: #fafafa;
-                border: 1px solid #e0e0e0;
+                background-color: __WINDOW_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
                 padding: 5px;
-                color: #333333;
+                color: __TEXT__;
                 font-size: 9pt;
             }
         """)
@@ -186,7 +187,7 @@ class TaskProgressWidget(QWidget):
     def task_completed(self, message: str = "任务完成"):
         """任务完成"""
         self.task_icon.setText("✓")
-        self.task_label.setStyleSheet("font-weight: bold; color: #4caf50;")
+        theme.apply_to_sub(self.task_label, "font-weight: bold; color: __SUCCESS__;")
         self.status_label.setText(message)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
@@ -201,7 +202,7 @@ class TaskProgressWidget(QWidget):
     def task_failed(self, error_message: str):
         """任务失败"""
         self.task_icon.setText("✗")
-        self.task_label.setStyleSheet("font-weight: bold; color: #f44336;")
+        theme.apply_to_sub(self.task_label, "font-weight: bold; color: __DANGER__;")
         self.status_label.setText("任务失败")
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -216,7 +217,7 @@ class TaskProgressWidget(QWidget):
     def task_cancelled(self):
         """任务取消"""
         self.task_icon.setText("⊗")
-        self.task_label.setStyleSheet("font-weight: bold; color: #ff9800;")
+        theme.apply_to_sub(self.task_label, "font-weight: bold; color: #ff9800;")
         self.status_label.setText("任务已取消")
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -236,7 +237,7 @@ class TaskProgressWidget(QWidget):
 
         self.task_icon.setText("⏳")
         self.task_label.setText("准备就绪")
-        self.task_label.setStyleSheet("font-weight: bold; color: #333333; font-size: 9pt;")
+        theme.apply_to_sub(self.task_label, "font-weight: bold; color: __TEXT__; font-size: 9pt;")
         self.status_label.setText("")
         self.time_label.setText("00:00")
 
@@ -318,9 +319,9 @@ class TaskInfoPanel(QFrame):
     def setup_ui(self):
         """设置UI"""
         # 去除边框样式，使用简单的背景色
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QFrame {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border: none;
             }
         """)
@@ -333,13 +334,13 @@ class TaskInfoPanel(QFrame):
 
         # 标题
         title_label = QLabel("任务执行状态")
-        title_label.setStyleSheet("font-weight: bold; font-size: 9pt; color: #333333;")
+        theme.apply_to_sub(title_label, "font-weight: bold; font-size: 9pt; color: __TEXT__;")
         layout.addWidget(title_label)
 
         # 分隔线
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("background-color: #e0e0e0;")
+        theme.apply_to_sub(separator, "background-color: __DIVIDER__;")
         layout.addWidget(separator)
 
         # 任务进度组件

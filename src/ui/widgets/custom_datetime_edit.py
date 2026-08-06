@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QLineEdit, QPushButton,
 from PyQt5.QtCore import Qt, QDateTime, pyqtSignal, QPoint
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont
 from .custom_datetime_picker import CustomDateTimePicker
+from ui.theme import theme
 
 
 class CustomDateTimeEdit(QWidget):
@@ -31,22 +32,22 @@ class CustomDateTimeEdit(QWidget):
         self.text_edit = QLineEdit()
         self.text_edit.setReadOnly(True)
         self.text_edit.setText(self.current_datetime.toString("yyyy-MM-dd hh:mm"))
-        self.text_edit.setStyleSheet("""
+        theme.apply_to_sub(self.text_edit, """
             QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-right: none;
                 border-radius: 4px;
                 border-top-right-radius: 0px;
                 border-bottom-right-radius: 0px;
                 padding: 6px 8px;
                 font-size: 13px;
-                color: #333333;
+                color: __TEXT__;
             }
             QLineEdit:focus {
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                border: 1px solid __ACCENT__;
                 border-right: none;
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
         """)
         layout.addWidget(self.text_edit)
@@ -55,22 +56,22 @@ class CustomDateTimeEdit(QWidget):
         self.dropdown_button = QPushButton()
         self.dropdown_button.setToolTip("选择日期时间")
         self.dropdown_button.setFixedSize(24, 32)  # 与输入框高度匹配
-        self.dropdown_button.setStyleSheet("""
+        theme.apply_to_sub(self.dropdown_button, """
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-left: none;
                 border-radius: 4px;
                 border-top-left-radius: 0px;
                 border-bottom-left-radius: 0px;
             }
             QPushButton:hover {
-                background-color: white;
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: __INPUT_BG__;
+                border: 1px solid __ACCENT__;
                 border-left: none;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.8);
+                background-color: __INPUT_BG__;
             }
         """)
         self.dropdown_button.clicked.connect(self._show_picker)
@@ -113,10 +114,10 @@ class CustomDateTimeEdit(QWidget):
         # 创建弹出窗口
         self.picker_popup = QFrame()
         self.picker_popup.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.picker_popup.setStyleSheet("""
+        theme.apply_to_sub(self.picker_popup, """
             QFrame {
-                background-color: white;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 6px;
             }
         """)

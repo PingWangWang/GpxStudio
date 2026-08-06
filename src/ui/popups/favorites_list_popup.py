@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from typing import List, Dict
+from ui.theme import theme
 
 
 class FavoritesListPopup(QWidget):
@@ -51,29 +52,29 @@ class FavoritesListPopup(QWidget):
 
     def _init_ui(self):
         """初始化UI"""
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             FavoritesListPopup {
-                background-color: white;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton#toolButton {
                 background-color: transparent;
-                border: 1px solid #d9d9d9;
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
-                color: #333333;
+                color: __TEXT__;
                 font-size: 12px;
                 padding: 2px 10px;
             }
             QPushButton#toolButton:hover {
-                border-color: #1890ff;
-                color: #1890ff;
+                border-color: __ACCENT__;
+                color: __ACCENT__;
             }
             QPushButton#clearButton {
                 background-color: transparent;
-                border: 1px solid #f5222d;
+                border: 1px solid __DANGER__;
                 border-radius: 3px;
-                color: #f5222d;
+                color: __DANGER__;
                 font-size: 12px;
                 padding: 2px 10px;
             }
@@ -81,18 +82,18 @@ class FavoritesListPopup(QWidget):
                 background-color: rgba(245, 34, 45, 0.1);
             }
             QListWidget {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border: none;
                 outline: none;
             }
             QListWidget::item {
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid __DIVIDER__;
             }
             QListWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: #e8f4fd;
+                background-color: __ACCENT__;
             }
         """)
 
@@ -138,9 +139,9 @@ class FavoritesListPopup(QWidget):
         # 空状态提示
         self.empty_label = QLabel("暂无收藏地点")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("""
+        theme.apply_to_sub(self.empty_label, """
             QLabel {
-                color: #999999;
+                color: __TEXT_TERTIARY__;
                 font-size: 13px;
                 padding: 20px;
             }
@@ -207,9 +208,9 @@ class FavoritesListPopup(QWidget):
         from modules.search.type_icons import get_type_emoji
         name_label = QLabel(
             f"{get_type_emoji(fav.get('type', ''), fav.get('name', ''))} {fav.get('name', '收藏点')}")
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 13px;
                 font-weight: bold;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -222,9 +223,9 @@ class FavoritesListPopup(QWidget):
         address = fav.get('address', '')
         if address:
             address_label = QLabel(address)
-            address_label.setStyleSheet("""
+            theme.apply_to_sub(address_label, """
                 QLabel {
-                    color: #888888;
+                    color: __TEXT_SECONDARY__;
                     font-size: 12px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }
@@ -245,16 +246,16 @@ class FavoritesListPopup(QWidget):
         delete_btn.setToolTip("删除此收藏")
         delete_btn.setFixedSize(26, 26)
         delete_btn.setCursor(Qt.PointingHandCursor)
-        delete_btn.setStyleSheet("""
+        theme.apply_to_sub(delete_btn, """
             QPushButton {
                 background-color: transparent;
                 border: none;
                 font-size: 17px;
-                color: #FFD700;
+                color: __GOLD__;
                 padding: 0;
             }
             QPushButton:hover {
-                color: #f5222d;
+                color: __DANGER__;
             }
         """)
         delete_btn.clicked.connect(

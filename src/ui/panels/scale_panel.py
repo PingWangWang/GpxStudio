@@ -6,6 +6,7 @@
 from typing import Optional
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import pyqtSignal
+from ui.theme import theme
 
 
 class ScalePanel(QWidget):
@@ -31,7 +32,7 @@ class ScalePanel(QWidget):
         zoom_container.addWidget(zoom_icon)
 
         self.zoom_label = QLabel("级别: -")
-        self.zoom_label.setStyleSheet("color: #333333; font-size: 9pt; font-weight: bold;")
+        theme.apply_to_sub(self.zoom_label, "color: __TEXT__; font-size: 9pt; font-weight: bold;")
         self.zoom_label.setToolTip("地图缩放级别：数字越大，地图显示越详细\n范围：3-18（3为国家级，18为建筑级）")
         zoom_container.addWidget(self.zoom_label)
 
@@ -39,7 +40,7 @@ class ScalePanel(QWidget):
 
         # 分隔符
         separator = QLabel("|")
-        separator.setStyleSheet("color: #cccccc; font-size: 9pt;")
+        theme.apply_to_sub(separator, "color: __TEXT_TERTIARY__; font-size: 9pt;")
         layout.addWidget(separator)
 
         # 比例尺显示（带图标）
@@ -51,7 +52,7 @@ class ScalePanel(QWidget):
         scale_container.addWidget(scale_icon)
 
         self.scale_label = QLabel("比例: -")
-        self.scale_label.setStyleSheet("color: #666666; font-size: 9pt;")
+        theme.apply_to_sub(self.scale_label, "color: __TEXT_SECONDARY__; font-size: 9pt;")
         self.scale_label.setToolTip("地图比例尺：表示地图上的距离与实际距离的比值")
         scale_container.addWidget(self.scale_label)
 
@@ -60,10 +61,10 @@ class ScalePanel(QWidget):
         layout.addStretch()  # 添加弹性空间
 
         # 设置面板样式 - 更现代化的设计
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             ScalePanel {
-                background-color: #f5f7fa;
-                border: 1px solid #e0e0e0;
+                background-color: __WINDOW_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 5px;
             }
         """)

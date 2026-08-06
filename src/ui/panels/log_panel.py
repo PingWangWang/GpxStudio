@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QTextCursor, QColor, QFont
+from ui.theme import theme
 
 
 LOG_LEVELS = {
@@ -54,11 +55,11 @@ class LogDisplayWidget(QTextEdit):
         self.setReadOnly(True)
         self.setLineWrapMode(QTextEdit.NoWrap)
         self.setFont(QFont("Consolas", 9))
-        self.setStyleSheet("""
+        theme.apply_to_sub(self, """
             QTextEdit {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __PANEL_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
                 padding: 5px;
             }
         """)
@@ -135,7 +136,7 @@ class LogPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("程序日志")
-        title_label.setStyleSheet("font-weight: bold; color: #000000;")
+        theme.apply_to_sub(title_label, "font-weight: bold; color: __TEXT__;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -145,11 +146,11 @@ class LogPanel(QWidget):
         self.level_combo = QComboBox()
         self.level_combo.addItems(list(LOG_LEVELS.keys()))
         self.level_combo.setCurrentText("INFO")
-        self.level_combo.setStyleSheet("""
+        theme.apply_to_sub(self.level_combo, """
             QComboBox {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __INPUT_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
                 padding: 3px 8px;
                 min-width: 80px;
             }
@@ -159,15 +160,15 @@ class LogPanel(QWidget):
 
         clear_button = QPushButton("清空")
         clear_button.setToolTip("清空日志内容")
-        clear_button.setStyleSheet("""
+        theme.apply_to_sub(clear_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
                 padding: 3px 10px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         clear_button.clicked.connect(self.log_display.clear_messages)

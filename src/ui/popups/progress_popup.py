@@ -6,6 +6,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QPushButton, QFrame
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+from ui.theme import theme
 
 
 class ProgressPopup(QWidget):
@@ -38,29 +39,29 @@ class ProgressPopup(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 与GPX导出面板颜色统一
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             ProgressPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                border: 1px solid __BORDER__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
             }
             QProgressBar {
                 height: 8px;
                 border-radius: 4px;
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QProgressBar::chunk {
-                background-color: #4CAF50;
+                background-color: __SUCCESS__;
                 border-radius: 4px;
             }
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #3b4453;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
@@ -68,13 +69,13 @@ class ProgressPopup(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: white;
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.8);
+                background-color: __BTN_PRIMARY_PRESSED__;
             }
             QFrame {
-                color: rgba(255, 255, 255, 0.3);
+                color: __DIVIDER__;
             }
         """)
 
@@ -97,14 +98,14 @@ class ProgressPopup(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("QFrame { color: #e0e0e0; }")
+        theme.apply_to_sub(separator, "QFrame { color: __DIVIDER__; }")
         layout.addWidget(separator)
 
         # 进度信息标签
         self.progress_label = QLabel("准备中...")
-        self.progress_label.setStyleSheet("""
+        theme.apply_to_sub(self.progress_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.9);
+                color: __TEXT__;
                 font-size: 12px;
             }
         """)
@@ -127,16 +128,16 @@ class ProgressPopup(QWidget):
         self.cancel_button.setToolTip("取消当前任务")
         self.cancel_button.setObjectName("cancelButton")
         self.cancel_button.clicked.connect(self._on_cancel_clicked)
-        self.cancel_button.setStyleSheet("""
+        theme.apply_to_sub(self.cancel_button, """
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.7);
-                color: #666666;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.85);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.6);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
         """)
         button_layout.addWidget(self.cancel_button)

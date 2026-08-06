@@ -8,8 +8,10 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
+from ui.theme import theme
+
 class CustomMessageDialog(QDialog):
-    """自定义消息对话框（替代QMessageBox）"""
+    """自定义消息对话框（替代QMessageBox，支持主题切换）"""
 
     def __init__(self, parent=None, title="", message="", informative_text="", 
                  show_cancel=True, ok_text="确定", cancel_text="取消"):
@@ -20,15 +22,15 @@ class CustomMessageDialog(QDialog):
         self._init_ui(title, message, informative_text, show_cancel, ok_text, cancel_text)
 
     def _init_ui(self, title, message, informative_text, show_cancel, ok_text, cancel_text):
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             CustomMessageDialog {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
                 border: 2px solid rgba(0, 123, 255, 0.2);
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QPushButton {
@@ -39,39 +41,39 @@ class CustomMessageDialog(QDialog):
                 min-width: 80px;
             }
             QPushButton#primaryButton {
-                background-color: #4A90E2;
-                color: white;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 font-weight: bold;
             }
             QPushButton#primaryButton:hover {
-                background-color: #357ABD;
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton#primaryButton:pressed {
-                background-color: #2A629A;
+                background-color: __BTN_PRIMARY_PRESSED__;
             }
             QPushButton#secondaryButton {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: #e0e0e0;
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
             }
             QPushButton#secondaryButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton#secondaryButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
             QPushButton#closeButton {
                 background-color: transparent;
                 border: none;
                 font-size: 16px;
-                color: #aaaaaa;
+                color: __TEXT_SECONDARY__;
                 min-width: 20px;
                 padding: 0;
             }
             QPushButton#closeButton:hover {
-                color: white;
-                background-color: rgba(255, 255, 255, 0.1);
+                color: __TEXT__;
+                background-color: __HOVER__;
                 border-radius: 10px;
             }
         """)
@@ -107,7 +109,7 @@ class CustomMessageDialog(QDialog):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
+        theme.apply_to_sub(line, "background-color: __BORDER__;")
         layout.addWidget(line)
 
         # 消息内容
@@ -118,7 +120,7 @@ class CustomMessageDialog(QDialog):
         
         if informative_text:
             info_label = QLabel(informative_text)
-            info_label.setStyleSheet("color: #cccccc; margin-bottom: 5px;")
+            theme.apply_to_sub(info_label, "color: __TEXT_TERTIARY__; margin-bottom: 5px;")
             info_label.setWordWrap(True)
             layout.addWidget(info_label)
 

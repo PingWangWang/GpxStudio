@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QLineEdit)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QCursor
+from ui.theme import theme
 from typing import List, Dict
 
 
@@ -30,9 +31,9 @@ class LocationHistoryItem(QWidget):
         # 地点名称
         name = self.location_data.get('name', '')
         name_label = QLabel(name)
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 14px;
                 font-weight: bold;
             }
@@ -43,9 +44,9 @@ class LocationHistoryItem(QWidget):
         address = self.location_data.get('address', '')
         if address:
             address_label = QLabel(address)
-            address_label.setStyleSheet("""
+            theme.apply_to_sub(address_label, """
                 QLabel {
-                    color: #666666;
+                    color: __TEXT_SECONDARY__;
                     font-size: 12px;
                 }
             """)
@@ -53,13 +54,13 @@ class LocationHistoryItem(QWidget):
             layout.addWidget(address_label)
         
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             LocationHistoryItem {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border-radius: 4px;
             }
             LocationHistoryItem:hover {
-                background-color: #f0f0f0;
+                background-color: __HOVER__;
             }
         """)
         
@@ -112,20 +113,20 @@ class LocationHistoryPopup(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             LocationHistoryPopup {
-                background-color: white;
-                border: 1px solid #cccccc;
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 6px;
             }
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: #1890ff;
+                color: __ACCENT__;
                 font-size: 12px;
                 padding: 4px 8px;
             }
@@ -137,18 +138,18 @@ class LocationHistoryPopup(QWidget):
                 background-color: rgba(24, 144, 255, 0.2);
             }
             QListWidget {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border: none;
                 outline: none;
             }
             QListWidget::item {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border: none;
                 padding: 0px;
                 margin: 2px 0px;
             }
             QListWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: __HOVER__;
             }
             QListWidget::item:selected {
                 background-color: #e6f7ff;
@@ -169,30 +170,30 @@ class LocationHistoryPopup(QWidget):
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: #999999;
+                color: __TEXT_TERTIARY__;
                 font-size: 13px;
                 padding: 2px 6px;
             }
             QPushButton:hover {
-                color: #666666;
+                color: __TEXT_SECONDARY__;
             }
             QPushButton:checked {
-                color: #1890ff;
+                color: __ACCENT__;
                 font-weight: bold;
-                border-bottom: 2px solid #1890ff;
+                border-bottom: 2px solid __ACCENT__;
             }
         """
 
         self.history_tab_btn = QPushButton("🕒 最近搜索")
         self.history_tab_btn.setCheckable(True)
         self.history_tab_btn.setChecked(True)
-        self.history_tab_btn.setStyleSheet(tab_style)
+        theme.apply_to_sub(self.history_tab_btn, tab_style)
         self.history_tab_btn.clicked.connect(lambda: self._switch_tab('history'))
         header_layout.addWidget(self.history_tab_btn)
 
         self.favorites_tab_btn = QPushButton("⭐ 收藏夹")
         self.favorites_tab_btn.setCheckable(True)
-        self.favorites_tab_btn.setStyleSheet(tab_style)
+        theme.apply_to_sub(self.favorites_tab_btn, tab_style)
         self.favorites_tab_btn.clicked.connect(lambda: self._switch_tab('favorites'))
         header_layout.addWidget(self.favorites_tab_btn)
 
@@ -212,9 +213,9 @@ class LocationHistoryPopup(QWidget):
         # 空状态提示
         self.empty_label = QLabel("暂无搜索历史")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("""
+        theme.apply_to_sub(self.empty_label, """
             QLabel {
-                color: #999999;
+                color: __TEXT_TERTIARY__;
                 font-size: 13px;
                 padding: 20px;
             }
@@ -298,9 +299,9 @@ class LocationHistoryPopup(QWidget):
         my_layout = QHBoxLayout(my_widget)
         my_layout.setContentsMargins(12, 8, 12, 8)
         my_label = QLabel("📍 我的位置")
-        my_label.setStyleSheet("""
+        theme.apply_to_sub(my_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 14px;
                 font-weight: bold;
             }

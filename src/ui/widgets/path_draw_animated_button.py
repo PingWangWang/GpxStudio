@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath
 from PyQt5.QtSvg import QSvgRenderer
 import os
 from core.resource_path import resource_path
+from ui.theme import theme
 
 
 class PathDrawAnimatedButton(QPushButton):
@@ -23,7 +24,7 @@ class PathDrawAnimatedButton(QPushButton):
 
         # 设置按钮属性
         self.setFixedSize(36, 36)
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -31,10 +32,10 @@ class PathDrawAnimatedButton(QPushButton):
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.05);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(0, 0, 0, 0.1);
+                background-color: __HOVER_STRONG__;
             }
         """)
 

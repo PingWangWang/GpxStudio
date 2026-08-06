@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
 from PyQt5.QtSvg import QSvgRenderer
 import os
 from core.resource_path import resource_path
+from ui.theme import theme
 
 
 class SvgAnimatedButton(QPushButton):
@@ -25,7 +26,7 @@ class SvgAnimatedButton(QPushButton):
         
         # 设置按钮属性
         self.setFixedSize(36, 36)
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -33,10 +34,10 @@ class SvgAnimatedButton(QPushButton):
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: #f0f0f0;
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: #e0e0e0;
+                background-color: __HOVER_STRONG__;
             }
         """)
         

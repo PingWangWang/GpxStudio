@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QTextEdit, QFrame, QWidget)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
+from ui.theme import theme
 
 class UpdatePopup(QDialog):
     """更新提示弹出面板"""
@@ -31,22 +32,22 @@ class UpdatePopup(QDialog):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 与其他弹出面板保持一致
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             UpdatePopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
                 border: 2px solid rgba(0, 123, 255, 0.2);
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QTextEdit {
-                background-color: rgba(0, 0, 0, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
-                color: #e0e0e0;
+                color: __TEXT__;
                 font-size: 13px;
                 padding: 5px;
                 font-family: "Consolas", "Microsoft YaHei", monospace;
@@ -60,41 +61,41 @@ class UpdatePopup(QDialog):
             }
             /* 主要按钮样式 */
             QPushButton#primaryButton {
-                background-color: #4A90E2;
-                color: white;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 font-weight: bold;
             }
             QPushButton#primaryButton:hover {
-                background-color: #357ABD;
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton#primaryButton:pressed {
-                background-color: #2A629A;
+                background-color: __BTN_PRIMARY_PRESSED__;
             }
             /* 次要按钮样式 */
             QPushButton#secondaryButton {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: #e0e0e0;
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
             }
             QPushButton#secondaryButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton#secondaryButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
             /* 关闭按钮样式 */
             QPushButton#closeButton {
                 background-color: transparent;
                 border: none;
                 font-size: 16px;
-                color: #aaaaaa;
+                color: __TEXT_SECONDARY__;
                 min-width: 20px;
                 padding: 0;
             }
             QPushButton#closeButton:hover {
-                color: white;
-                background-color: rgba(255, 255, 255, 0.1);
+                color: __TEXT__;
+                background-color: __HOVER__;
                 border-radius: 10px;
             }
         """)
@@ -130,16 +131,16 @@ class UpdatePopup(QDialog):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
+        theme.apply_to_sub(line, "background-color: __DIVIDER__;")
         layout.addWidget(line)
 
         # 版本信息
         version_info = QLabel(f"最新版本: v{self.version}")
-        version_info.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A90E2;")
+        theme.apply_to_sub(version_info, "font-size: 14px; font-weight: bold; color: __ACCENT__;")
         layout.addWidget(version_info)
         
         info_label = QLabel("建议您更新到最新版本以获取更好的体验。")
-        info_label.setStyleSheet("color: #cccccc;")
+        theme.apply_to_sub(info_label, "color: __TEXT_TERTIARY__;")
         layout.addWidget(info_label)
 
         # Release Notes 区域
@@ -255,28 +256,28 @@ class DownloadProgressDialog(QDialog):
     def _init_ui(self):
         """初始化UI"""
         # 设置样式 - 与其他弹出面板保持一致
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             DownloadProgressDialog {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
                 border: 2px solid rgba(0, 123, 255, 0.2);
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QProgressBar {
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
                 background-color: rgba(0, 0, 0, 0.3);
                 text-align: center;
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
                 height: 25px;
             }
             QProgressBar::chunk {
-                background-color: #4A90E2;
+                background-color: __ACCENT__;
                 border-radius: 3px;
             }
             QPushButton {
@@ -287,27 +288,27 @@ class DownloadProgressDialog(QDialog):
                 min-width: 80px;
             }
             QPushButton#secondaryButton {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: #e0e0e0;
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
             }
             QPushButton#secondaryButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton#secondaryButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
             QPushButton#closeButton {
                 background-color: transparent;
                 border: none;
                 font-size: 16px;
-                color: #aaaaaa;
+                color: __TEXT_SECONDARY__;
                 min-width: 20px;
                 padding: 0;
             }
             QPushButton#closeButton:hover {
-                color: white;
-                background-color: rgba(255, 255, 255, 0.1);
+                color: __TEXT__;
+                background-color: __HOVER__;
                 border-radius: 10px;
             }
         """)
@@ -343,7 +344,7 @@ class DownloadProgressDialog(QDialog):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
+        theme.apply_to_sub(line, "background-color: __DIVIDER__;")
         layout.addWidget(line)
         
         # 提示文本

@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QFrame, QApplication)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QCursor
+from ui.theme import theme
 
 
 class LocationInfoPopup(QWidget):
@@ -31,9 +32,9 @@ class LocationInfoPopup(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置整体样式 - 参考地图设置面板的深色风格
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             LocationInfoPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
                 border: 1px solid rgba(0, 123, 255, 0.2);
             }
@@ -53,7 +54,7 @@ class LocationInfoPopup(QWidget):
         title_font = QFont("Microsoft YaHei", 9)
         title_font.setBold(True)
         title_label.setFont(title_font)
-        title_label.setStyleSheet("color: white; font-family: 'Microsoft YaHei';")
+        theme.apply_to_sub(title_label, "color: __TEXT__; font-family: 'Microsoft YaHei';")
         title_layout.addWidget(title_label)
         
         title_layout.addStretch()
@@ -62,18 +63,18 @@ class LocationInfoPopup(QWidget):
         close_button = QPushButton("✕")
         close_button.setToolTip("关闭")
         close_button.setFixedSize(24, 24)
-        close_button.setStyleSheet("""
+        theme.apply_to_sub(close_button, """
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: rgba(255, 255, 255, 0.7);
+                color: __TEXT_TERTIARY__;
                 font-size: 14px;
                 font-weight: bold;
                 border-radius: 12px;
             }
             QPushButton:hover {
-                color: white;
-                background-color: rgba(255, 255, 255, 0.1);
+                color: __TEXT__;
+                background-color: __HOVER__;
             }
         """)
         close_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -85,7 +86,7 @@ class LocationInfoPopup(QWidget):
         # 分隔线
         separator1 = QFrame()
         separator1.setFrameShape(QFrame.HLine)
-        separator1.setStyleSheet("background-color: rgba(255, 255, 255, 0.1); border: none; height: 1px;")
+        theme.apply_to_sub(separator1, "background-color: __DIVIDER__; border: none; height: 1px;")
         separator1.setFixedHeight(1)
         main_layout.addWidget(separator1)
         
@@ -93,9 +94,9 @@ class LocationInfoPopup(QWidget):
         self.name_label = QLabel()
         self.name_label.setWordWrap(True)
         self.name_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        self.name_label.setStyleSheet("""
+        theme.apply_to_sub(self.name_label, """
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 4px 0px;
@@ -108,9 +109,9 @@ class LocationInfoPopup(QWidget):
         self.address_label = QLabel()
         self.address_label.setWordWrap(True)
         self.address_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        self.address_label.setStyleSheet("""
+        theme.apply_to_sub(self.address_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.85);
+                color: __TEXT_SECONDARY__;
                 font-size: 12px;
                 padding: 2px 0px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -121,9 +122,9 @@ class LocationInfoPopup(QWidget):
         # 坐标信息 - 支持文本选择和复制
         self.coord_label = QLabel()
         self.coord_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        self.coord_label.setStyleSheet("""
+        theme.apply_to_sub(self.coord_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.6);
+                color: __TEXT_SECONDARY__;
                 font-size: 11px;
                 padding: 2px 0px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -134,9 +135,9 @@ class LocationInfoPopup(QWidget):
         # 类型信息（可选）- 支持文本选择和复制
         self.type_label = QLabel()
         self.type_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        self.type_label.setStyleSheet("""
+        theme.apply_to_sub(self.type_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.6);
+                color: __TEXT_SECONDARY__;
                 font-size: 11px;
                 padding: 2px 0px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;

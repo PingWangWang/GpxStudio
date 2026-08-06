@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import QTime, QDateTime, Qt
 
 from .time_date_panel import DateSelectPanel, TimeSelectPanel
+from ui.theme import theme
 
 
 class PanelFactory:
@@ -68,16 +69,8 @@ class PanelFactory:
         address_line_edit.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         # 设置省略号模式（右侧省略）
         address_line_edit.setPlaceholderText("未选择地址")
-        # 使用PyQt5的CSS样式
-        address_line_edit.setStyleSheet("""
-            QLineEdit {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #cccccc;
-                padding: 5px 10px;
-                font-size: 9pt;
-            }
-        """)
+        # 使用PyQt5的CSS样式（占位符接入主题，切主题自动刷新）
+        theme.apply_to_sub(address_line_edit, "QLineEdit { background-color: __INPUT_BG__; color: __TEXT__; border: 1px solid __BORDER__; padding: 5px 10px; font-size: 9pt; }")
         # 设置固定高度确保文本不会换行
         address_line_edit.setFixedHeight(30)
         # 允许标签收缩
@@ -233,15 +226,15 @@ class PanelFactory:
 
         parent.start_date_button = QPushButton("选择日期")
         parent.start_date_button.setToolTip("选择出发日期")
-        parent.start_date_button.setStyleSheet("""
+        theme.apply_to_sub(parent.start_date_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __WINDOW_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
                 padding: 6px 8px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: __HOVER__;
             }
         """)
         parent.start_date_button.clicked.connect(lambda: parent.show_date_panel("start"))
@@ -249,15 +242,15 @@ class PanelFactory:
 
         parent.start_time_button = QPushButton("选择时间")
         parent.start_time_button.setToolTip("选择出发时间")
-        parent.start_time_button.setStyleSheet("""
+        theme.apply_to_sub(parent.start_time_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __WINDOW_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
                 padding: 6px 8px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: __HOVER__;
             }
         """)
         parent.start_time_button.clicked.connect(lambda: parent.show_time_panel("start"))
@@ -282,14 +275,7 @@ class PanelFactory:
         # 移除固定宽度，使用动态宽度
         # parent.start_time_display.setFixedWidth(199)
         parent.start_time_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        parent.start_time_display.setStyleSheet("""
-            QLineEdit {
-                background-color: #f5f5f5;
-                color: #000000;
-                border: 1px solid #cccccc;
-                padding: 4px;
-            }
-        """)
+        theme.apply_to_sub(parent.start_time_display, "QLineEdit { background-color: __WINDOW_BG__; color: __TEXT__; border: 1px solid __BORDER__; padding: 4px; }")
         start_display_layout.addWidget(parent.start_time_display)
         start_time_layout.addLayout(start_display_layout)
         layout.addLayout(start_time_layout)
@@ -318,14 +304,7 @@ class PanelFactory:
         # 移除固定宽度，使用动态宽度
         # parent.end_time_display.setFixedWidth(199)
         parent.end_time_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        parent.end_time_display.setStyleSheet("""
-            QLineEdit {
-                background-color: #f5f5f5;
-                color: #000000;
-                border: 1px solid #cccccc;
-                padding: 4px;
-            }
-        """)
+        theme.apply_to_sub(parent.end_time_display, "QLineEdit { background-color: __WINDOW_BG__; color: __TEXT__; border: 1px solid __BORDER__; padding: 4px; }")
         end_time_layout.addWidget(parent.end_time_display)
         layout.addLayout(end_time_layout)
 

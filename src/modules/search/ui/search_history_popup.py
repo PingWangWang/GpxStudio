@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QHBoxLayout, 
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 import os
+from ui.theme import theme
 
 
 class SearchHistoryPopup(QListWidget):
@@ -33,24 +34,24 @@ class SearchHistoryPopup(QListWidget):
         self._map_manager = map_manager
 
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QListWidget {
-                background-color: white;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
                 outline: none;
             }
             QListWidget::item {
                 /* 内边距由行控件 contentsMargins 提供；此处若保留 padding 会与
                    setItemWidget 行控件叠加，挤压内容区导致文字上下被裁剪 */
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid __DIVIDER__;
             }
             QListWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: #e8f4fd;
-                color: #333333;
+                background-color: __ACCENT__;
+                color: __TEXT_ON_ACCENT__;
             }
         """)
 
@@ -114,9 +115,9 @@ class SearchHistoryPopup(QListWidget):
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(12, 5, 8, 5)
         name_label = QLabel("📍 我的位置")
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 13px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -142,16 +143,16 @@ class SearchHistoryPopup(QListWidget):
     def _apply_favorite_style(self, button, is_fav: bool):
         """设置收藏按钮外观：已收藏金色实心★，未收藏灰色空心☆"""
         button.setText('★' if is_fav else '☆')
-        button.setStyleSheet(f"""
+        theme.apply_to_sub(button, f"""
             QPushButton {{
                 background-color: transparent;
                 border: none;
                 font-size: {'19px' if is_fav else '17px'};
-                color: {'#FFD700' if is_fav else '#888888'};
+                color: {'__GOLD__' if is_fav else '__TEXT_SECONDARY__'};
                 padding: 0;
             }}
             QPushButton:hover {{
-                color: #FFD700;
+                color: __GOLD__;
                 font-size: 19px;
             }}
         """)
@@ -193,9 +194,9 @@ class SearchHistoryPopup(QListWidget):
         # 左侧图标按地址类型分类（搜索/历史/收藏夹三处图标一致；名称兜底推断类型）
         from modules.search.type_icons import get_type_emoji
         name_label = QLabel(f"{get_type_emoji(record.get('type', ''), name)} {name}")
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 13px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -206,9 +207,9 @@ class SearchHistoryPopup(QListWidget):
 
         if address and address != name:
             address_label = QLabel(address)
-            address_label.setStyleSheet("""
+            theme.apply_to_sub(address_label, """
                 QLabel {
-                    color: #888888;
+                    color: __TEXT_SECONDARY__;
                     font-size: 12px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }

@@ -26,6 +26,7 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import QPainter
 from PyQt5.QtCore import Qt, QPointF, QRectF
+from ui.theme import theme
 
 
 class MapToolbar:
@@ -36,15 +37,15 @@ class MapToolbar:
     """
 
     _BUTTON_STYLE = """
-        QPushButton {{
+        QPushButton {
             background-color: transparent;
             border: none;
             border-radius: 4px;
             padding: 0px;
             font-size: 18px;
-        }}
-        QPushButton:hover {{ background-color: #f0f0f0; }}
-        QPushButton:pressed {{ background-color: #e0e0e0; }}
+        }
+        QPushButton:hover { background-color: __HOVER__; }
+        QPushButton:pressed { background-color: __HOVER_STRONG__; }
     """
 
     def __init__(self, app, map_container: QWidget, control_height: int = 36):
@@ -68,11 +69,11 @@ class MapToolbar:
 
         self.right_buttons_container = QWidget()
         self.right_buttons_container.setParent(ctr)
-        self.right_buttons_container.setStyleSheet("""
+        theme.set_theme_stylesheet(self.right_buttons_container, """
             QWidget {
-                background-color: white;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                border: 1px solid __BORDER__;
             }
         """)
         layout = QVBoxLayout(self.right_buttons_container)
@@ -83,14 +84,14 @@ class MapToolbar:
 
         # 地图模式（卫星/街道）
         self.map_mode_button = self._make_btn("🗺️", "切换地图模式（卫星/街道）", h, checkable=True)
-        self.map_mode_button.setStyleSheet("""
+        theme.apply_to_sub(self.map_mode_button, """
             QPushButton {
                 background-color: transparent; border: none;
                 border-radius: 4px; padding: 0px; font-size: 18px;
             }
-            QPushButton:hover { background-color: #f0f0f0; }
-            QPushButton:pressed { background-color: #e0e0e0; }
-            QPushButton:checked { background-color: #e3f2fd; border: 1px solid #2196f3; }
+            QPushButton:hover { background-color: __HOVER__; }
+            QPushButton:pressed { background-color: __HOVER_STRONG__; }
+            QPushButton:checked { background-color: __ACCENT__; border: 1px solid __ACCENT__; }
         """)
         self.map_mode_button.setChecked(map_config.get_map_mode() == 'satellite')
         self.map_mode_button.enterEvent = lambda e: self._app.on_map_mode_button_enter()
@@ -138,10 +139,10 @@ class MapToolbar:
         self.loading_button.setText("")
         self.loading_button.setToolTip("加载状态指示器")
         self.loading_button.setFixedSize(h, h)
-        self.loading_button.setStyleSheet("""
+        theme.apply_to_sub(self.loading_button, """
             QPushButton { background-color: transparent; border: none;
                 border-radius: 4px; padding: 0px; font-size: 18px; }
-            QPushButton:hover { background-color: #f0f0f0; }
+            QPushButton:hover { background-color: __HOVER__; }
         """)
         layout.addWidget(self.loading_button)
 
@@ -156,14 +157,14 @@ class MapToolbar:
         self.road_overlay_button.setText("🛣️")
         self.road_overlay_button.setToolTip("路网")
         self.road_overlay_button.setFixedSize(h, h)
-        self.road_overlay_button.setStyleSheet("""
+        theme.apply_to_sub(self.road_overlay_button, """
             QPushButton {
-                background-color: white; border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__; border: 1px solid __BORDER__;
                 border-radius: 6px; padding: 0px; font-size: 18px;
             }
-            QPushButton:hover { background-color: #f0f0f0; }
-            QPushButton:pressed { background-color: #e0e0e0; }
-            QPushButton:checked { background-color: #e3f2fd; border: 1px solid #2196f3; }
+            QPushButton:hover { background-color: __HOVER__; }
+            QPushButton:pressed { background-color: __HOVER_STRONG__; }
+            QPushButton:checked { background-color: __ACCENT__; border: 1px solid __ACCENT__; }
         """)
         self.road_overlay_button.setCheckable(True)
         self.road_overlay_button.setChecked(map_config.get_satellite_show_roads())
@@ -178,12 +179,12 @@ class MapToolbar:
 
     def _build_scale_label(self):
         self.scale_info_label = QLabel(self._container)
-        self.scale_info_label.setStyleSheet("""
+        theme.apply_to_sub(self.scale_info_label, """
             QLabel {
-                background-color: rgba(255, 255, 255, 0.8);
-                border: 1px solid rgba(0, 0, 0, 0.2);
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px; padding: 8px 12px;
-                font-size: 12px; color: #333333;
+                font-size: 12px; color: __TEXT__;
             }
         """)
         self.scale_info_label.setText("缩放级别: 10")
@@ -198,10 +199,10 @@ class MapToolbar:
 
         self.search_container = QWidget()
         self.search_container.setParent(ctr)
-        self.search_container.setStyleSheet("""
+        theme.set_theme_stylesheet(self.search_container, """
             QWidget {
-                background-color: white; border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__; border-radius: 6px;
+                border: 1px solid __BORDER__;
             }
         """)
         layout = QHBoxLayout(self.search_container)
@@ -211,13 +212,13 @@ class MapToolbar:
         # 搜索输入框
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("搜索地点...")
-        self.search_input.setStyleSheet("""
+        theme.apply_to_sub(self.search_input, """
             QLineEdit {
-                background-color: #f5f5f5; border: none; border-radius: 4px;
+                background-color: __INPUT_BG__; border: none; border-radius: 4px;
                 padding: 0px 12px; font-size: 13px;
                 min-width: 250px; max-width: 250px;
             }
-            QLineEdit:focus { background-color: #ebebeb; }
+            QLineEdit:focus { background-color: __WINDOW_BG__; }
         """)
         self.search_input.setFixedHeight(h)
         self.search_input.returnPressed.connect(self._app.on_search_button_clicked)
@@ -289,7 +290,7 @@ class MapToolbar:
         btn.setToolTip(tooltip)
         btn.setFixedSize(size, size)
         btn.setCheckable(checkable)
-        btn.setStyleSheet(self._BUTTON_STYLE)
+        theme.apply_to_sub(btn, self._BUTTON_STYLE)
         return btn
 
     def copy_refs_to_app(self):

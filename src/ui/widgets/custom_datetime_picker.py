@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QCalendarWidget,
                              QListWidget, QListWidgetItem, QLabel, QFrame, QPushButton, QSpinBox)
 from PyQt5.QtCore import Qt, QDate, QTime, QDateTime, pyqtSignal, QLocale
 from PyQt5.QtGui import QFont
+from ui.theme import theme
 
 
 class CustomDateTimePicker(QWidget):
@@ -26,84 +27,84 @@ class CustomDateTimePicker(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
 
         # 设置样式 - 与其他面板保持一致
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QWidget {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QCalendarWidget {
-                background-color: rgba(255, 255, 255, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QCalendarWidget QToolButton {
                 background-color: transparent;
                 border: none;
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
                 padding: 4px;
             }
             QCalendarWidget QToolButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
                 border-radius: 2px;
             }
             QCalendarWidget QMenu {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                color: #333333;
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
+                color: __TEXT__;
             }
             QCalendarWidget QSpinBox {
                 background-color: transparent;
                 border: none;
-                color: white;
+                color: __TEXT__;
                 padding: 2px;
             }
             QCalendarWidget QAbstractButton {
                 background-color: transparent;
                 border: none;
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
             }
             QCalendarWidget QAbstractButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
                 border-radius: 2px;
             }
             QCalendarWidget QAbstractItemView {
-                background-color: white;
+                background-color: __INPUT_BG__;
                 border: none;
-                color: #333333;
-                selection-background-color: #3b4453;
-                selection-color: white;
+                color: __TEXT__;
+                selection-background-color: __ACCENT__;
+                selection-color: __TEXT_ON_ACCENT__;
             }
             QListWidget {
-                background-color: rgba(255, 255, 255, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
-                color: #333333;
+                color: __TEXT__;
                 font-size: 13px;
             }
             QListWidget::item {
                 padding: 8px 12px;
-                border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-                color: #333333;
+                border-bottom: 1px solid __DIVIDER__;
+                color: __TEXT__;
             }
             QListWidget::item:hover {
-                background-color: rgba(59, 68, 83, 0.1);
-                color: #333333;
+                background-color: __HOVER_STRONG__;
+                color: __TEXT__;
             }
             QListWidget::item:selected {
-                background-color: #3b4453;
-                color: white;
+                background-color: __ACCENT__;
+                color: __TEXT_ON_ACCENT__;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 4px 0px;
             }
             QFrame {
-                color: rgba(255, 255, 255, 0.3);
+                color: __DIVIDER__;
             }
         """)
 
@@ -137,11 +138,11 @@ class CustomDateTimePicker(QWidget):
                 spinbox.setReadOnly(True)
 
         # 添加样式来确保没有三角箭头显示
-        self.calendar.setStyleSheet("""
+        theme.apply_to_sub(self.calendar, """
             QCalendarWidget QToolButton {
                 background-color: transparent;
                 border: none;
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
                 padding: 4px;
             }
@@ -151,7 +152,7 @@ class CustomDateTimePicker(QWidget):
             QCalendarWidget QAbstractButton {
                 background-color: transparent;
                 border: none;
-                color: white;
+                color: __TEXT__;
                 font-size: 12px;
             }
             QCalendarWidget QAbstractButton::menu-indicator {
@@ -171,7 +172,7 @@ class CustomDateTimePicker(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("QFrame { color: rgba(255, 255, 255, 0.3); }")
+        theme.apply_to_sub(separator, "QFrame { color: __DIVIDER__; }")
         layout.addWidget(separator)
 
         # 右侧：时间选择

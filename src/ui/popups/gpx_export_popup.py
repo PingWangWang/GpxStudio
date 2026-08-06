@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QFrame, QApplication, QLineEdit, QCheckBox)
 from PyQt5.QtCore import Qt, QDateTime, pyqtSignal, QEvent, QTimer, QSize
 from PyQt5.QtGui import QFont
+from ui.theme import theme
 import os
 import json
 
@@ -36,23 +37,23 @@ class GpxExportPopup(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置弹出面板样式 - 与路线面板颜色统一
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             GpxExportPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                border: 1px solid __BORDER__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
             }
             CustomDateTimeEdit {
                 background-color: transparent;
             }
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #3b4453;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
@@ -60,23 +61,23 @@ class GpxExportPopup(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: white;
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.8);
+                background-color: __BTN_PRIMARY_PRESSED__;
             }
             QPushButton#cancelButton {
-                background-color: rgba(255, 255, 255, 0.7);
-                color: #666666;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
             }
             QPushButton#cancelButton:hover {
-                background-color: rgba(255, 255, 255, 0.85);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton#cancelButton:pressed {
-                background-color: rgba(255, 255, 255, 0.6);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
             QFrame {
-                color: rgba(255, 255, 255, 0.3);
+                color: __DIVIDER__;
             }
         """)
 
@@ -99,18 +100,18 @@ class GpxExportPopup(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("QFrame { color: #e0e0e0; }")
+        theme.apply_to_sub(separator, "QFrame { color: __DIVIDER__; }")
         layout.addWidget(separator)
 
         # 路线信息
         route_info = self._get_route_info()
         info_label = QLabel(route_info)
-        info_label.setStyleSheet("""
+        theme.apply_to_sub(info_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.9);
+                color: __TEXT__;
                 font-size: 12px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
                 padding: 8px;
             }
@@ -139,18 +140,18 @@ class GpxExportPopup(QWidget):
         
         self.datetime_text_edit.setText(default_datetime.toString("yyyy-MM-dd hh:mm"))
         self.datetime_text_edit.setReadOnly(True)  # 设置为只读
-        self.datetime_text_edit.setStyleSheet("""
+        theme.apply_to_sub(self.datetime_text_edit, """
             QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __INPUT_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
                 padding: 6px 8px;
                 font-size: 13px;
-                color: #333333;
+                color: __TEXT__;
             }
             QLineEdit:focus {
-                border: 1px solid rgba(255, 255, 255, 0.7);
-                background-color: white;
+                border: 1px solid __BORDER__;
+                background-color: __INPUT_BG__;
             }
         """)
         time_layout.addWidget(self.datetime_text_edit, 1)
@@ -162,22 +163,22 @@ class GpxExportPopup(QWidget):
 
         # 使用emoji作为图标
         self.settings_button.setText("⏰")
-        self.settings_button.setStyleSheet("""
+        theme.apply_to_sub(self.settings_button, """
             QPushButton {
                 font-size: 16px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
                 text-align: center;
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.5);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
         """)
         self.settings_button.clicked.connect(self._show_datetime_picker)
@@ -193,9 +194,9 @@ class GpxExportPopup(QWidget):
 
         # 文字标签
         elevation_label = QLabel("导出海拔数据")
-        elevation_label.setStyleSheet("""
+        theme.apply_to_sub(elevation_label, """
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
                 margin-right: 8px;
             }
@@ -205,9 +206,9 @@ class GpxExportPopup(QWidget):
         # 复选框
         self.elevation_checkbox = QCheckBox()
         self.elevation_checkbox.setChecked(self.export_elevation)
-        self.elevation_checkbox.setStyleSheet("""
+        theme.apply_to_sub(self.elevation_checkbox, """
             QCheckBox {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
             }
             QCheckBox::indicator {
@@ -218,16 +219,16 @@ class GpxExportPopup(QWidget):
                 font-weight: bold;
             }
             QCheckBox::indicator:unchecked {
-                border: 2px solid rgba(255, 255, 255, 0.5);
+                border: 2px solid __BORDER__;
                 background-color: transparent;
                 border-radius: 3px;
                 color: transparent;
             }
             QCheckBox::indicator:checked {
-                border: 2px solid #4CAF50;
-                background-color: #4CAF50;
+                border: 2px solid __SUCCESS__;
+                background-color: __SUCCESS__;
                 border-radius: 3px;
-                color: white;
+                color: __TEXT__;
             }
         """)
         # 重写paintEvent以绘制对勾
@@ -255,9 +256,9 @@ class GpxExportPopup(QWidget):
         tip_layout.setSpacing(0)
 
         self.elevation_tip = QLabel("获取海拔数据较慢，需耐心等待")
-        self.elevation_tip.setStyleSheet("""
+        theme.apply_to_sub(self.elevation_tip, """
             QLabel {
-                color: rgba(255, 255, 255, 0.7);
+                color: __TEXT_TERTIARY__;
                 font-size: 10px;
                 margin-left: 2px;
             }
@@ -337,10 +338,10 @@ class GpxExportPopup(QWidget):
         self.picker_popup.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         # 确保窗口标题为空，避免显示默认标题
         self.picker_popup.setWindowTitle("")
-        self.picker_popup.setStyleSheet("""
+        theme.set_theme_stylesheet(self.picker_popup, """
             QWidget {
-                background-color: #3b4453;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 6px;
             }
         """)

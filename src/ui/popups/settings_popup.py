@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QLineEdit, QPushButton, QLabel, QMessageBox,
                              QTabWidget, QTextEdit, QComboBox, QFrame, QSizePolicy,
                              QCheckBox)
+from ui.theme import theme
 
 class CustomMessageBox(QWidget):
     """自定义消息提示框"""
@@ -20,19 +21,19 @@ class CustomMessageBox(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, False)
 
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             CustomMessageBox {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
                 font-family: 'Microsoft YaHei';
             }
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-family: 'Microsoft YaHei';
             }
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #4A90E2;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __ACCENT__;
                 font-size: 14px;
                 font-weight: bold;
                 border-radius: 4px;
@@ -40,10 +41,10 @@ class CustomMessageBox(QWidget):
                 font-family: 'Microsoft YaHei';
             }
             QPushButton:hover {
-                background-color: white;
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.8);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
         """)
 
@@ -54,21 +55,21 @@ class CustomMessageBox(QWidget):
 
         # 标题
         title_label = QLabel(title)
-        title_label.setStyleSheet("""
+        theme.apply_to_sub(title_label, """
             QLabel {
                 font-size: 16px;
                 font-weight: bold;
-                color: white;
+                color: __TEXT__;
             }
         """)
         main_layout.addWidget(title_label)
 
         # 消息内容
         message_label = QLabel(message)
-        message_label.setStyleSheet("""
+        theme.apply_to_sub(message_label, """
             QLabel {
                 font-size: 14px;
-                color: rgba(255, 255, 255, 0.9);
+                color: __TEXT__;
                 line-height: 1.4;
             }
         """)
@@ -131,19 +132,19 @@ class CustomArrowButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(30, 46)
-        self.setStyleSheet("""
+        theme.apply_to_sub(self, """
             QPushButton {
                 border: none;
-                background-color: #f8f9fa;
+                background-color: __WINDOW_BG__;
                 border-top-right-radius: 4px;
                 border-bottom-right-radius: 4px;
-                border-left: 1px solid #e1e5e9;
+                border-left: 1px solid __BORDER__;
             }
             QPushButton:hover {
-                background-color: #e9ecef;
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: #dee2e6;
+                background-color: __HOVER_STRONG__;
             }
         """)
 
@@ -193,11 +194,11 @@ class BaseSettingsPopup(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, False)  # 不透明背景
 
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             BaseSettingsPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 8px;
-                border: 2px solid rgba(0, 123, 255, 0.2);
+                border: 2px solid __BORDER__;
                 font-family: 'Microsoft YaHei';
             }
         """)
@@ -296,9 +297,9 @@ class MapSettingsPopup(BaseSettingsPopup):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 与路线规划面板保持一致
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             MapSettingsPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -326,11 +327,11 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("地图设置")
-        title_label.setStyleSheet("""
+        theme.apply_to_sub(title_label, """
             QLabel {
                 font-size: 13px;
                 font-weight: bold;
-                color: white;
+                color: __TEXT__;
                 font-family: 'Microsoft YaHei';
             }
         """)
@@ -340,16 +341,16 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 关闭按钮
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(28, 28)
-        close_btn.setStyleSheet("""
+        theme.apply_to_sub(close_btn, """
             QPushButton {
                 background-color: transparent;
                 border: none;
                 font-size: 14px;
-                color: white;
+                color: __TEXT__;
                 border-radius: 14px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -361,7 +362,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
+        theme.apply_to_sub(line, "background-color: __DIVIDER__; margin: 5px 0;")
         main_layout.addWidget(line)
 
         # 地图数据源选择
@@ -377,20 +378,20 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 设置下拉框样式
         # [修改] 箭头图标路径由 resource_path 动态生成，兼容开发/打包环境
         _arrow_path = resource_path("res/icons/arrow-down.svg").replace("\\", "/")
-        self.map_source_combo.setStyleSheet("""
+        theme.apply_to_sub(self.map_source_combo, """
             QComboBox {
                 padding: 0px 4px 0px 4px; /* 左右留4px内边距 */
                 border: 0px;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
                 height: 30px;
             }
             QComboBox:focus {
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
             QComboBox::drop-down {
                 border: 0px;
@@ -405,11 +406,11 @@ class MapSettingsPopup(BaseSettingsPopup):
                 margin: auto;
             }
             QComboBox QAbstractItemView {
-                border: 1px solid rgba(0, 0, 0, 0.2);
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
-                background-color: white;
-                selection-background-color: #3b4453;
-                selection-color: white;
+                background-color: __INPUT_BG__;
+                selection-background-color: __ACCENT__;
+                selection-color: __TEXT_ON_ACCENT__;
                 font-size: 12px;
             }
             QComboBox QLineEdit {
@@ -451,18 +452,18 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.api_key_edit.setEchoMode(QLineEdit.Password)
         self.api_key_edit.setAlignment(Qt.AlignLeft)  # 确保文本左对齐
         # 设置较小的字体以显示更多内容
-        self.api_key_edit.setStyleSheet("""
+        theme.apply_to_sub(self.api_key_edit, """
             QLineEdit {
                 padding: 4px 8px 4px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 11px;
-                color: #333333;
+                color: __TEXT__;
                 height: 30px;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
         """)
         # 设置文本边距，为右侧的眼睛按钮留出空间
@@ -476,15 +477,15 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.api_key_eye_btn.setFixedSize(30, 30)
         self.api_key_eye_btn.clicked.connect(self.toggle_api_key_visibility)
         self.api_key_eye_btn.setToolTip("显示/隐藏API密钥")
-        self.api_key_eye_btn.setStyleSheet("""
+        theme.apply_to_sub(self.api_key_eye_btn, """
             QPushButton {
                 border: none;
                 background-color: transparent;
                 font-size: 16px;
-                color: white;
+                color: __TEXT__;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
         """)
 
@@ -495,18 +496,18 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.security_key_edit.setEchoMode(QLineEdit.Normal)  # 初始为Normal模式显示placeholder
         self.security_key_edit.setAlignment(Qt.AlignLeft)  # 确保文本左对齐
         # 设置较小的字体以显示更多内容
-        self.security_key_edit.setStyleSheet("""
+        theme.apply_to_sub(self.security_key_edit, """
             QLineEdit {
                 padding: 4px 8px 4px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 11px;
-                color: #333333;
+                color: __TEXT__;
                 height: 30px;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
         """)
         # 设置文本边距，为右侧的眼睛按钮留出空间
@@ -516,15 +517,15 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.security_key_eye_btn.setFixedSize(30, 30)
         self.security_key_eye_btn.clicked.connect(self.toggle_security_key_visibility)
         self.security_key_eye_btn.setToolTip("显示/隐藏安全密钥")
-        self.security_key_eye_btn.setStyleSheet("""
+        theme.apply_to_sub(self.security_key_eye_btn, """
             QPushButton {
                 border: none;
                 background-color: transparent;
                 font-size: 16px;
-                color: white;
+                color: __TEXT__;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
         """)
 
@@ -536,7 +537,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.close_action_combo.addItem("最小化到系统托盘", "hide")
         self.close_action_combo.setFixedHeight(30)
         self.close_action_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.close_action_combo.setStyleSheet(self.map_source_combo.styleSheet())
+        theme.apply_to_sub(self.close_action_combo, self.map_source_combo.styleSheet())
         
         # 创建关闭动作容器（为了保持布局一致性）
         close_action_container = QWidget()
@@ -555,7 +556,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 关闭动作行
         close_action_row = QHBoxLayout()
         close_action_label = QLabel("关闭时:")
-        close_action_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(close_action_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         close_action_label.setFixedWidth(80)
         close_action_label.setFixedHeight(30)
         close_action_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -576,7 +577,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 地图数据源行
         source_row = QHBoxLayout()
         source_label = QLabel("地图数据源:")
-        source_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(source_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         source_label.setFixedWidth(80)
         source_label.setFixedHeight(30)  # 设置标签固定高度
         source_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -594,7 +595,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         api_key_row = QHBoxLayout()
         api_key_row = QHBoxLayout()
         api_key_label = QLabel("API Key:")
-        api_key_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(api_key_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         api_key_label.setFixedWidth(80)
         api_key_label.setFixedHeight(30)  # 设置标签固定高度
         api_key_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -622,7 +623,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 安全密钥行 (当前版本暂不支持，隐藏)
         security_key_row = QHBoxLayout()
         security_key_label = QLabel("安全密钥:")
-        security_key_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(security_key_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         security_key_label.setFixedWidth(80)
         security_key_label.setFixedHeight(30)  # 设置标签固定高度
         security_key_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -652,7 +653,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 分隔线
         line_close = QFrame()
         line_close.setFrameShape(QFrame.HLine)
-        line_close.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 2px 0;")
+        theme.apply_to_sub(line_close, "background-color: __DIVIDER__; margin: 2px 0;")
         config_layout.addWidget(line_close)
         
         # 添加关闭动作行
@@ -664,7 +665,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.elevation_mode_combo.addItem("全量模式（按实际点数）", False)
         self.elevation_mode_combo.setFixedHeight(30)
         self.elevation_mode_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.elevation_mode_combo.setStyleSheet(self.map_source_combo.styleSheet())
+        theme.apply_to_sub(self.elevation_mode_combo, self.map_source_combo.styleSheet())
 
         elevation_mode_container = QWidget()
         elevation_mode_layout = QHBoxLayout(elevation_mode_container)
@@ -679,7 +680,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         elevation_row = QHBoxLayout()
         elevation_label = QLabel("海拔获取:")
-        elevation_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(elevation_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         elevation_label.setFixedWidth(80)
         elevation_label.setFixedHeight(30)
         elevation_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -699,10 +700,10 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.show_favorites_check.setFixedHeight(30)
         # 对勾图标路径由 resource_path 动态生成，兼容开发/打包环境（与 arrow-down.svg 同模式）
         _check_path = resource_path("res/icons/check.svg").replace("\\", "/")
-        self.show_favorites_check.setStyleSheet(f"""
+        theme.apply_to_sub(self.show_favorites_check, f"""
             QCheckBox {{
                 font-size: 12px;
-                color: white;
+                color: __TEXT__;
                 font-family: 'Microsoft YaHei';
                 background-color: transparent;
                 spacing: 6px;
@@ -712,12 +713,12 @@ class MapSettingsPopup(BaseSettingsPopup):
                 height: 16px;
             }}
             QCheckBox::indicator:unchecked {{
-                border: 1px solid rgba(255, 255, 255, 0.4);
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }}
             QCheckBox::indicator:checked {{
-                border: 1px solid #FFD700;
+                border: 1px solid __GOLD__;
                 border-radius: 3px;
                 background-color: rgba(255, 215, 0, 0.3);
                 image: url({_check_path});
@@ -726,7 +727,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         favorites_row = QHBoxLayout()
         favorites_label = QLabel("收藏点:")
-        favorites_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        theme.apply_to_sub(favorites_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
         favorites_label.setFixedWidth(80)
         favorites_label.setFixedHeight(30)
         favorites_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -746,7 +747,7 @@ class MapSettingsPopup(BaseSettingsPopup):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 20px 0;")  # 进一步增加分隔线的上下边距到20px
+        theme.apply_to_sub(separator, "background-color: __DIVIDER__; margin: 20px 0;")  # 进一步增加分隔线的上下边距到20px
         main_layout.addWidget(separator)
 
         # 按钮区域
@@ -759,22 +760,22 @@ class MapSettingsPopup(BaseSettingsPopup):
         self.save_btn.setToolTip("保存当前配置")
         self.save_btn.setMinimumWidth(80)
         self.save_btn.setMinimumHeight(30)
-        self.save_btn.setStyleSheet("""
+        theme.apply_to_sub(self.save_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.3);
-                color: white;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.4);
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton:disabled {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: rgba(255, 255, 255, 0.5);
+                background-color: __HOVER__;
+                color: __TEXT_TERTIARY__;
             }
         """)
         btn_layout.addWidget(self.save_btn)
@@ -1006,9 +1007,9 @@ class LogSettingsPopup(BaseSettingsPopup):
 
     def _init_ui(self):
         """初始化UI"""
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             LogSettingsPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -1031,11 +1032,11 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         title_layout = QHBoxLayout()
         title_label = QLabel("日志设置")
-        title_label.setStyleSheet("""
+        theme.apply_to_sub(title_label, """
             QLabel {
                 font-size: 13px;
                 font-weight: bold;
-                color: white;
+                color: __TEXT__;
                 font-family: 'Microsoft YaHei';
             }
         """)
@@ -1044,16 +1045,16 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(28, 28)
-        close_btn.setStyleSheet("""
+        theme.apply_to_sub(close_btn, """
             QPushButton {
                 background-color: transparent;
                 border: none;
                 font-size: 14px;
-                color: white;
+                color: __TEXT__;
                 border-radius: 14px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -1064,7 +1065,7 @@ class LogSettingsPopup(BaseSettingsPopup):
 
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2);")
+        theme.apply_to_sub(line, "background-color: __DIVIDER__;")
         main_layout.addWidget(line)
 
         content_layout = QVBoxLayout()
@@ -1078,14 +1079,14 @@ class LogSettingsPopup(BaseSettingsPopup):
         log_size_text.setReadOnly(True)
         log_size_text.setFixedHeight(30)
         log_size_text.setPlaceholderText("日志级别")
-        log_size_text.setStyleSheet("""
+        theme.apply_to_sub(log_size_text, """
             QLineEdit {
                 padding: 0px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #666666;
+                color: __TEXT_SECONDARY__;
                 min-height: 30px;
                 max-height: 30px;
             }
@@ -1099,27 +1100,27 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_level_combo.addItem("ERROR", "ERROR")
         self.log_level_combo.addItem("CRITICAL", "CRITICAL")
         self.log_level_combo.setFixedHeight(30)
-        self.log_level_combo.setStyleSheet("""
+        theme.apply_to_sub(self.log_level_combo, """
             QComboBox {
                 padding: 0px 30px 0px 8px;
                 border: 0px;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
                 height: 30px;
             }
             QComboBox:focus {
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
             QComboBox QAbstractItemView {
-                border: 1px solid rgba(0, 0, 0, 0.2);
+                border: 1px solid __BORDER__;
                 border-radius: 3px;
-                background-color: white;
-                selection-background-color: #3b4453;
-                selection-color: white;
+                background-color: __INPUT_BG__;
+                selection-background-color: __ACCENT__;
+                selection-color: __TEXT_ON_ACCENT__;
                 font-size: 12px;
             }
         """)
@@ -1130,18 +1131,18 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.open_log_btn.clicked.connect(self.on_open_log_directory)
         self.open_log_btn.setToolTip("打开日志文件所在目录")
         self.open_log_btn.setFixedHeight(30)
-        self.open_log_btn.setStyleSheet("""
+        theme.apply_to_sub(self.open_log_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         row1_layout.addWidget(self.open_log_btn, 0)
@@ -1156,14 +1157,14 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.log_size_text.setReadOnly(True)
         self.log_size_text.setFixedHeight(30)
         self.log_size_text.setText(f"日志记录: {log_size:.2f} MB")
-        self.log_size_text.setStyleSheet("""
+        theme.apply_to_sub(self.log_size_text, """
             QLineEdit {
                 padding: 0px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
             }
@@ -1174,18 +1175,18 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.clean_log_btn.clicked.connect(self.on_clean_logs)
         self.clean_log_btn.setToolTip("清理日志文件")
         self.clean_log_btn.setFixedHeight(30)
-        self.clean_log_btn.setStyleSheet("""
+        theme.apply_to_sub(self.clean_log_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         row2_layout.addWidget(self.clean_log_btn, 0)
@@ -1200,14 +1201,14 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.geo_info_text.setReadOnly(True)
         self.geo_info_text.setFixedHeight(30)
         self.geo_info_text.setText(f"地理信息: {geo_info_size:.2f} MB")
-        self.geo_info_text.setStyleSheet("""
+        theme.apply_to_sub(self.geo_info_text, """
             QLineEdit {
                 padding: 0px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
             }
@@ -1218,18 +1219,18 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.clean_geo_info_btn.clicked.connect(self.on_clean_geo_info)
         self.clean_geo_info_btn.setToolTip("清理地理信息缓存")
         self.clean_geo_info_btn.setFixedHeight(30)
-        self.clean_geo_info_btn.setStyleSheet("""
+        theme.apply_to_sub(self.clean_geo_info_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         row3_layout.addWidget(self.clean_geo_info_btn, 0)
@@ -1244,14 +1245,14 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.route_history_text.setReadOnly(True)
         self.route_history_text.setFixedHeight(30)
         self.route_history_text.setText(f"历史路线: {route_history_size:.2f} MB")
-        self.route_history_text.setStyleSheet("""
+        theme.apply_to_sub(self.route_history_text, """
             QLineEdit {
                 padding: 0px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
             }
@@ -1262,18 +1263,18 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.clean_route_history_btn.clicked.connect(self.on_clean_route_history)
         self.clean_route_history_btn.setToolTip("清理路线历史记录文件")
         self.clean_route_history_btn.setFixedHeight(30)
-        self.clean_route_history_btn.setStyleSheet("""
+        theme.apply_to_sub(self.clean_route_history_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         row4_layout.addWidget(self.clean_route_history_btn, 0)
@@ -1291,14 +1292,14 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.cache_size_text.setReadOnly(True)
         self.cache_size_text.setFixedHeight(30)
         self.cache_size_text.setText(f"界面渲染: {cache_size:.2f} MB")
-        self.cache_size_text.setStyleSheet("""
+        theme.apply_to_sub(self.cache_size_text, """
             QLineEdit {
                 padding: 0px 8px;
                 border: none;
                 border-radius: 3px;
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 font-size: 12px;
-                color: #333333;
+                color: __TEXT__;
                 min-height: 30px;
                 max-height: 30px;
             }
@@ -1309,18 +1310,18 @@ class LogSettingsPopup(BaseSettingsPopup):
         self.clean_cache_btn.clicked.connect(self.on_clean_cache)
         self.clean_cache_btn.setToolTip("清理地图瓦片缓存")
         self.clean_cache_btn.setFixedHeight(30)
-        self.clean_cache_btn.setStyleSheet("""
+        theme.apply_to_sub(self.clean_cache_btn, """
             QPushButton {
                 padding: 4px 12px;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: white;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
                 border: none;
                 border-radius: 3px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         row5_layout.addWidget(self.clean_cache_btn, 0)
@@ -1494,9 +1495,9 @@ class AboutPopup(BaseSettingsPopup):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 与地图设置面板保持一致
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             AboutPopup {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -1518,11 +1519,11 @@ class AboutPopup(BaseSettingsPopup):
         # 标题栏
         title_layout = QHBoxLayout()
         title_label = QLabel("关于")
-        title_label.setStyleSheet("""
+        theme.apply_to_sub(title_label, """
             QLabel {
                 font-size: 13px;
                 font-weight: bold;
-                color: white;
+                color: __TEXT__;
                 font-family: 'Microsoft YaHei';
             }
         """)
@@ -1532,16 +1533,16 @@ class AboutPopup(BaseSettingsPopup):
         # 关闭按钮
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(28, 28)
-        close_btn.setStyleSheet("""
+        theme.apply_to_sub(close_btn, """
             QPushButton {
                 background-color: transparent;
                 border: none;
                 font-size: 14px;
-                color: white;
+                color: __TEXT__;
                 border-radius: 14px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
         """)
         close_btn.clicked.connect(self.hide)
@@ -1553,7 +1554,7 @@ class AboutPopup(BaseSettingsPopup):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); margin: 5px 0;")
+        theme.apply_to_sub(line, "background-color: __DIVIDER__; margin: 5px 0;")
         main_layout.addWidget(line)
 
         # 关于内容 - 优化布局和文字样式
@@ -1562,10 +1563,10 @@ class AboutPopup(BaseSettingsPopup):
         about_label.setText(self._get_about_text())
         about_label.setWordWrap(True)
         about_label.setAlignment(Qt.AlignCenter)
-        about_label.setStyleSheet("""
+        theme.apply_to_sub(about_label, """
             QLabel {
                 padding: 8px;
-                color: white;
+                color: __TEXT__;
             }
         """)
         main_layout.addWidget(about_label)
@@ -1583,32 +1584,32 @@ class AboutPopup(BaseSettingsPopup):
         developer_email = about_config.get_developer_email()
         copyright_text = about_config.get_copyright_text()
 
-        html = f"""
-        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: white; line-height: 1.5;">
-            <h3 style="color: white; text-align: center; margin: 10px 0; font-size: 16px; font-weight: bold;">{app_name}</h3>
+        html = theme.apply(f"""
+        <div style="font-family: 'Microsoft YaHei', Arial, sans-serif; color: __TEXT__; line-height: 1.5;">
+            <h3 style="color: __TEXT__; text-align: center; margin: 10px 0; font-size: 16px; font-weight: bold;">{app_name}</h3>
 
             <div style="text-align: center; margin: 8px 0; font-size: 12px;">
                 <div>版本: {app_version} | 平台: {app_platform}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.15); padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
+            <div style="background-color: __WINDOW_BG__; padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
                 <div>{license_text}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.1); padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
+            <div style="background-color: __HOVER__; padding: 8px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 11px;">
                 <div>开发者: {developer_team}</div>
                 <div>邮箱: {developer_email}</div>
             </div>
 
-            <div style="background-color: rgba(255, 255, 255, 0.1); padding: 6px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 10px;">
+            <div style="background-color: __HOVER__; padding: 6px; border-radius: 4px; margin: 8px 16px; text-align: center; font-size: 10px;">
                 <div>运行日志大小: {log_size:.2f} MB</div>
             </div>
 
-            <div style="text-align: center; color: rgba(255, 255, 255, 0.7); font-size: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); margin: 8px 16px 0;">
+            <div style="text-align: center; color: __TEXT_TERTIARY__; font-size: 10px; padding-top: 8px; border-top: 1px solid __DIVIDER__; margin: 8px 16px 0;">
                 <div>{copyright_text}</div>
             </div>
         </div>
-        """
+        """)
 
         return html
 

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QFrame)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+from ui.theme import theme
 
 
 class MapContextMenu(QWidget):
@@ -41,20 +42,20 @@ class MapContextMenu(QWidget):
         layout.setSpacing(8)
 
         # 设置样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             QWidget {
-                background-color: white;
-                border: 2px solid #4A90E2;
+                background-color: __PANEL_BG__;
+                border: 2px solid __ACCENT__;
                 border-radius: 8px;
             }
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 border: none;
                 font-size: 9pt;
             }
             QPushButton {
-                background-color: #3d93fd;
-                color: white;
+                background-color: __BTN_PRIMARY_BG__;
+                color: __BTN_PRIMARY_TEXT__;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
@@ -62,10 +63,10 @@ class MapContextMenu(QWidget):
                 min-width: 100px;
             }
             QPushButton:hover {
-                background-color: #357ABD;
+                background-color: __BTN_PRIMARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: #2868A8;
+                background-color: __BTN_PRIMARY_PRESSED__;
             }
         """)
 
@@ -81,7 +82,7 @@ class MapContextMenu(QWidget):
         line1 = QFrame()
         line1.setFrameShape(QFrame.HLine)
         line1.setFrameShadow(QFrame.Sunken)
-        line1.setStyleSheet("background-color: #e0e0e0; border: none;")
+        theme.apply_to_sub(line1, "background-color: __DIVIDER__; border: none;")
         layout.addWidget(line1)
 
         # 位置名称
@@ -102,7 +103,7 @@ class MapContextMenu(QWidget):
         line2 = QFrame()
         line2.setFrameShape(QFrame.HLine)
         line2.setFrameShadow(QFrame.Sunken)
-        line2.setStyleSheet("background-color: #e0e0e0; border: none;")
+        theme.apply_to_sub(line2, "background-color: __DIVIDER__; border: none;")
         layout.addWidget(line2)
 
         # 操作按钮

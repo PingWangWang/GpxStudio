@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from datetime import datetime, timedelta
+from ui.theme import theme
 
 
 class DateSelectPanel(QWidget):
@@ -33,22 +34,22 @@ class DateSelectPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("日期选择")
-        title_label.setStyleSheet("font-weight: bold; color: #000000; font-size: 9pt;")
+        theme.apply_to_sub(title_label, "font-weight: bold; color: __TEXT__; font-size: 9pt;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
 
         close_button = QPushButton("关闭")
         close_button.setToolTip("关闭面板")
-        close_button.setStyleSheet("""
+        theme.apply_to_sub(close_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
                 padding: 3px 10px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         close_button.clicked.connect(self.hide)
@@ -58,18 +59,18 @@ class DateSelectPanel(QWidget):
 
         # 日历控件
         self.calendar = QCalendarWidget()
-        self.calendar.setStyleSheet("""
+        theme.apply_to_sub(self.calendar, """
             QCalendarWidget {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __PANEL_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
             }
             QCalendarWidget QWidget {
-                alternate-background-color: #f5f5f5;
+                alternate-background-color: __WINDOW_BG__;
             }
             QCalendarWidget QAbstractItemView {
-                selection-background-color: #0078d4;
-                selection-color: #ffffff;
+                selection-background-color: __ACCENT__;
+                selection-color: __TEXT_ON_ACCENT__;
             }
         """)
         self.calendar.activated.connect(self.on_date_selected)
@@ -156,22 +157,22 @@ class TimeSelectPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("时间选择")
-        title_label.setStyleSheet("font-weight: bold; color: #000000; font-size: 9pt;")
+        theme.apply_to_sub(title_label, "font-weight: bold; color: __TEXT__; font-size: 9pt;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
 
         close_button = QPushButton("关闭")
         close_button.setToolTip("关闭面板")
-        close_button.setStyleSheet("""
+        theme.apply_to_sub(close_button, """
             QPushButton {
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __BTN_SECONDARY_TEXT__;
+                border: 1px solid __BTN_SECONDARY_BORDER__;
                 padding: 3px 10px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: __BTN_SECONDARY_HOVER__;
             }
         """)
         close_button.clicked.connect(self.hide)
@@ -181,22 +182,22 @@ class TimeSelectPanel(QWidget):
 
         # 时间列表
         self.time_list = QListWidget()
-        self.time_list.setStyleSheet("""
+        theme.apply_to_sub(self.time_list, """
             QListWidget {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #cccccc;
+                background-color: __PANEL_BG__;
+                color: __TEXT__;
+                border: 1px solid __BORDER__;
             }
             QListWidget::item {
                 padding: 8px;
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid __DIVIDER__;
             }
             QListWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: #0078d4;
-                color: #ffffff;
+                background-color: __ACCENT__;
+                color: __TEXT_ON_ACCENT__;
             }
         """)
         self.time_list.itemClicked.connect(self.on_time_selected)

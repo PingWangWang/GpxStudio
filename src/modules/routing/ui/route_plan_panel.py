@@ -11,6 +11,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
 from ui.popups.location_history_popup import LocationHistoryPopup
 from modules.search import GeoInfoStorage
+from ui.theme import theme
 
 
 class RouteHistoryItem(QWidget):
@@ -54,9 +55,9 @@ class RouteHistoryItem(QWidget):
             route_text = f"{start} → {end}"
 
         route_label = QLabel(route_text)
-        route_label.setStyleSheet("""
+        theme.apply_to_sub(route_label, """
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -69,9 +70,9 @@ class RouteHistoryItem(QWidget):
         search_count = self.history_data.get('search_count', 1)
         # 无论搜索次数是多少，始终显示搜索次数
         count_label = QLabel(f"搜索 {search_count} 次")
-        count_label.setStyleSheet("""
+        theme.apply_to_sub(count_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.6);
+                color: __TEXT_SECONDARY__;
                 font-size: 11px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -83,11 +84,11 @@ class RouteHistoryItem(QWidget):
         self.delete_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
         self.delete_button.setText("❌")
         self.delete_button.setToolTip('删除历史记录')
-        self.delete_button.setStyleSheet("""
+        theme.apply_to_sub(self.delete_button, """
             QPushButton {
                 font-size: 16px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton:hover:enabled {
@@ -113,23 +114,23 @@ class RouteHistoryItem(QWidget):
         self._update_export_button_icon()
 
         self.export_button.setToolTip('导出GPX文件')
-        self.export_button.setStyleSheet("""
+        theme.apply_to_sub(self.export_button, """
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton:hover:enabled {
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.5);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
             QPushButton:pressed:enabled {
-                background-color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
             QPushButton:disabled {
-                background-color: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 opacity: 0.5;
             }
         """)
@@ -171,20 +172,20 @@ class RouteHistoryItem(QWidget):
         # 使用emoji作为图标，与右键菜单面板保持一致
         self.export_button.setText("📤")
         # 始终使用启用状态的样式，因为导出按钮始终可用
-        self.export_button.setStyleSheet("""
+        theme.apply_to_sub(self.export_button, """
             QPushButton {
                 font-size: 18px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton:hover:enabled {
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.5);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
             QPushButton:pressed:enabled {
-                background-color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
         """)
 
@@ -200,11 +201,11 @@ class RouteHistoryItem(QWidget):
 
         icon_text = icon_map.get(mode, '🚗')
         self.mode_icon_label.setText(icon_text)
-        self.mode_icon_label.setStyleSheet("""
+        theme.apply_to_sub(self.mode_icon_label, """
             QLabel {
                 font-size: 20px;
                 text-align: center;
-                color: white;
+                color: __TEXT__;
             }
         """)
 
@@ -240,9 +241,9 @@ class RouteAlternativeItem(QWidget):
         # 方案名称（如：推荐方案、距离最短、躲避拥堵）
         description = self.route_data.get('description', f'方案{self.index + 1}')
         name_label = QLabel(description)
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.9);
+                color: __TEXT__;
                 font-size: 14px;
                 font-weight: bold;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -262,9 +263,9 @@ class RouteAlternativeItem(QWidget):
             time_text = f"约{minutes}分钟"
 
         time_label = QLabel(time_text)
-        time_label.setStyleSheet("""
+        theme.apply_to_sub(time_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.7);
+                color: __TEXT_SECONDARY__;
                 font-size: 12px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -281,9 +282,9 @@ class RouteAlternativeItem(QWidget):
         distance = self.route_data.get('distance', 0)
         distance_km = distance / 1000
         distance_label = QLabel(f"{distance_km:.1f}公里")
-        distance_label.setStyleSheet("""
+        theme.apply_to_sub(distance_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.6);
+                color: __TEXT_SECONDARY__;
                 font-size: 11px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -296,9 +297,9 @@ class RouteAlternativeItem(QWidget):
             # 计算有效点位数量（排除None分隔符）
             valid_points_count = len([p for p in route_points if p is not None])
             points_label = QLabel(f"{valid_points_count}个点位")
-            points_label.setStyleSheet("""
+            theme.apply_to_sub(points_label, """
                 QLabel {
-                    color: rgba(255, 255, 255, 0.6);
+                    color: __TEXT_SECONDARY__;
                     font-size: 11px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }
@@ -309,9 +310,9 @@ class RouteAlternativeItem(QWidget):
         traffic_lights = self.route_data.get('traffic_lights', 0)
         if traffic_lights > 0:
             lights_label = QLabel(f"红绿灯{traffic_lights}个")
-            lights_label.setStyleSheet("""
+            theme.apply_to_sub(lights_label, """
                 QLabel {
-                    color: rgba(255, 255, 255, 0.6);
+                    color: __TEXT_SECONDARY__;
                     font-size: 11px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }
@@ -322,9 +323,9 @@ class RouteAlternativeItem(QWidget):
         tolls = self.route_data.get('tolls', 0)
         if tolls > 0:
             tolls_label = QLabel(f"收费{tolls}元")
-            tolls_label.setStyleSheet("""
+            theme.apply_to_sub(tolls_label, """
                 QLabel {
-                    color: rgba(255, 255, 255, 0.6);
+                    color: __TEXT_SECONDARY__;
                     font-size: 11px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }
@@ -345,20 +346,20 @@ class RouteAlternativeItem(QWidget):
         # 使用emoji作为图标，与右键菜单面板保持一致
         self.export_button.setText("📥")
         self.export_button.setToolTip('导出GPX文件')
-        self.export_button.setStyleSheet("""
+        theme.apply_to_sub(self.export_button, """
             QPushButton {
                 font-size: 18px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.5);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.7);
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
             }
         """)
         self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.route_data, self.export_button, self))
@@ -372,9 +373,9 @@ class RouteAlternativeItem(QWidget):
 
         # 设置选中状态的背景色
         if self.is_selected:
-            self.setStyleSheet("""
+            theme.apply_to_sub(self, """
                 RouteAlternativeItem {
-                    background-color: rgba(255, 255, 255, 0.15);
+                    background-color: __HOVER_STRONG__;
                     border-radius: 4px;
                 }
             """)
@@ -383,13 +384,15 @@ class RouteAlternativeItem(QWidget):
         """设置选中状态"""
         self.is_selected = selected
         if selected:
-            self.setStyleSheet("""
+            theme.apply_to_sub(self, """
                 RouteAlternativeItem {
-                    background-color: rgba(255, 255, 255, 0.15);
+                    background-color: __HOVER_STRONG__;
                     border-radius: 4px;
                 }
             """)
         else:
+            # 取消选中：同时清除主题模板，避免切主题时被刷回选中背景
+            self._theme_qss_template = None
             self.setStyleSheet("")
 
 
@@ -415,9 +418,9 @@ class AddressSuggestionItem(QWidget):
 
         # 地址名称
         name_label = QLabel(self.address_data.get('name', ''))
-        name_label.setStyleSheet("""
+        theme.apply_to_sub(name_label, """
             QLabel {
-                color: #333333;
+                color: __TEXT__;
                 font-size: 13px;
                 font-weight: bold;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -428,9 +431,9 @@ class AddressSuggestionItem(QWidget):
 
         # 详细地址
         address_label = QLabel(self.address_data.get('address', ''))
-        address_label.setStyleSheet("""
+        theme.apply_to_sub(address_label, """
             QLabel {
-                color: #666666;
+                color: __TEXT_SECONDARY__;
                 font-size: 11px;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -444,7 +447,7 @@ class AddressSuggestionItem(QWidget):
         self.confirm_button = QPushButton()
         self.confirm_button.setFixedSize(32, 32)  # 减小按钮尺寸
         self.confirm_button.setToolTip("选择此地址")
-        self.confirm_button.setStyleSheet("""
+        theme.apply_to_sub(self.confirm_button, """
             QPushButton {
                 background-color: rgba(74, 144, 226, 0.15);
                 border: 1px solid rgba(74, 144, 226, 0.4);
@@ -469,7 +472,7 @@ class AddressSuggestionItem(QWidget):
         """加载确认图标"""
         # 使用emoji作为图标，与右键菜单面板保持一致
         self.confirm_button.setText("✅")
-        self.confirm_button.setStyleSheet("""
+        theme.apply_to_sub(self.confirm_button, """
             QPushButton {
                 font-size: 18px;
                 background-color: rgba(74, 144, 226, 0.15);
@@ -567,24 +570,24 @@ class RoutePlanPanel(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式 - 使用 RoutePlanPanel 作为选择器确保背景色应用
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             RoutePlanPanel {
-                background-color: #3b4453;
+                background-color: __PANEL_BG__;
                 border-radius: 6px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
+                border: 1px solid __BORDER__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 12px;
                 font-size: 13px;
-                color: #333333;
+                color: __TEXT__;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: __INPUT_BG__;
             }
             QPushButton {
                 background-color: transparent;
@@ -592,10 +595,10 @@ class RoutePlanPanel(QWidget):
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
             }
             /* 交通方式按钮特殊样式 - 无背景框 */
             QPushButton[transportMode="true"] {
@@ -603,13 +606,13 @@ class RoutePlanPanel(QWidget):
                 border: none;
             }
             QPushButton[transportMode="true"]:hover {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
             QPushButton[transportMode="true"]:pressed {
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: __HOVER__;
             }
             QPushButton[transportMode="true"][selected="true"] {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
                 border: none;
             }
             /* 切换按钮特殊样式 - 无背景框 */
@@ -618,10 +621,10 @@ class RoutePlanPanel(QWidget):
                 border: none;
             }
             QPushButton[switchButton="true"]:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton[switchButton="true"]:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
             QLabel {
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
@@ -720,10 +723,10 @@ class RoutePlanPanel(QWidget):
 
         # 起点标签
         start_label = QLabel("起")
-        start_label.setStyleSheet("""
+        theme.apply_to_sub(start_label, """
             QLabel {
-                background-color: rgba(255, 255, 255, 0.3);
-                color: white;
+                background-color: __HOVER_STRONG__;
+                color: __TEXT__;
                 font-size: 12px;
                 font-weight: bold;
                 border-radius: 12px;
@@ -776,10 +779,10 @@ class RoutePlanPanel(QWidget):
 
         # 终点标签
         end_label = QLabel("终")
-        end_label.setStyleSheet("""
+        theme.apply_to_sub(end_label, """
             QLabel {
-                background-color: rgba(255, 255, 255, 0.3);
-                color: white;
+                background-color: __HOVER_STRONG__;
+                color: __TEXT__;
                 font-size: 12px;
                 font-weight: bold;
                 border-radius: 12px;
@@ -838,20 +841,20 @@ class RoutePlanPanel(QWidget):
         self.clear_button = QPushButton("清除路线")
         self.clear_button.setToolTip("清除当前路线和所有标记")
         self.clear_button.setFixedWidth(110)
-        self.clear_button.setStyleSheet("""
+        theme.apply_to_sub(self.clear_button, """
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.7);
-                color: #666666;
+                background-color: __HOVER_STRONG__;
+                color: __TEXT_SECONDARY__;
                 font-size: 14px;
                 font-weight: bold;
                 border-radius: 4px;
                 padding: 10px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.85);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.6);
+                background-color: __HOVER_STRONG__;
             }
         """)
         self.clear_button.clicked.connect(self._on_clear_route)
@@ -864,20 +867,20 @@ class RoutePlanPanel(QWidget):
         self.plan_button = QPushButton("开车去")
         self.plan_button.setToolTip("规划路线")
         self.plan_button.setFixedWidth(110)
-        self.plan_button.setStyleSheet("""
+        theme.apply_to_sub(self.plan_button, """
             QPushButton {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #4A90E2;
+                background-color: __BTN_SECONDARY_BG__;
+                color: __ACCENT__;
                 font-size: 14px;
                 font-weight: bold;
                 border-radius: 4px;
                 padding: 10px;
             }
             QPushButton:hover {
-                background-color: white;
+                background-color: __BTN_SECONDARY_HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.8);
+                background-color: __BTN_SECONDARY_PRESSED__;
             }
         """)
         self.plan_button.clicked.connect(self._on_plan_route)
@@ -908,9 +911,9 @@ class RoutePlanPanel(QWidget):
 
         # 地址待选标题
         self.suggestions_title_label = QLabel("地址待选")
-        self.suggestions_title_label.setStyleSheet("""
+        theme.apply_to_sub(self.suggestions_title_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.7);
+                color: __TEXT_SECONDARY__;
                 font-size: 12px;
             }
         """)
@@ -923,16 +926,16 @@ class RoutePlanPanel(QWidget):
 
         # 地址待选列表
         self.address_suggestions_list = QListWidget()
-        self.address_suggestions_list.setStyleSheet("""
+        theme.apply_to_sub(self.address_suggestions_list, """
             QListWidget {
-                background-color: rgba(255, 255, 255, 0.95);
+                background-color: __INPUT_BG__;
                 border: none;
                 border-radius: 4px;
-                color: #333333;
+                color: __TEXT__;
             }
             QListWidget::item {
                 padding: 0px;
-                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                border-bottom: 1px solid __DIVIDER__;
             }
             QListWidget::item:hover {
                 background-color: rgba(74, 144, 226, 0.05);
@@ -966,9 +969,9 @@ class RoutePlanPanel(QWidget):
 
         # 历史记录文本
         history_label = QLabel("路线搜索记录")
-        history_label.setStyleSheet("""
+        theme.apply_to_sub(history_label, """
             QLabel {
-                color: rgba(255, 255, 255, 0.7);
+                color: __TEXT_SECONDARY__;
                 font-size: 12px;
             }
         """)
@@ -982,11 +985,11 @@ class RoutePlanPanel(QWidget):
         self.clear_history_button.setFixedSize(32, 32)
         self.clear_history_button.setText("🗑")
         self.clear_history_button.setToolTip('清空历史记录')
-        self.clear_history_button.setStyleSheet("""
+        theme.apply_to_sub(self.clear_history_button, """
             QPushButton {
                 font-size: 16px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
             QPushButton:hover:enabled {
@@ -1005,22 +1008,22 @@ class RoutePlanPanel(QWidget):
 
         # 历史记录列表
         self.history_list = QListWidget()
-        self.history_list.setStyleSheet("""
+        theme.apply_to_sub(self.history_list, """
             QListWidget {
-                background-color: rgba(0, 0, 0, 0.3);
+                background-color: __WINDOW_BG__;
                 border: none;
                 border-radius: 4px;
-                color: white;
+                color: __TEXT__;
             }
             QListWidget::item {
                 padding: 0px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                border-bottom: 1px solid __DIVIDER__;
             }
             QListWidget::item:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
             }
         """)
         self.history_list.itemClicked.connect(self._on_history_clicked)
@@ -1045,127 +1048,127 @@ class RoutePlanPanel(QWidget):
 
         # 驾车图标
         self.driving_button.setText("🚗")
-        self.driving_button.setStyleSheet("""
+        theme.apply_to_sub(self.driving_button, """
             QPushButton {
                 font-size: 24px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: __HOVER__;
             }
             QPushButton[selected="true"] {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
                 border: none;
             }
         """)
 
         # 骑行图标
         self.cycling_button.setText("🚲")
-        self.cycling_button.setStyleSheet("""
+        theme.apply_to_sub(self.cycling_button, """
             QPushButton {
                 font-size: 24px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: __HOVER__;
             }
             QPushButton[selected="true"] {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
                 border: none;
             }
         """)
 
         # 步行图标
         self.walking_button.setText("🚶")
-        self.walking_button.setStyleSheet("""
+        theme.apply_to_sub(self.walking_button, """
             QPushButton {
                 font-size: 24px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: __HOVER__;
             }
             QPushButton[selected="true"] {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
                 border: none;
             }
         """)
 
         # 取消图标
         self.cancel_button.setText("❌")
-        self.cancel_button.setStyleSheet("""
+        theme.apply_to_sub(self.cancel_button, """
             QPushButton {
                 font-size: 20px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
         """)
 
         # 切换图标
         self.switch_button.setText("🔄")
-        self.switch_button.setStyleSheet("""
+        theme.apply_to_sub(self.switch_button, """
             QPushButton {
                 font-size: 20px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
         """)
 
         # 添加途径点图标
         self.add_waypoint_button.setText("➕")
-        self.add_waypoint_button.setStyleSheet("""
+        theme.apply_to_sub(self.add_waypoint_button, """
             QPushButton {
                 font-size: 20px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
         """)
 
         # 历史记录图标
         self.history_icon_label.setText("📋")
-        self.history_icon_label.setStyleSheet("""
+        theme.apply_to_sub(self.history_icon_label, """
             QLabel {
                 font-size: 16px;
-                color: white;
+                color: __TEXT__;
             }
         """)
 
         # 搜索图标
         self.search_icon_label.setText("🔍")
-        self.search_icon_label.setStyleSheet("""
+        theme.apply_to_sub(self.search_icon_label, """
             QLabel {
                 font-size: 16px;
-                color: white;
+                color: __TEXT__;
             }
         """)
 
@@ -1173,10 +1176,10 @@ class RoutePlanPanel(QWidget):
         """设置Loading图标为emoji"""
         # 使用emoji作为Loading图标
         self.loading_button.setText("🔄")
-        self.loading_button.setStyleSheet("""
+        theme.apply_to_sub(self.loading_button, """
             QLabel {
                 font-size: 24px;
-                color: white;
+                color: __TEXT__;
                 background: transparent;
             }
         """)
@@ -1263,14 +1266,14 @@ class RoutePlanPanel(QWidget):
 
         # 设置错误提示
         input_widget.setPlaceholderText("搜索失败，请重试")
-        input_widget.setStyleSheet("""
+        theme.apply_to_sub(input_widget, """
             QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: __INPUT_BG__;
                 border: 1px solid rgba(255, 100, 100, 0.5);
                 border-radius: 4px;
                 padding: 8px;
                 font-size: 13px;
-                color: #333333;
+                color: __TEXT__;
             }
             QLineEdit::placeholder {
                 color: #ff6666;
@@ -1281,14 +1284,14 @@ class RoutePlanPanel(QWidget):
         from PyQt5.QtCore import QTimer
         def restore_placeholder():
             input_widget.setPlaceholderText(original_placeholder)
-            input_widget.setStyleSheet("""
+            theme.apply_to_sub(input_widget, """
                 QLineEdit {
-                    background-color: rgba(255, 255, 255, 0.9);
-                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    background-color: __INPUT_BG__;
+                    border: 1px solid __BORDER__;
                     border-radius: 4px;
                     padding: 8px;
                     font-size: 13px;
-                    color: #333333;
+                    color: __TEXT__;
                 }
             """)
 
@@ -1307,9 +1310,9 @@ class RoutePlanPanel(QWidget):
 
         # 错误图标和文字
         error_text = QLabel(error_message)
-        error_text.setStyleSheet("""
+        theme.apply_to_sub(error_text, """
             QLabel {
-                color: rgba(255, 100, 100, 1);
+                color: __DANGER__;
                 font-size: 13px;
                 font-weight: bold;
             }
@@ -1430,10 +1433,10 @@ class RoutePlanPanel(QWidget):
 
         # 途径点标签
         waypoint_label = QLabel(f"经{len(self.waypoint_widgets) + 1}")
-        waypoint_label.setStyleSheet("""
+        theme.apply_to_sub(waypoint_label, """
             QLabel {
-                background-color: rgba(255, 255, 255, 0.3);
-                color: white;
+                background-color: __HOVER_STRONG__;
+                color: __TEXT__;
                 font-size: 12px;
                 font-weight: bold;
                 border-radius: 12px;
@@ -1463,17 +1466,17 @@ class RoutePlanPanel(QWidget):
 
         # 使用emoji作为图标，与缩放地图按钮保持一致
         delete_button.setText("➖")
-        delete_button.setStyleSheet("""
+        theme.apply_to_sub(delete_button, """
             QPushButton {
                 font-size: 20px;
                 background-color: transparent;
                 border: none;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: __HOVER__;
             }
         """)
 

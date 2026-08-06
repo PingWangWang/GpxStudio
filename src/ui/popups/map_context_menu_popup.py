@@ -6,6 +6,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from PyQt5.QtGui import QFont, QIcon, QFontMetrics
+from ui.theme import theme
 
 
 class MapContextMenuPopup(QWidget):
@@ -36,10 +37,10 @@ class MapContextMenuPopup(QWidget):
     def _init_ui(self):
         """初始化UI"""
         # 设置面板样式
-        self.setStyleSheet("""
+        theme.set_theme_stylesheet(self, """
             MapContextMenuPopup {
-                background-color: #3b4453;
-                border: 1px solid #d9d9d9;
+                background-color: __PANEL_BG__;
+                border: 1px solid __BORDER__;
                 border-radius: 4px;
             }
         """)
@@ -70,15 +71,15 @@ class MapContextMenuPopup(QWidget):
         total_width = self._content_padding * 2 + self._icon_width + self._item_spacing + max_text_width
 
         # 创建菜单项
-        self._create_menu_item(main_layout, "设为起点", "📍", self._on_set_as_start, "#1890ff")
-        self._create_menu_item(main_layout, "设为途径点", "📌", self._on_set_as_via, "#52c41a")
-        self._create_menu_item(main_layout, "设为终点", "🏁", self._on_set_as_end, "#f5222d")
+        self._create_menu_item(main_layout, "设为起点", "📍", self._on_set_as_start, "__ACCENT__")
+        self._create_menu_item(main_layout, "设为途径点", "📌", self._on_set_as_via, "__SUCCESS__")
+        self._create_menu_item(main_layout, "设为终点", "🏁", self._on_set_as_end, "__DANGER__")
 
         # 分隔线
         self._create_separator(main_layout)
 
         self._create_menu_item(main_layout, "这是哪儿", "📍", self._on_query_here, "#722ed1")
-        self._create_menu_item(main_layout, "收藏此位置", "⭐", self._on_add_favorite, "#FFD700")
+        self._create_menu_item(main_layout, "收藏此位置", "⭐", self._on_add_favorite, "__GOLD__")
         self._create_menu_item(main_layout, "设置地图中心点", "🎯", self._on_set_center, "#13c2c2")
 
         # 分隔线
@@ -105,21 +106,21 @@ class MapContextMenuPopup(QWidget):
         item_button.setCursor(Qt.PointingHandCursor)
 
         # 设置按钮样式
-        item_button.setStyleSheet("""
+        theme.apply_to_sub(item_button, """
             QPushButton {
                 background-color: transparent;
                 border: none;
                 text-align: left;
                 padding: 8px 16px;
                 font-size: 13px;
-                color: white;
+                color: __TEXT__;
                 font-family: "MiSans", "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: __HOVER__;
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: __HOVER_STRONG__;
             }
         """)
 
@@ -132,7 +133,7 @@ class MapContextMenuPopup(QWidget):
 
         # 图标标签
         icon_label = QLabel(icon_text)
-        icon_label.setStyleSheet(f"""
+        theme.apply_to_sub(icon_label, f"""
             QLabel {{
                 color: {icon_color};
                 font-size: 16px;
@@ -143,9 +144,9 @@ class MapContextMenuPopup(QWidget):
 
         # 文字标签
         text_label = QLabel(text)
-        text_label.setStyleSheet("""
+        theme.apply_to_sub(text_label, """
             QLabel {
-                color: white;
+                color: __TEXT__;
                 font-size: 13px;
                 font-family: "MiSans", "Microsoft YaHei", "微软雅黑", sans-serif;
             }
@@ -172,9 +173,9 @@ class MapContextMenuPopup(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Plain)
-        separator.setStyleSheet("""
+        theme.apply_to_sub(separator, """
             QFrame {
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: __DIVIDER__;
                 border: none;
                 max-height: 1px;
                 margin: 4px 0;
