@@ -98,7 +98,7 @@ class UICallbacksMixin:
         self.logger.debug(f"[搜索结果] 显示 {len(results)} 条搜索结果")
         if self.search_results_popup is not None and results:
             self.search_results_popup.show_results(results, self.search_container)
-            self._switch_to_cancel_button()
+            self._refresh_toolbar_buttons()
             QTimer.singleShot(50, lambda: self.cancel_button.raise_())
 
     # ── 位置显示 ──────────────────────────────────────────────────────────

@@ -277,26 +277,6 @@ class MapMixin:
 
     # ── 收藏夹弹窗 ──────────────────────────────────────────────────────
 
-    def _show_favorites_cancel_button(self):
-        """收藏夹弹窗展开：收藏夹按钮位切换为关闭按钮（路线按钮保持原样）"""
-        favorites_button = getattr(self, 'favorites_button', None)
-        if favorites_button is not None:
-            favorites_button.hide()
-        cancel_button = getattr(self, 'cancel_button', None)
-        if cancel_button is not None:
-            cancel_button.show()
-            cancel_button.raise_()
-
-    def _hide_favorites_cancel_button(self):
-        """收藏夹弹窗收起：隐藏关闭按钮，恢复收藏夹按钮"""
-        cancel_button = getattr(self, 'cancel_button', None)
-        if cancel_button is not None:
-            cancel_button.hide()
-        favorites_button = getattr(self, 'favorites_button', None)
-        if favorites_button is not None:
-            favorites_button.show()
-            favorites_button.raise_()
-
     def on_favorites_button_clicked(self):
         """工具栏收藏夹按钮：展开/收起收藏夹列表"""
         self.logger.info("[收藏夹] 收藏夹按钮点击")
@@ -310,12 +290,12 @@ class MapMixin:
             self.favorites_popup.import_clicked.connect(self._on_favorites_import)
             self.favorites_popup.export_clicked.connect(self._on_favorites_export)
             self.favorites_popup.clear_clicked.connect(self._on_favorites_clear)
-            # 弹窗关闭（含失去焦点自动关闭）时恢复收藏夹按钮
-            self.favorites_popup.closed.connect(self._hide_favorites_cancel_button)
+            # 弹窗关闭（含失去焦点自动关闭）时统一刷新工具栏按钮态
+            self.favorites_popup.closed.connect(self._refresh_toolbar_buttons)
 
         if self.favorites_popup.isVisible():
             self.favorites_popup.hide()
-            self._hide_favorites_cancel_button()
+            self._refresh_toolbar_buttons()
             return
 
         self.favorites_popup.refresh()
@@ -328,8 +308,8 @@ class MapMixin:
         PopupPositioner.update_search_popups_position(
             None, None, getattr(self, 'search_container', None),
             self.logger, favorites_popup=self.favorites_popup)
-        # 弹窗展开时收藏夹按钮位切换为关闭按钮（路线按钮保持原样）
-        self._show_favorites_cancel_button()
+        # 弹窗展开后统一刷新按钮态（收藏夹按钮隐藏、关闭按钮显示）
+        self._refresh_toolbar_buttons()
 
     def _on_favorites_selected(self, fav: dict):
         """收藏夹条目点击：仅将地图缩放定位到该收藏点（不添加额外标记）

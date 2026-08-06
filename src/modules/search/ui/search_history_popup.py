@@ -87,12 +87,8 @@ class SearchHistoryPopup(QListWidget):
         # 清空现有项
         self.clear()
 
-        if not history_list:
-            # 没有历史记录，不显示
-            self.hide()
-            return
-
-        # 第一行固定"我的位置"（点击定位到当前位置）
+        # 第一行固定"我的位置"（点击定位到当前位置）；
+        # 无历史记录时也显示弹窗（仅"我的位置"首行）
         self._add_my_location_item()
 
         # 添加历史记录项

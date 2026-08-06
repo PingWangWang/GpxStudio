@@ -313,9 +313,9 @@ class LocationHistoryPopup(QWidget):
         self.history_list.setItemWidget(my_item, my_widget)
 
         if not items:
-            self.history_list.setVisible(False)
-            self.empty_label.setText(empty_text)
-            self.empty_label.setVisible(True)
+            # 无历史记录时仍显示"我的位置"首行（列表保持可见，不显示空提示）
+            self.history_list.setVisible(True)
+            self.empty_label.setVisible(False)
             return
 
         self.history_list.setVisible(True)

@@ -42,13 +42,10 @@ class SearchMixin:
             self.logger.debug("[搜索历史] 抑制标志已设置，不显示历史记录")
             return
         history_list = self.search_manager.get_search_history(10)
-        if history_list:
-            self.logger.debug(f"[搜索历史] 显示 {len(history_list)} 条历史记录")
-            self.search_history_popup.show_history(history_list, self.search_container)
-            QTimer.singleShot(10, lambda: self.search_input.setFocus())
-        else:
-            self.logger.debug("[搜索历史] 没有历史记录")
-            self.search_history_popup.hide()
+        # 无历史记录时也显示弹窗（仅"我的位置"首行）
+        self.logger.debug(f"[搜索历史] 显示 {len(history_list)} 条历史记录")
+        self.search_history_popup.show_history(history_list, self.search_container)
+        QTimer.singleShot(10, lambda: self.search_input.setFocus())
 
     def _hide_search_history_if_needed(self):
         if self.search_history_popup is None:
@@ -73,6 +70,8 @@ class SearchMixin:
         if self.search_history_popup is not None:
             self.search_history_popup.hide()
         self.search_manager.select_result_from_dropdown(result, self.current_search_text)
+        # 搜索结果弹窗已自关，刷新工具栏按钮态（恢复路线按钮、隐藏关闭按钮）
+        self._refresh_toolbar_buttons()
 
     def _on_favorite_requested(self, result: dict):
         """搜索历史/搜索结果：切换收藏状态（未收藏则收藏，已收藏则取消）
@@ -101,25 +100,44 @@ class SearchMixin:
 
     def on_cancel_button_clicked(self):
         self.logger.info("[搜索] ========== 关闭按钮点击 ==========")
-        # 收藏夹弹窗展开时：关闭按钮只负责收起弹窗并恢复收藏夹按钮
+        # 关闭顺序：先关收藏夹弹窗（当前操作层），再关搜索结果弹窗；每步后刷新按钮态
         favorites_popup = getattr(self, 'favorites_popup', None)
         if favorites_popup is not None and favorites_popup.isVisible():
             favorites_popup.hide()
-            self._hide_favorites_cancel_button()
+            self._refresh_toolbar_buttons()
             return
         if self.search_results_popup is not None:
             self.search_results_popup.hide()
         self.search_input.clear()
-        self._switch_to_route_button()
+        self._refresh_toolbar_buttons()
 
-    def _switch_to_cancel_button(self):
-        self.logger.debug("[按钮切换] 切换到关闭按钮")
-        self.route_button.hide()
-        self.cancel_button.show()
-        self.cancel_button.raise_()
+    def _refresh_toolbar_buttons(self):
+        """按当前可见弹窗集合统一刷新工具栏按钮态（route/favorites/cancel）
 
-    def _switch_to_route_button(self):
-        self.logger.debug("[按钮切换] 切换回路线按钮")
-        self.cancel_button.hide()
-        self.route_button.show()
-        self.route_button.raise_()
+        按钮显隐由"搜索结果弹窗可见 / 收藏夹弹窗可见"两个状态决定（幂等）：
+        - route 按钮：两个弹窗都关闭时显示
+        - favorites 按钮：收藏夹弹窗关闭时显示（搜索结果弹窗打开时保持）
+        - cancel 按钮：任一弹窗打开时显示（收藏夹关闭后若搜索结果仍开，cancel 保留，
+          保证待选列表可继续关闭——修复多状态叠加时按钮互相覆盖的问题）
+        """
+        search_results_open = (self.search_results_popup is not None
+                               and self.search_results_popup.isVisible())
+        # 收藏夹弹窗为延迟创建（首次点击收藏夹按钮才创建），须 getattr 防护
+        favorites_popup = getattr(self, 'favorites_popup', None)
+        favorites_open = (favorites_popup is not None
+                          and favorites_popup.isVisible())
+
+        cancel_needed = search_results_open or favorites_open
+
+        route_button = getattr(self, 'route_button', None)
+        favorites_button = getattr(self, 'favorites_button', None)
+        cancel_button = getattr(self, 'cancel_button', None)
+
+        if route_button is not None:
+            route_button.setVisible(not cancel_needed)
+        if favorites_button is not None:
+            favorites_button.setVisible(not favorites_open)
+        if cancel_button is not None:
+            cancel_button.setVisible(cancel_needed)
+            if cancel_needed:
+                cancel_button.raise_()
