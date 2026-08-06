@@ -210,6 +210,25 @@ class ConsoleWebEnginePage(QWebEnginePage):
                 print("[定位标识] 使用全局信号管理器发送信号")
                 signal_manager.location_marker_hidden.emit()
 
+        # 处理定位弹窗收藏消息（格式：收藏位置:lat,lon,名称，名称可能含逗号）
+        if message.startswith('收藏位置:'):
+            try:
+                parts = message[len('收藏位置:'):].split(',')
+                lat = float(parts[0].strip())
+                lon = float(parts[1].strip())
+                name = ','.join(parts[2:]).strip()  # 名称含逗号时拼接恢复
+                print(f"[定位标识] 捕获到收藏当前位置请求: ({lat}, {lon}) {name}")
+                if self.signal_manager:
+                    print("[定位标识] 使用实例信号管理器发送信号")
+                    self.signal_manager.location_favorite_requested.emit(lat, lon, name)
+                else:
+                    print("[定位标识] 使用全局信号管理器发送信号")
+                    signal_manager.location_favorite_requested.emit(lat, lon, name)
+            except Exception as e:
+                print(f"[定位标识] 解析收藏当前位置请求失败: {e}")
+                import traceback
+                traceback.print_exc()
+
         if self.geolocation_handler:
             if message.startswith('定位成功:'):
                 try:

@@ -160,10 +160,12 @@ class InitMixin:
         try:
             from modules.search import SearchHistoryPopup
             from modules.search import SearchResultsPopup
-            self.search_history_popup = SearchHistoryPopup(self)
+            # 注入 map_manager 供弹窗查询收藏状态（按钮初始金色/灰色）
+            map_manager = getattr(self, 'map_manager', None)
+            self.search_history_popup = SearchHistoryPopup(self, map_manager=map_manager)
             self.search_history_popup.history_selected.connect(self._on_history_selected)
             self.search_history_popup.favorite_requested.connect(self._on_favorite_requested)
-            self.search_results_popup = SearchResultsPopup(self)
+            self.search_results_popup = SearchResultsPopup(self, map_manager=map_manager)
             self.search_results_popup.result_selected.connect(self._on_result_selected)
             self.search_results_popup.favorite_requested.connect(self._on_favorite_requested)
         except ImportError as e:
@@ -375,6 +377,7 @@ class InitMixin:
         self.signal_manager.map_loaded.connect(self._on_map_loaded)
         self.signal_manager.favorite_delete_requested.connect(self._on_favorite_delete_requested)
         self.signal_manager.location_marker_hidden.connect(self._on_location_marker_hidden)
+        self.signal_manager.location_favorite_requested.connect(self._on_location_favorite_requested)
 
     def _connect_task_manager_signals(self):
         self.task_manager.task_started.connect(self._on_task_started)
@@ -506,6 +509,7 @@ class InitMixin:
                 self.search_container is not None and
                 self.route_plan_panel is not None):
             self._update_route_panel_position()
+        self._update_search_popups_position()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -513,6 +517,7 @@ class InitMixin:
                 self.search_container is not None and
                 self.route_plan_panel is not None):
             self._update_route_panel_position()
+        self._update_search_popups_position()
 
     def _update_route_panel_position(self):
         from ui.popups.popup_positioner import PopupPositioner
@@ -520,6 +525,16 @@ class InitMixin:
             getattr(self, 'route_plan_panel', None),
             getattr(self, 'search_container', None),
             getattr(self, 'gpx_export_popup', None),
+            self.logger,
+        )
+
+    def _update_search_popups_position(self):
+        """主窗口移动/缩放后，按搜索容器锚点重算搜索下拉弹窗位置（与路线面板同构）"""
+        from ui.popups.popup_positioner import PopupPositioner
+        PopupPositioner.update_search_popups_position(
+            getattr(self, 'search_history_popup', None),
+            getattr(self, 'search_results_popup', None),
+            getattr(self, 'search_container', None),
             self.logger,
         )
 

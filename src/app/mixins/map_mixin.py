@@ -251,6 +251,17 @@ class MapMixin:
         except Exception as e:
             self.logger.error(f"处理隐藏定位标识请求出错: {e}")
 
+    def _on_location_favorite_requested(self, lat: float, lon: float, name: str):
+        """定位 popup 内点击收藏按钮时的处理方法（切换收藏，成功不弹窗）"""
+        self.logger.info(f"[定位标识] 收到收藏当前位置请求: ({lat}, {lon}) {name}")
+        try:
+            if self.map_manager is not None:
+                action = self.map_manager.toggle_favorite(lat, lon, name, coord_system='WGS-84')
+                if action == 'failed':
+                    self.logger.error(f"[定位标识] 收藏当前位置失败")
+        except Exception as e:
+            self.logger.error(f"处理收藏当前位置请求出错: {e}")
+
     def _show_context_menu(self, location_info: dict):
         self.logger.info(f"[DEBUG漂移] 2_show_menu传入坐标=({location_info['lat']:.10f}, {location_info['lon']:.10f})")
         self.logger.debug(f"[地图右键] 显示右键菜单: {location_info}")

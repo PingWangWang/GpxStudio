@@ -149,6 +149,38 @@ class FavoritesStorage:
             print(f"[收藏点存储] 删除失败: {e}")
             return False
 
+    def is_favorited(self, lat: float, lon: float) -> bool:
+        """
+        查询坐标（WGS-84）是否已收藏
+
+        Args:
+            lat: 纬度（WGS-84）
+            lon: 经度（WGS-84）
+
+        Returns:
+            bool: True 已收藏
+        """
+        return self._find_duplicate(lat, lon) >= 0
+
+    def delete_by_coords(self, lat: float, lon: float) -> bool:
+        """
+        按坐标（WGS-84）删除收藏点
+
+        Args:
+            lat: 纬度（WGS-84）
+            lon: 经度（WGS-84）
+
+        Returns:
+            bool: 是否删除成功
+        """
+        index = self._find_duplicate(lat, lon)
+        if index < 0:
+            return False
+        removed = self.favorites_list.pop(index)
+        self._save()
+        print(f"[收藏点存储] 已按坐标删除收藏点: {removed.get('name', '')}")
+        return True
+
     def get_all(self) -> List[Dict]:
         """
         获取所有收藏点

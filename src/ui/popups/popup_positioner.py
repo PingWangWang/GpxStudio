@@ -79,6 +79,67 @@ class PopupPositioner:
         toolbar.search_container.raise_()
 
     # ──────────────────────────────────────────────────────────────────
+    # 2.5 搜索下拉弹窗（搜索历史 / 搜索结果）
+    # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def update_search_popups_position(search_history_popup, search_results_popup,
+                                      search_container, logger=None) -> None:
+        """主窗口移动/缩放后，按搜索容器锚点重算搜索下拉弹窗的位置与尺寸。
+
+        定位公式与弹窗 show 时一致（容器左下角 + 4px 垂直偏移）；
+        尺寸规则：
+        - 宽度跟随搜索容器宽度
+        - 最大高度 = 主窗口底部边界 - 弹窗顶部（同一屏幕坐标系，底部留 4px 边距），
+          下限为 2 行保证滚动条可用；条目数少时高度随条目数变化，达上限时滚动条生效
+        与路线规划面板的跟随机制同构（父窗口事件 → 锚点重算）。
+
+        参数:
+            search_history_popup: SearchHistoryPopup 实例（可为 None）
+            search_results_popup: SearchResultsPopup 实例（可为 None）
+            search_container: 搜索容器 QWidget
+            logger: 日志对象（可为 None）
+        """
+        try:
+            if search_container is None:
+                return
+
+            container_pos = search_container.mapToGlobal(search_container.rect().bottomLeft())
+
+            for popup in (search_history_popup, search_results_popup):
+                if popup is None or not popup.isVisible():
+                    continue
+
+                popup_x = container_pos.x()
+                popup_y = container_pos.y() + 4
+                popup.move(popup_x, popup_y)
+
+                # 宽度跟随搜索容器
+                popup.setFixedWidth(search_container.width())
+
+                # 最大高度受主窗口底部边界约束（弹窗 parent 即主窗口）
+                item_height = getattr(popup, 'ITEM_HEIGHT', 46)
+                main_window = popup.parent()
+                if main_window is not None:
+                    max_height = main_window.frameGeometry().bottom() - popup_y - 4
+                    max_height = max(max_height, 2 * item_height)  # 下限 2 行
+                    target_height = min(popup.count() * item_height, max_height)
+                    popup.setMaximumHeight(max_height)
+                    # QListWidget 为滚动区域，sizeHint 固定不随内容变化，
+                    # 须显式 resize 到目标高度（条目驱动与边界驱动取小）
+                    popup.resize(popup.width(), target_height)
+
+                if logger:
+                    logger.debug(f"[面板位置] 搜索弹窗: ({popup_x}, {popup_y})")
+
+        except Exception as e:
+            msg = f"[面板位置] 更新搜索弹窗位置时出错: {e}"
+            if logger:
+                logger.error(msg)
+            else:
+                print(msg)
+
+    # ──────────────────────────────────────────────────────────────────
     # 3. 路线规划面板 / GPX 导出弹出面板
     # ──────────────────────────────────────────────────────────────────
 

@@ -1179,6 +1179,60 @@ class MapManager:
             self.logger.warning(f"[收藏点] 添加收藏失败: {message}")
         return success, message
 
+    def is_favorited(self, lat: float, lon: float, coord_system: str = 'WGS-84') -> bool:
+        """
+        查询坐标是否已收藏
+
+        参数:
+            lat: 纬度
+            lon: 经度
+            coord_system: 传入坐标的坐标系统（统一转 WGS-84 后与存储比对）
+
+        返回:
+            bool: True 已收藏
+        """
+        if coord_system != 'WGS-84':
+            lat, lon = CoordinateTransform.convert(lat, lon, coord_system, 'WGS-84')
+        return self.favorites_storage.is_favorited(lat, lon)
+
+    def toggle_favorite(self, lat: float, lon: float, name: str, address: str = '',
+                        coord_system: str = 'WGS-84') -> str:
+        """
+        切换收藏状态：未收藏则收藏，已收藏则取消收藏
+
+        参数:
+            lat: 纬度
+            lon: 经度
+            name: 收藏点名称
+            address: 收藏点地址
+            coord_system: 传入坐标的坐标系统（统一转 WGS-84 存储）
+
+        返回:
+            str: 'added' 已收藏 / 'removed' 已取消收藏 / 'failed' 操作失败
+        """
+        # 坐标统一转为 WGS-84 存储（渲染时再按地图源自动转换）
+        wgs_lat, wgs_lon = lat, lon
+        if coord_system != 'WGS-84':
+            wgs_lat, wgs_lon = CoordinateTransform.convert(lat, lon, coord_system, 'WGS-84')
+
+        if self.favorites_storage.is_favorited(wgs_lat, wgs_lon):
+            # 已收藏 → 取消收藏
+            if self.favorites_storage.delete_by_coords(wgs_lat, wgs_lon):
+                self.logger.info(f"[收藏点] 已取消收藏: {name} ({wgs_lat:.6f}, {wgs_lon:.6f})")
+                self.reload_map()  # 保持当前视图刷新，移除星形标记
+                return 'removed'
+            self.logger.warning(f"[收藏点] 取消收藏失败: {name}")
+            return 'failed'
+        else:
+            # 未收藏 → 收藏
+            success, message = self.favorites_storage.add_favorite(name, address, wgs_lat, wgs_lon)
+            if success:
+                self.logger.info(f"[收藏点] 已收藏: {name} ({wgs_lat:.6f}, {wgs_lon:.6f})")
+                self.reload_map()  # 保持当前视图刷新，显示星形标记
+                return 'added'
+            self.logger.warning(f"[收藏点] 收藏失败: {message}")
+            return 'failed'
+
     def delete_favorite(self, fav_id: int) -> bool:
         """
         删除收藏点
@@ -1326,22 +1380,43 @@ class MapManager:
         from app.constants import COLOR_ORANGE, ICON_WARNING
         self.logger.info(f"[地图] 恢复定位标记: lat={marker_info['lat']}, lon={marker_info['lon']}")
 
-        # 注入定位标识交互脚本（供 popup 内"隐藏标识"按钮调用）
-        location_script = """
+        lat = marker_info['lat']
+        lon = marker_info['lon']
+        # 收藏状态（marker 存储坐标 WGS-84，直接查询）
+        is_fav = self.is_favorited(lat, lon)
+
+        # 收藏名称：popup 标题文本（首行）；JS 注入需转义单引号/反斜杠/换行
+        raw_lines = [line for line in (marker_info['popup_text'] or '').split('\n') if line.strip()]
+        name = raw_lines[0] if raw_lines else '当前位置'
+        name_js = name.replace('\\', '\\\\').replace("'", "\\'").replace('\n', ' ')
+
+        # 注入定位标识交互脚本（供 popup 内"收藏位置/隐藏标识"按钮调用）
+        location_script = f"""
         <script>
-        // 定位标识交互全局对象：供定位 popup 内的隐藏按钮调用
-        window.GPXLocation = {
-            hide: function() {
+        // 定位标识交互全局对象：供定位 popup 内的收藏/隐藏按钮调用
+        window.GPXLocation = {{
+            lat: {lat}, lon: {lon}, name: '{name_js}', isFav: {'true' if is_fav else 'false'},
+            hide: function() {{
                 console.log('隐藏定位标识');
-            }
-        };
+            }},
+            favorite: function() {{
+                // 乐观切换收藏按钮外观（实际增删由后端处理）
+                var btn = document.getElementById('gpx-loc-fav-btn');
+                if (btn) {{
+                    this.isFav = !this.isFav;
+                    btn.textContent = (this.isFav ? '★' : '☆') + ' 收藏位置';
+                    btn.style.color = this.isFav ? '#FFD700' : '#888888';
+                    btn.style.borderColor = this.isFav ? '#FFD700' : '#888888';
+                }}
+                console.log('收藏位置:' + this.lat + ',' + this.lon + ',' + this.name);
+            }}
+        }};
         </script>
         """
         from folium import Element  # 与 MapRenderer.fit_bounds 的局部导入模式一致
         map_obj.get_root().html.add_child(Element(location_script))
 
         # 格式化 popup：行分隔转 <br>，首行加粗为标题，其余为灰色标签行
-        raw_lines = [line for line in (marker_info['popup_text'] or '').split('\n') if line.strip()]
         popup_lines = []
         for i, line in enumerate(raw_lines):
             line_esc = MapRenderer._escape_popup_html(line)
@@ -1349,15 +1424,28 @@ class MapManager:
                 popup_lines.append(f'<b>{line_esc}</b>')
             else:
                 popup_lines.append(f'<span style="color:#888;">{line_esc}</span>')
+
+        # 收藏按钮状态样式（金色已收藏 / 灰色未收藏）
+        # 文案与"隐藏标识"同 4 字，保证两按钮宽度一致
+        fav_btn_text = ('★' if is_fav else '☆') + ' 收藏位置'
+        fav_btn_color = '#FFD700' if is_fav else '#888888'
+
         popup_html = f"""
         <div style="font-family:'Microsoft YaHei','微软雅黑',sans-serif; font-size:13px; min-width:180px;">
             {'<br>'.join(popup_lines)}
             <br>
-            <button onclick="window.GPXLocation.hide()" style="
-                margin-top:6px; background-color:#f5222d; color:white;
-                border:none; border-radius:3px; padding:3px 10px; cursor:pointer;">
-                隐藏标识
-            </button>
+            <div style="margin-top:6px; display:flex; gap:6px;">
+                <button id="gpx-loc-fav-btn" onclick="window.GPXLocation.favorite()" style="
+                    background-color:transparent; color:{fav_btn_color};
+                    border:1px solid {fav_btn_color}; border-radius:3px; padding:3px 10px; cursor:pointer;">
+                    {fav_btn_text}
+                </button>
+                <button onclick="window.GPXLocation.hide()" style="
+                    background-color:#f5222d; color:white;
+                    border:none; border-radius:3px; padding:3px 10px; cursor:pointer;">
+                    隐藏标识
+                </button>
+            </div>
         </div>
         """
 

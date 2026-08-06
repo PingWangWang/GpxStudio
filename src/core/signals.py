@@ -32,6 +32,7 @@ class SignalManager(QObject):
 
     # 定位标识相关信号
     location_marker_hidden = pyqtSignal()  # 地图弹窗内点击隐藏标识按钮
+    location_favorite_requested = pyqtSignal(float, float, str)  # 纬度, 经度, 名称 - 定位弹窗内点击收藏按钮
 
     # 搜索相关信号
     search_results_updated = pyqtSignal(list, str)  # 搜索结果列表, 搜索类型
@@ -89,6 +90,10 @@ class SignalManager(QObject):
             'location_marker_hidden': {
                 'signal': self.location_marker_hidden,
                 'description': '地图弹窗内点击隐藏定位标识时发射'
+            },
+            'location_favorite_requested': {
+                'signal': self.location_favorite_requested,
+                'description': '地图弹窗内点击收藏当前位置时发射'
             },
 
             # 搜索相关信号
