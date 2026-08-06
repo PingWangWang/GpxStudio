@@ -23,15 +23,9 @@ class MapMixin:
     def on_zoom_fit_clicked(self):
         self.logger.info("[缩放] ZOOM按钮点击，开始计算边界框")
         all_points = []
-        if self.data_manager is not None:
-            if self.data_manager.start_coords:
-                all_points.append(self.data_manager.start_coords)
-            if self.data_manager.end_coords:
-                all_points.append(self.data_manager.end_coords)
-            if self.data_manager.waypoints_coords:
-                all_points.extend(self.data_manager.waypoints_coords)
-            if self.data_manager.route_points:
-                all_points.extend([p for p in self.data_manager.route_points if p is not None])
+        if self.map_manager is not None:
+            # 元素全集：起终点/途径点/路线点 + 当前位置标识 + 收藏点（受开关控制）
+            all_points = self.map_manager.get_all_visible_element_coords()
         if not all_points:
             self.logger.warning("[缩放] 没有找到地图元素，保持现状")
             return
@@ -238,6 +232,24 @@ class MapMixin:
         location_info = {'success': False, 'name': f'位置 ({lat:.6f}, {lon:.6f})',
                          'lat': lat, 'lon': lon, 'type': '', 'level': None}
         self._show_context_menu(location_info)
+
+    def _on_favorite_delete_requested(self, fav_id: int):
+        """收藏点弹窗内点击删除按钮时的处理方法"""
+        self.logger.info(f"[收藏点] 收到删除收藏请求: id={fav_id}")
+        try:
+            if self.map_manager is not None:
+                self.map_manager.delete_favorite(fav_id)
+        except Exception as e:
+            self.logger.error(f"处理删除收藏请求出错: {e}")
+
+    def _on_location_marker_hidden(self):
+        """定位 popup 内点击隐藏标识按钮时的处理方法"""
+        self.logger.info("[定位标识] 收到隐藏标识请求")
+        try:
+            if self.map_manager is not None:
+                self.map_manager.hide_location_marker()
+        except Exception as e:
+            self.logger.error(f"处理隐藏定位标识请求出错: {e}")
 
     def _show_context_menu(self, location_info: dict):
         self.logger.info(f"[DEBUG漂移] 2_show_menu传入坐标=({location_info['lat']:.10f}, {location_info['lon']:.10f})")

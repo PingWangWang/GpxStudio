@@ -90,6 +90,11 @@ def get_route_history_file():
     return os.path.join(get_data_root(), 'RouteHistoryList.json')
 
 
+def get_favorites_file():
+    """获取收藏点列表文件路径"""
+    return os.path.join(get_data_root(), 'FavoritesList.json')
+
+
 def get_map_config_file():
     """获取地图配置文件路径"""
     return os.path.join(get_config_dir(), 'map_config.json')

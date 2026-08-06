@@ -184,6 +184,32 @@ class ConsoleWebEnginePage(QWebEnginePage):
                 import traceback
                 traceback.print_exc()
 
+        # 处理收藏点删除消息（收藏点弹窗内的删除按钮触发）
+        if message.startswith('收藏删除:'):
+            try:
+                fav_id = int(message[len('收藏删除:'):].strip())
+                print(f"[收藏点] 捕获到删除收藏请求: id={fav_id}")
+                if self.signal_manager:
+                    print("[收藏点] 使用实例信号管理器发送信号")
+                    self.signal_manager.favorite_delete_requested.emit(fav_id)
+                else:
+                    print("[收藏点] 使用全局信号管理器发送信号")
+                    signal_manager.favorite_delete_requested.emit(fav_id)
+            except Exception as e:
+                print(f"[收藏点] 解析删除收藏请求失败: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # 处理定位标识隐藏消息（定位 popup 内的隐藏按钮触发）
+        if message.startswith('隐藏定位标识'):
+            print("[定位标识] 捕获到隐藏标识请求")
+            if self.signal_manager:
+                print("[定位标识] 使用实例信号管理器发送信号")
+                self.signal_manager.location_marker_hidden.emit()
+            else:
+                print("[定位标识] 使用全局信号管理器发送信号")
+                signal_manager.location_marker_hidden.emit()
+
         if self.geolocation_handler:
             if message.startswith('定位成功:'):
                 try:

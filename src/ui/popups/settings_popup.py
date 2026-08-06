@@ -6,7 +6,8 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QLineEdit, QPushButton, QLabel, QMessageBox,
-                             QTabWidget, QTextEdit, QComboBox, QFrame, QSizePolicy)
+                             QTabWidget, QTextEdit, QComboBox, QFrame, QSizePolicy,
+                             QCheckBox)
 
 class CustomMessageBox(QWidget):
     """自定义消息提示框"""
@@ -253,7 +254,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 280)  # 容纳海拔获取下拉框
+        self.setFixedSize(300, 310)  # 容纳海拔获取下拉框与收藏点开关
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -692,6 +693,53 @@ class MapSettingsPopup(BaseSettingsPopup):
         elevation_row.setStretch(2, 1)
         config_layout.addLayout(elevation_row)
 
+        # 收藏点显示开关
+        self.show_favorites_check = QCheckBox("显示收藏点")
+        self.show_favorites_check.setToolTip("在地图上以金色星形显示已收藏的地点")
+        self.show_favorites_check.setFixedHeight(30)
+        # 对勾图标路径由 resource_path 动态生成，兼容开发/打包环境（与 arrow-down.svg 同模式）
+        _check_path = resource_path("res/icons/check.svg").replace("\\", "/")
+        self.show_favorites_check.setStyleSheet(f"""
+            QCheckBox {{
+                font-size: 12px;
+                color: white;
+                font-family: 'Microsoft YaHei';
+                background-color: transparent;
+                spacing: 6px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+            }}
+            QCheckBox::indicator:unchecked {{
+                border: 1px solid rgba(255, 255, 255, 0.4);
+                border-radius: 3px;
+                background-color: rgba(255, 255, 255, 0.1);
+            }}
+            QCheckBox::indicator:checked {{
+                border: 1px solid #FFD700;
+                border-radius: 3px;
+                background-color: rgba(255, 215, 0, 0.3);
+                image: url({_check_path});
+            }}
+        """)
+
+        favorites_row = QHBoxLayout()
+        favorites_label = QLabel("收藏点:")
+        favorites_label.setStyleSheet("font-weight: bold; font-size: 12px; color: white; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        favorites_label.setFixedWidth(80)
+        favorites_label.setFixedHeight(30)
+        favorites_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        favorites_row.addWidget(favorites_label)
+        favorites_row.addSpacing(10)
+        favorites_row.addWidget(self.show_favorites_check)
+        favorites_row.setContentsMargins(0, 0, 0, 0)
+        favorites_row.setSpacing(0)
+        favorites_row.setStretch(0, 0)
+        favorites_row.setStretch(1, 0)
+        favorites_row.setStretch(2, 1)
+        config_layout.addLayout(favorites_row)
+
         main_layout.addLayout(config_layout)
 
         # 添加分隔线，美化布局并增加与底部按钮的间距
@@ -820,6 +868,9 @@ class MapSettingsPopup(BaseSettingsPopup):
         idx = self.elevation_mode_combo.findData(elevation_optimize)
         self.elevation_mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
+        # 加载收藏点显示开关
+        self.show_favorites_check.setChecked(map_config.get_show_favorites())
+
 
     def save_config(self):
         """保存配置"""
@@ -856,18 +907,18 @@ class MapSettingsPopup(BaseSettingsPopup):
             "close_action": close_action,
             "api_key": api_key,
             "security_key": security_key,
-            "elevation_optimize": self.elevation_mode_combo.currentData()
+            "elevation_optimize": self.elevation_mode_combo.currentData(),
+            "show_favorites": self.show_favorites_check.isChecked()
         }
 
         if map_config.save_config(config):
             self.on_map_source_changed(current_index)
             # 发送配置保存信号，通知主窗口重新加载地图
             self.config_saved.emit()
-            # 使用自定义消息提示框
-            msg_box = CustomMessageBox(self, "成功", "配置已保存，地图将重新加载")
-            msg_box.show_message()
+            # 保存成功：直接关闭面板，不弹成功提示
+            self.hide()
         else:
-            # 使用自定义消息提示框
+            # 保存失败：弹错误提示，面板保持打开供用户修正
             msg_box = CustomMessageBox(self, "错误", "保存配置失败")
             msg_box.show_message()
 

@@ -4,7 +4,7 @@
 该组件在搜索框获得焦点时显示，展示最近的搜索历史记录
 """
 
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 import os
@@ -15,6 +15,7 @@ class SearchHistoryPopup(QListWidget):
 
     # 信号：用户选择了历史记录
     history_selected = pyqtSignal(dict)  # 传递完整的历史记录字典
+    favorite_requested = pyqtSignal(dict)  # 用户点击收藏按钮，传递完整的历史记录字典
 
     def __init__(self, parent=None):
         """初始化搜索历史下拉列表"""
@@ -86,9 +87,9 @@ class SearchHistoryPopup(QListWidget):
         # 设置宽度与搜索容器一致
         self.setFixedWidth(search_container_widget.width())
 
-        # 计算高度（最多显示10项，每项约40px）
-        item_height = 40
-        max_height = min(len(history_list) * item_height, 400)
+        # 计算高度（最多显示10项，每项约46px）
+        item_height = 46
+        max_height = min(len(history_list) * item_height, 460)
         self.setMaximumHeight(max_height)
 
         # 移动到搜索容器下方（增加间距）
@@ -100,7 +101,7 @@ class SearchHistoryPopup(QListWidget):
 
     def _add_history_item(self, record: dict):
         """
-        添加历史记录项
+        添加历史记录项（名称/地址 + 收藏按钮）
 
         Args:
             record: 历史记录字典
@@ -110,24 +111,73 @@ class SearchHistoryPopup(QListWidget):
 
         # 创建列表项
         item = QListWidgetItem()
+        item.setSizeHint(QSize(0, 46))  # 设置项高度
 
-        # 设置图标
-        if self.history_icon:
-            item.setIcon(self.history_icon)
-            item.setSizeHint(QSize(0, 40))  # 设置项高度
-
-        # 设置文本（emoji + 名称）
-        display_text = f"📋 {name}"
-        if address and address != name:
-            display_text = f"📋 {name} - {address}"
-
-        item.setText(display_text)
-
-        # 保存完整的记录数据
+        # 保存完整的历史记录数据
         item.setData(Qt.UserRole, record)
 
-        # 添加到列表
+        # 创建行控件：左侧名称/地址，右侧收藏按钮
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(12, 5, 8, 5)
+        row_layout.setSpacing(8)
+
+        # 左侧文本区域
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        name_label = QLabel(f"📋 {name}")
+        name_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        # 让文本穿透鼠标事件，点击行仍触发 itemClicked
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        text_layout.addWidget(name_label)
+
+        if address and address != name:
+            address_label = QLabel(address)
+            address_label.setStyleSheet("""
+                QLabel {
+                    color: #888888;
+                    font-size: 12px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            address_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            text_layout.addWidget(address_label)
+
+        row_layout.addWidget(text_container, 1)
+
+        # 右侧收藏按钮（点击收藏，不关闭下拉列表）
+        favorite_button = QPushButton("☆")
+        favorite_button.setToolTip("收藏此地点")
+        favorite_button.setFixedSize(26, 26)
+        favorite_button.setCursor(Qt.PointingHandCursor)
+        favorite_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 17px;
+                color: #888888;
+                padding: 0;
+            }
+            QPushButton:hover {
+                color: #FFD700;
+                font-size: 19px;
+            }
+        """)
+        favorite_button.clicked.connect(lambda checked=False, r=record: self.favorite_requested.emit(r))
+        row_layout.addWidget(favorite_button, 0, Qt.AlignTop)
+
+        # 将行控件设置为列表项
         self.addItem(item)
+        self.setItemWidget(item, row_widget)
 
     def _on_item_clicked(self, item: QListWidgetItem):
         """处理项点击事件"""

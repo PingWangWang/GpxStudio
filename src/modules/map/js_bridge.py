@@ -137,3 +137,40 @@ class MapJsBridge:
         """
         js = _load('map_update_route.js').replace('__ROUTE_COORDS_JSON__', coords_json)
         page.runJavaScript(js, callback)
+
+    # ------------------------------------------------------------------
+    # 收藏点
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def remove_favorite(cls, page, fav_id: int, callback: Optional[Callable] = None) -> None:
+        """增量移除单个收藏点星标（不重载页面，保持视图位置）。
+
+        Args:
+            page:    QWebEnginePage 实例。
+            fav_id:  收藏点ID（渲染时已写入星标 options.favId）。
+            callback: 可选回调，接收结果字典 {success, message}。
+        """
+        js = _load('map_favorites_remove.js').replace('__FAV_ID__', str(fav_id))
+        if callback:
+            page.runJavaScript(js, callback)
+        else:
+            page.runJavaScript(js)
+
+    # ------------------------------------------------------------------
+    # 定位标识
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def hide_location_marker(cls, page, callback: Optional[Callable] = None) -> None:
+        """增量隐藏当前位置标识（不重载页面，保持视图位置）。
+
+        Args:
+            page:    QWebEnginePage 实例。
+            callback: 可选回调，接收结果字典 {success, message}。
+        """
+        js = _load('map_location_hide.js')
+        if callback:
+            page.runJavaScript(js, callback)
+        else:
+            page.runJavaScript(js)

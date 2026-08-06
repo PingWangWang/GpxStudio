@@ -4,7 +4,7 @@
 该组件在点击搜索按钮后显示，展示搜索返回的多个地址结果
 """
 
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 import os
@@ -15,6 +15,7 @@ class SearchResultsPopup(QListWidget):
 
     # 信号：用户选择了搜索结果
     result_selected = pyqtSignal(dict)  # 传递完整的搜索结果字典
+    favorite_requested = pyqtSignal(dict)  # 用户点击收藏按钮，传递完整的搜索结果字典
 
     def __init__(self, parent=None):
         """初始化搜索结果下拉列表"""
@@ -100,7 +101,7 @@ class SearchResultsPopup(QListWidget):
 
     def _add_result_item(self, result: dict):
         """
-        添加搜索结果项
+        添加搜索结果项（名称/地址 + 收藏按钮）
 
         Args:
             result: 搜索结果字典
@@ -110,27 +111,73 @@ class SearchResultsPopup(QListWidget):
 
         # 创建列表项
         item = QListWidgetItem()
-
-        # 设置图标
-        if self.search_icon:
-            item.setIcon(self.search_icon)
-            item.setSizeHint(QSize(0, 55))  # 设置项高度
-        else:
-            item.setSizeHint(QSize(0, 55))
-
-        # 设置文本（第一行：emoji + 名称，第二行：地址）
-        display_parts = [f"🔍 {name}"]
-        if address and address != name:
-            display_parts.append(address)
-
-        display_text = '\n'.join(display_parts)
-        item.setText(display_text)
+        item.setSizeHint(QSize(0, 55))  # 设置项高度
 
         # 保存完整的结果数据
         item.setData(Qt.UserRole, result)
 
-        # 添加到列表
+        # 创建行控件：左侧名称/地址，右侧收藏按钮
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(12, 6, 8, 6)
+        row_layout.setSpacing(8)
+
+        # 左侧文本区域
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        name_label = QLabel(f"🔍 {name}")
+        name_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+        """)
+        # 让文本穿透鼠标事件，点击行仍触发 itemClicked
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        text_layout.addWidget(name_label)
+
+        if address and address != name:
+            address_label = QLabel(address)
+            address_label.setStyleSheet("""
+                QLabel {
+                    color: #888888;
+                    font-size: 12px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            address_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            text_layout.addWidget(address_label)
+
+        row_layout.addWidget(text_container, 1)
+
+        # 右侧收藏按钮（点击收藏，不关闭下拉列表）
+        favorite_button = QPushButton("☆")
+        favorite_button.setToolTip("收藏此地点")
+        favorite_button.setFixedSize(28, 28)
+        favorite_button.setCursor(Qt.PointingHandCursor)
+        favorite_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 18px;
+                color: #888888;
+                padding: 0;
+            }
+            QPushButton:hover {
+                color: #FFD700;
+                font-size: 20px;
+            }
+        """)
+        favorite_button.clicked.connect(lambda checked=False, r=result: self.favorite_requested.emit(r))
+        row_layout.addWidget(favorite_button, 0, Qt.AlignTop)
+
+        # 将行控件设置为列表项
         self.addItem(item)
+        self.setItemWidget(item, row_widget)
 
     def _on_item_clicked(self, item: QListWidgetItem):
         """处理项点击事件"""

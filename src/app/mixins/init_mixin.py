@@ -147,6 +147,7 @@ class InitMixin:
         self.map_context_menu.set_as_via.connect(self._on_context_menu_add_waypoint_new)
         self.map_context_menu.set_as_end.connect(self._on_context_menu_set_end_new)
         self.map_context_menu.query_here.connect(self._on_context_menu_query_here)
+        self.map_context_menu.add_favorite.connect(self._on_context_menu_add_favorite)
         self.map_context_menu.set_center.connect(self._on_context_menu_set_center)
         self.map_context_menu.clear_route.connect(self._on_context_menu_clear_route)
 
@@ -161,8 +162,10 @@ class InitMixin:
             from modules.search import SearchResultsPopup
             self.search_history_popup = SearchHistoryPopup(self)
             self.search_history_popup.history_selected.connect(self._on_history_selected)
+            self.search_history_popup.favorite_requested.connect(self._on_favorite_requested)
             self.search_results_popup = SearchResultsPopup(self)
             self.search_results_popup.result_selected.connect(self._on_result_selected)
+            self.search_results_popup.favorite_requested.connect(self._on_favorite_requested)
         except ImportError as e:
             (self.logger or print)(f"无法导入搜索弹出面板: {e}") if self.logger else print(f"无法导入搜索弹出面板: {e}")
 
@@ -370,6 +373,8 @@ class InitMixin:
         self.signal_manager.map_center_changed.connect(self.on_map_center_changed)
         self.signal_manager.map_right_click.connect(self._on_map_right_click)
         self.signal_manager.map_loaded.connect(self._on_map_loaded)
+        self.signal_manager.favorite_delete_requested.connect(self._on_favorite_delete_requested)
+        self.signal_manager.location_marker_hidden.connect(self._on_location_marker_hidden)
 
     def _connect_task_manager_signals(self):
         self.task_manager.task_started.connect(self._on_task_started)

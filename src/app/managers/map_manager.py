@@ -8,6 +8,7 @@ from PyQt5.QtCore import QUrl
 from modules.map import MapRenderer
 from modules.geolocation import CoordinateTransform
 from services.config.map_config import map_config
+from services.storage.favorites_storage import FavoritesStorage
 from .map_view_state_manager import MapViewStateManager
 
 
@@ -38,6 +39,9 @@ class MapManager:
         self.map_view = map_view  # 地图视图组件
         self.logger = logger  # 日志器
         self._recreate_map_view = recreate_callback  # 重新创建回调
+
+        # 收藏点存储（本地 JSON 持久化，统一 WGS-84 坐标）
+        self.favorites_storage = FavoritesStorage()
         
         # 创建视图状态管理器（使用lambda获取最新的map_view引用）
         self.view_state_manager = MapViewStateManager(lambda: self.map_view, logger)
@@ -83,6 +87,9 @@ class MapManager:
         m = MapRenderer.create_base_map(init_center, zoom_start=init_zoom,
                                         map_type=map_mode, map_source=map_source,
                                         coord_system=init_coord_system)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)
@@ -226,6 +233,9 @@ class MapManager:
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
 
         # 如果有路线数据，添加路线到地图
         if self.data_manager.route_points:
@@ -425,6 +435,9 @@ class MapManager:
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
 
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
+
         # 添加搜索结果
         self._add_search_results_to_map(m)
 
@@ -531,6 +544,13 @@ class MapManager:
             center = view_state['center']
             zoom = view_state['zoom']
             self.logger.info(f"[重载地图] 保持视图: center={center}, zoom={zoom}, source={view_state['source']}")
+
+            # 降级链加固：JS/缓存均失败（默认北京值）时，用运行时记录的真实位置兜底，
+            # 避免在 webengine console 回调栈内重建（视图读取超时）时地图跳回默认中心
+            if view_state.get('source') == 'default' and self.data_manager.last_map_center:
+                center = list(self.data_manager.last_map_center)
+                zoom = self.data_manager.last_map_zoom_level or 10
+                self.logger.warning(f"[重载地图] 视图获取失败，使用运行时记录位置兜底: center={center}, zoom={zoom}")
             
             # 关键：判断JavaScript返回坐标的坐标系
             # JavaScript返回的坐标系 = 当前显示的地图源的坐标系（切换前的）
@@ -562,20 +582,13 @@ class MapManager:
         # 4. 添加元素
         if keep_points:
             self._add_selected_points_to_map(m)
-        
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
+
         # 添加定位标记（"我的位置"）
-        if keep_location and self.data_manager.location_marker:
-            from app.constants import COLOR_ORANGE, ICON_WARNING
-            marker_info = self.data_manager.location_marker
-            self.logger.info(f"[重载地图] 恢复定位标记: lat={marker_info['lat']}, lon={marker_info['lon']}")
-            MapRenderer.add_marker(
-                m, 
-                [marker_info['lat'], marker_info['lon']], 
-                marker_info['popup_text'],
-                color=COLOR_ORANGE, 
-                icon=ICON_WARNING,
-                map_source=map_source
-            )
+        if keep_location:
+            self._add_location_marker_to_map(m)
         
         if keep_search_results:
             # 添加调试日志，确认搜索结果状态
@@ -644,6 +657,11 @@ class MapManager:
     def clear_map_and_keep_view(self):
         """清空地图上的所有元素（路线、起止点、途径点等），但保持当前显示区域和缩放级别"""
         self.logger.info("[清空地图] 使用统一刷新方法清空地图并保持视图")
+        # 同步清除定位标记数据（与 keep_location=False 参数意图一致），
+        # 防止后续全量重建（如收藏后刷新）时残留的标记"复活"
+        if getattr(self.data_manager, 'location_marker', None):
+            self.logger.debug("[清空地图] 清除定位标记数据")
+            self.data_manager.location_marker = None
         # 使用统一的刷新方法，不保留任何元素但保持视图
         self.reload_map(keep_view=True, keep_route=False, keep_points=False, keep_search_results=False, keep_location=False)
 
@@ -674,6 +692,9 @@ class MapManager:
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
 
         # 添加搜索结果
         self._add_search_results_to_map(m)
@@ -752,6 +773,34 @@ class MapManager:
         coords.extend(self.data_manager.waypoints_coords)
         if self.data_manager.end_coords:
             coords.append(self.data_manager.end_coords)
+        return coords
+
+    def get_all_visible_element_coords(self):
+        """获取自动缩放所需的全部可见元素坐标
+
+        元素全集：起点/终点/途径点、路线点、当前位置标识（若显示中）、
+        收藏点（若显示开关开启）。全部按 WGS-84 约定返回，不做坐标转换，
+        由调用方（自动缩放）统一参与边界计算。
+
+        返回:
+            list: 坐标点列表 [(lat, lon), ...]
+        """
+        coords = self._get_all_selected_coords()
+
+        # 路线点（忽略海拔，仅取前两个元素）
+        if self.data_manager.route_points:
+            coords.extend([(p[0], p[1]) for p in self.data_manager.route_points if p is not None])
+
+        # 当前位置标识（数据存在即视为地图上显示中）
+        if self.data_manager.location_marker:
+            coords.append((self.data_manager.location_marker['lat'],
+                           self.data_manager.location_marker['lon']))
+
+        # 收藏点（受显示开关控制）
+        if map_config.get_show_favorites():
+            coords.extend([(fav.get('lat', 0), fav.get('lon', 0))
+                           for fav in self.favorites_storage.get_all()])
+
         return coords
 
     def preview_search_result(self, coords: Tuple[float, float], name: str, level: Optional[str] = None, type_info: Optional[str] = None, radius: Optional[float] = None, result_data: Optional[dict] = None):
@@ -834,6 +883,9 @@ class MapManager:
         # 添加已选择的点（使用普通样式）
         self._add_selected_points_to_map(m)
 
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
+
         # 添加其他搜索结果（使用普通样式，跳过当前预览的结果）
         self._add_search_results_to_map(m, preview_coords=coords)
 
@@ -896,6 +948,9 @@ class MapManager:
         # 添加已选择的点（起点、终点、途径点）
         points_add_start = time.time()
         self._add_selected_points_to_map(m)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
         points_add_time = (time.time() - points_add_start) * 1000
 
         # 添加路线到地图
@@ -998,11 +1053,8 @@ class MapManager:
             lon: 经度
             popup_text: 弹出窗口显示的文本
         """
-        # 导入常量
-        from app.constants import COLOR_ORANGE, ICON_WARNING
-
         self.logger.debug(f"[MapManager] 开始在地图上显示位置: {lat}, {lon}")
-        
+
         # 保存定位标记信息到 data_manager，以便地图切换时能够恢复
         self.data_manager.location_marker = {
             'lat': lat,
@@ -1021,15 +1073,15 @@ class MapManager:
         m = MapRenderer.create_base_map([lat, lon], zoom_start=13, map_type=map_mode, map_source=map_source)
         self.logger.debug("[MapManager] 基础地图创建完成")
 
-        # 添加定位标记
-        MapRenderer.add_marker(
-            m, [lat, lon], popup_text,
-            color=COLOR_ORANGE, icon=ICON_WARNING,
-            map_source=map_source
-        )
+        # 添加定位标记（统一走公共渲染方法：格式化面板 + 隐藏按钮 + markerType，
+        # 与各全量重建入口的恢复渲染保持一致，避免两条路径样式分叉）
+        self._add_location_marker_to_map(m)
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
 
         # 如果有路线数据，添加路线到地图
         if self.data_manager.route_points:
@@ -1098,6 +1150,226 @@ class MapManager:
                 self.logger.error("[MapManager] 地图视图为None，无法显示位置")
         except RuntimeError as e:
             self.logger.error(f"[MapManager] 地图视图已被删除，无法显示位置: {e}")
+
+    def add_favorite(self, lat: float, lon: float, name: str, address: str = '',
+                     coord_system: str = 'WGS-84') -> tuple:
+        """
+        添加收藏点
+
+        参数:
+            lat: 纬度
+            lon: 经度
+            name: 收藏点名称
+            address: 收藏点地址
+            coord_system: 传入坐标的坐标系统（统一转为 WGS-84 存储）
+
+        返回:
+            (success, message): 是否成功及结果消息
+        """
+        # 坐标统一转为 WGS-84 存储（渲染时再按地图源自动转换）
+        if coord_system != 'WGS-84':
+            lat, lon = CoordinateTransform.convert(lat, lon, coord_system, 'WGS-84')
+
+        success, message = self.favorites_storage.add_favorite(name, address, lat, lon)
+        if success:
+            self.logger.info(f"[收藏点] 已添加收藏: {name} ({lat:.6f}, {lon:.6f})")
+            # 保持当前视图刷新地图，显示新收藏点
+            self.reload_map()
+        else:
+            self.logger.warning(f"[收藏点] 添加收藏失败: {message}")
+        return success, message
+
+    def delete_favorite(self, fav_id: int) -> bool:
+        """
+        删除收藏点
+
+        优先通过 JavaScript 增量移除星标（不重载页面，视图位置不变）；
+        仅当 JS 移除失败（页面不可用或未找到星标）时，延后到下一事件循环
+        重建地图兜底——脱离 webengine console 回调栈后再读取视图，
+        避免视图获取超时导致地图跳回默认中心。
+
+        参数:
+            fav_id: 收藏点ID
+
+        返回:
+            bool: 是否删除成功
+        """
+        success = self.favorites_storage.delete_favorite(fav_id)
+        if not success:
+            self.logger.warning(f"[收藏点] 删除收藏点失败: id={fav_id}")
+            return False
+
+        self.logger.info(f"[收藏点] 已删除收藏点: id={fav_id}")
+        # 增量移除星标（尽力而为）：回调在正常事件循环中执行，可安全读取 JS 结果
+        self._remove_favorite_marker_js(fav_id)
+        return True
+
+    def _remove_favorite_marker_js(self, fav_id: int):
+        """通过 JavaScript 增量移除收藏星标（内部方法）
+
+        移除成功则不再重建地图；失败时延后重建兜底。
+        延后使用 QTimer 而非同步调用：删除请求源自 webengine console 回调栈，
+        在回调栈内直接 reload_map 会导致视图状态 JS 读取超时（跳默认中心）。
+
+        参数:
+            fav_id: 收藏点ID
+        """
+        if not self.map_view or not self.map_view.page():
+            self._schedule_reload_after_delete()
+            return
+
+        from modules.map import MapJsBridge
+        from PyQt5.QtCore import QTimer
+
+        def on_js_result(result):
+            if result and result.get('success'):
+                self.logger.debug(f"[收藏点] JS 增量移除星标成功: id={fav_id}，保持当前视图")
+            else:
+                msg = result.get('message') if isinstance(result, dict) else 'JS返回空结果'
+                self.logger.warning(f"[收藏点] JS 增量移除星标失败（{msg}），延后重建地图兜底")
+                self._schedule_reload_after_delete()
+
+        try:
+            MapJsBridge.remove_favorite(self.map_view.page(), fav_id, on_js_result)
+        except Exception as e:
+            self.logger.error(f"[收藏点] JS 增量移除星标异常: {e}")
+            self._schedule_reload_after_delete()
+
+    def _schedule_reload_after_delete(self):
+        """延后重建地图（脱离 console 回调栈后执行，保证视图读取正常）"""
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(50, self.reload_map)
+
+    def hide_location_marker(self) -> bool:
+        """
+        隐藏当前位置标识（清数据 + JS 增量移除，视图位置不变）
+
+        与删除收藏同构：优先 JS 增量移除标记（页面不重载），
+        失败时延后重建地图兜底（脱离 console 回调栈后执行）。
+
+        返回:
+            bool: 是否存在已隐藏的定位标识
+        """
+        if not self.data_manager.location_marker:
+            self.logger.debug("[定位标识] 无定位标识可隐藏")
+            return False
+
+        self.data_manager.location_marker = None
+        self.logger.info("[定位标识] 已隐藏当前位置标识")
+        self._hide_location_marker_js()
+        return True
+
+    def _hide_location_marker_js(self):
+        """通过 JavaScript 增量隐藏定位标识（内部方法）
+
+        移除成功则不再重建地图；失败时延后重建兜底
+        （调用上下文为 webengine console 回调栈，直接重建会导致视图读取超时）。
+
+        参数:
+            无
+        """
+        if not self.map_view or not self.map_view.page():
+            self._schedule_reload_after_delete()
+            return
+
+        from modules.map import MapJsBridge
+
+        def on_js_result(result):
+            if result and result.get('success'):
+                self.logger.debug("[定位标识] JS 增量隐藏成功，保持当前视图")
+            else:
+                msg = result.get('message') if isinstance(result, dict) else 'JS返回空结果'
+                self.logger.warning(f"[定位标识] JS 增量隐藏失败（{msg}），延后重建地图兜底")
+                self._schedule_reload_after_delete()
+
+        try:
+            MapJsBridge.hide_location_marker(self.map_view.page(), on_js_result)
+        except Exception as e:
+            self.logger.error(f"[定位标识] JS 增量隐藏异常: {e}")
+            self._schedule_reload_after_delete()
+
+    def _add_favorites_to_map(self, map_obj):
+        """添加收藏点标记到地图（内部方法）
+
+        受 map_config.show_favorites 开关控制；开关关闭或收藏为空时不添加。
+
+        参数:
+            map_obj: 地图对象
+        """
+        if not map_config.get_show_favorites():
+            return
+
+        favorites = self.favorites_storage.get_all()
+        if not favorites:
+            return
+
+        map_source = map_config.get_map_source()
+        MapRenderer.add_favorites_markers(map_obj, favorites, map_source=map_source, visible=True)
+
+    def _add_location_marker_to_map(self, map_obj):
+        """添加当前位置标识到地图（内部方法）
+
+        定位标记数据（data_manager.location_marker）存在即渲染，
+        供所有全量重建入口统一调用，避免个别入口遗漏导致标识丢失。
+
+        popup 格式与收藏点面板一致：加粗标题 + 灰色标签行 + 底部操作按钮；
+        marker 携带 marker_type='location'（写入 Leaflet options.markerType），
+        供 JS 增量移除"隐藏标识"时按类型定位。
+
+        参数:
+            map_obj: 地图对象
+        """
+        marker_info = self.data_manager.location_marker
+        if not marker_info:
+            return
+
+        from app.constants import COLOR_ORANGE, ICON_WARNING
+        self.logger.info(f"[地图] 恢复定位标记: lat={marker_info['lat']}, lon={marker_info['lon']}")
+
+        # 注入定位标识交互脚本（供 popup 内"隐藏标识"按钮调用）
+        location_script = """
+        <script>
+        // 定位标识交互全局对象：供定位 popup 内的隐藏按钮调用
+        window.GPXLocation = {
+            hide: function() {
+                console.log('隐藏定位标识');
+            }
+        };
+        </script>
+        """
+        from folium import Element  # 与 MapRenderer.fit_bounds 的局部导入模式一致
+        map_obj.get_root().html.add_child(Element(location_script))
+
+        # 格式化 popup：行分隔转 <br>，首行加粗为标题，其余为灰色标签行
+        raw_lines = [line for line in (marker_info['popup_text'] or '').split('\n') if line.strip()]
+        popup_lines = []
+        for i, line in enumerate(raw_lines):
+            line_esc = MapRenderer._escape_popup_html(line)
+            if i == 0:
+                popup_lines.append(f'<b>{line_esc}</b>')
+            else:
+                popup_lines.append(f'<span style="color:#888;">{line_esc}</span>')
+        popup_html = f"""
+        <div style="font-family:'Microsoft YaHei','微软雅黑',sans-serif; font-size:13px; min-width:180px;">
+            {'<br>'.join(popup_lines)}
+            <br>
+            <button onclick="window.GPXLocation.hide()" style="
+                margin-top:6px; background-color:#f5222d; color:white;
+                border:none; border-radius:3px; padding:3px 10px; cursor:pointer;">
+                隐藏标识
+            </button>
+        </div>
+        """
+
+        MapRenderer.add_marker(
+            map_obj,
+            [marker_info['lat'], marker_info['lon']],
+            popup_html,
+            color=COLOR_ORANGE,
+            icon=ICON_WARNING,
+            map_source=map_config.get_map_source(),
+            marker_type='location'  # 写入 Leaflet options（markerType），供 JS 增量移除定位
+        )
 
     def _add_selected_points_to_map(self, map_obj):
         """添加已选择的点到地图（内部方法）
@@ -1403,6 +1675,9 @@ class MapManager:
         # 添加标记点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
 
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
+
         # 添加优化后的路线（不再优化）
         MapRenderer.add_route(
             m,
@@ -1451,6 +1726,12 @@ class MapManager:
 
         # 添加已选择的点（起点、终点、途径点）
         self._add_selected_points_to_map(m)
+
+        # 添加当前位置标识（数据存在即渲染，与其他全量重建入口保持一致）
+        self._add_location_marker_to_map(m)
+
+        # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
+        self._add_favorites_to_map(m)
         
         # 如果有预览的地点，添加高亮标记
         if hasattr(self.data_manager, 'preview_location') and self.data_manager.preview_location:

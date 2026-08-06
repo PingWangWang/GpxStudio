@@ -16,6 +16,7 @@ class MapContextMenuPopup(QWidget):
     set_as_via = pyqtSignal(float, float)  # 纬度, 经度
     set_as_end = pyqtSignal(float, float)  # 纬度, 经度
     query_here = pyqtSignal(float, float)  # 纬度, 经度（这是哪儿）
+    add_favorite = pyqtSignal(float, float)  # 纬度, 经度（收藏此位置）
     set_center = pyqtSignal(float, float)  # 纬度, 经度（设置地图中心点）
     clear_route = pyqtSignal()  # 清空地图
 
@@ -54,7 +55,7 @@ class MapContextMenuPopup(QWidget):
         self._item_spacing = 8
 
         # 菜单项文本列表（用于计算所需最大宽度）
-        texts = ["设为起点", "设为途径点", "设为终点", "这是哪儿", "设置地图中心点", "清空地图"]
+        texts = ["设为起点", "设为途径点", "设为终点", "这是哪儿", "收藏此位置", "设置地图中心点", "清空地图"]
 
         # 使用字体度量计算宽度
         fm = QFontMetrics(QFont())
@@ -77,6 +78,7 @@ class MapContextMenuPopup(QWidget):
         self._create_separator(main_layout)
 
         self._create_menu_item(main_layout, "这是哪儿", "📍", self._on_query_here, "#722ed1")
+        self._create_menu_item(main_layout, "收藏此位置", "⭐", self._on_add_favorite, "#FFD700")
         self._create_menu_item(main_layout, "设置地图中心点", "🎯", self._on_set_center, "#13c2c2")
 
         # 分隔线
@@ -220,6 +222,11 @@ class MapContextMenuPopup(QWidget):
     def _on_query_here(self):
         """这是哪儿"""
         self.query_here.emit(self.current_lat, self.current_lon)
+        self.hide()
+
+    def _on_add_favorite(self):
+        """收藏此位置"""
+        self.add_favorite.emit(self.current_lat, self.current_lon)
         self.hide()
 
     def _on_set_center(self):

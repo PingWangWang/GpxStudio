@@ -74,6 +74,23 @@ class SearchMixin:
             self.search_history_popup.hide()
         self.search_manager.select_result_from_dropdown(result, self.current_search_text)
 
+    def _on_favorite_requested(self, result: dict):
+        """搜索结果：收藏此地点"""
+        name = result.get('name', '收藏点')
+        self.logger.info(f"[搜索结果] 收藏: {name}")
+
+        # 搜索结果自带坐标系标记（高德结果为GCJ-02，OSM为WGS-84），统一转WGS-84存储
+        coord_system = result.get('coord_system', 'WGS-84')
+        success, message = self.map_manager.add_favorite(
+            result.get('lat', 0), result.get('lon', 0),
+            name, address=result.get('address', ''),
+            coord_system=coord_system)
+
+        if success:
+            self._show_info("收藏成功", f"已收藏：{name}")
+        else:
+            self._show_warning("收藏失败", message)
+
     def on_route_button_clicked(self):
         self.logger.info("[路线] 路线按钮点击")
         if hasattr(self.route_button, 'start_animation'):

@@ -566,7 +566,27 @@ class MapRenderer:
         return m
 
     @staticmethod
-    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign', map_source='gaode', coord_system='WGS-84', number=None):
+    def _escape_popup_html(text: str) -> str:
+        """
+        转义将嵌入 popup HTML 的用户内容
+
+        popup HTML 由 folium 以 JS 模板字符串（反引号）包裹内嵌，
+        因此除 HTML 实体外还需转义反引号与 ${（模板插值起始），
+        用 HTML 实体替代可同时保证 JS 语法安全与显示正确。
+
+        Args:
+            text: 原始文本
+
+        Returns:
+            str: 转义后的安全文本
+        """
+        import html as html_module
+        return (html_module.escape(str(text))
+                .replace('`', '&#96;')
+                .replace('${', '&#36;&#123;'))
+
+    @staticmethod
+    def add_marker(map_obj, location, popup_text, color='blue', icon='info-sign', map_source='gaode', coord_system='WGS-84', number=None, star=False, fav_id=None, marker_type=None):
         """
         添加标记点
 
@@ -579,6 +599,9 @@ class MapRenderer:
             map_source: 地图数据源
             coord_system: 输入坐标系统 ('WGS-84', 'GCJ-02')
             number: 标记序号（可选），用于在标记上显示数字
+            star: 是否使用金色星形标记（收藏点专用）
+            fav_id: 收藏点ID（可选），写入 Leaflet options（favId）供 JS 增量移除定位
+            marker_type: 标记类型（可选），写入 Leaflet options（markerType）供 JS 按类型定位
         """
         # 只在坐标系统不匹配时进行转换
         marker_location = location
@@ -591,9 +614,21 @@ class MapRenderer:
             f"target={target_system}, converted={'是' if coord_system != target_system else '否'}, "
             f"result={marker_location}, number={number}")
         # 否则直接使用（坐标系统匹配）
-        
+
+        # 收藏点星形标记：金色五角星
+        if star:
+            html = '''
+            <div style="
+                font-size: 22px;
+                line-height: 22px;
+                color: #FFD700;
+                text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                user-select: none;
+            ">★</div>
+            '''
+            marker_icon = folium.DivIcon(html=html, icon_anchor=(11, 11))
         # 如果提供了序号，使用自定义DivIcon显示带序号的标记
-        if number is not None:
+        elif number is not None:
             # 蓝色圆形标记，白色数字
             html = f'''
             <div style="
@@ -615,11 +650,95 @@ class MapRenderer:
         else:
             marker_icon = folium.Icon(color=color, icon=icon)
         
+        marker_options = {}
+        if fav_id is not None:
+            marker_options['fav_id'] = fav_id  # folium 会自动转为 favId 写入 JS options
+        if marker_type is not None:
+            marker_options['marker_type'] = marker_type  # folium 会自动转为 markerType 写入 JS options
+
         folium.Marker(
             location=marker_location,
             popup=popup_text,
-            icon=marker_icon
+            icon=marker_icon,
+            **marker_options
         ).add_to(map_obj)
+
+    @staticmethod
+    def add_favorites_markers(map_obj, favorites, map_source='gaode', visible=True):
+        """
+        在地图上添加收藏点标记（金色星形）
+
+        Args:
+            map_obj: folium地图对象
+            favorites: 收藏点列表，每项含 id/name/address/lat/lon/created_at
+            map_source: 地图数据源（'gaode'/'osm'），用于坐标转换
+            visible: 是否显示收藏点（False时不添加任何标记）
+
+        说明：
+            收藏点统一以 WGS-84 坐标存储，渲染时交由 add_marker 按地图源自动转换。
+            点击星形标记弹出详情（Leaflet 默认行为），详情内嵌删除按钮，
+            按钮点击通过 window.GPXFavorites.deleteFav 输出 console 消息，
+            由 webengine 拦截后转发给后端删除。
+        """
+        if not visible or not favorites:
+            return
+
+        import html as html_module
+
+        # 注入收藏点交互脚本（供 popup 内删除按钮调用）
+        favorites_script = """
+        <script>
+        // 收藏点交互全局对象：供收藏点 popup 内的删除按钮调用
+        window.GPXFavorites = {
+            deleteFav: function(id) {
+                console.log('收藏删除:' + id);
+            }
+        };
+        </script>
+        """
+        map_obj.get_root().html.add_child(folium.Element(favorites_script))
+
+        for fav in favorites:
+            fav_id = fav.get('id')
+            if fav_id is None:
+                continue
+
+            name = fav.get('name', '') or '收藏点'
+            address = fav.get('address', '') or ''
+            lat = fav.get('lat', 0)
+            lon = fav.get('lon', 0)
+            created_at = (fav.get('created_at') or '')[:19].replace('T', ' ')
+
+            # 转义用户内容（HTML 实体 + JS 模板字符串防护，见 _escape_popup_html）
+            name_esc = MapRenderer._escape_popup_html(name)
+            address_esc = MapRenderer._escape_popup_html(address)
+
+            # 地址行：地址为空或与名称相同（高德场景名称即完整地址）时隐藏，避免显示"未知"
+            address_line = ''
+            if address and address != name:
+                address_line = f'<span style="color:#888;">地址: {address_esc}</span><br>'
+
+            popup_html = f"""
+            <div style="font-family:'Microsoft YaHei','微软雅黑',sans-serif; font-size:13px; min-width:180px;">
+                <b>{name_esc}</b><br>
+                {address_line}
+                <span style="color:#888;">坐标: {lat:.6f}, {lon:.6f}</span><br>
+                <span style="color:#888;">收藏时间: {created_at or '未知'}</span><br>
+                <button onclick="window.GPXFavorites.deleteFav({fav_id})" style="
+                    margin-top:6px; background-color:#f5222d; color:white;
+                    border:none; border-radius:3px; padding:3px 10px; cursor:pointer;">
+                    删除收藏
+                </button>
+            </div>
+            """
+
+            MapRenderer.add_marker(
+                map_obj, [lat, lon], popup_html,
+                map_source=map_source,
+                coord_system='WGS-84',  # 收藏点统一以 WGS-84 存储
+                star=True,
+                fav_id=fav_id  # 写入 Leaflet options（favId），供 JS 增量移除时定位星标
+            )
 
     @staticmethod
     def add_route(map_obj, route_points, color='blue', weight=5, opacity=0.7):

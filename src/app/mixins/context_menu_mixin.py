@@ -141,6 +141,7 @@ class ContextMenuMixin:
         coord_system = CoordinateTransform.coord_system_for_map_source(map_source)
 
         address_name = f'位置 ({lat:.6f}, {lon:.6f})'
+        address = ''
         level = None
         type_info = None
 
@@ -151,6 +152,8 @@ class ContextMenuMixin:
                 result = geocoding_service.reverse_geocode(lat, lon)
                 if result:
                     address_name = result.get('full_address', address_name)
+                    # OSM 提供细分地址字段，高德仅 full_address（已在名称中）
+                    address = result.get('address', '') or ''
                     level = result.get('level')
                     type_info = result.get('type')
                     self.logger.info(f"[右键菜单] 逆地理编码成功: {address_name}")
@@ -163,6 +166,7 @@ class ContextMenuMixin:
 
         return {
             'name': address_name,
+            'address': address,
             'level': level,
             'type_info': type_info,
             'coord_system': coord_system,
@@ -320,6 +324,25 @@ class ContextMenuMixin:
             self.location_info_popup.show_location_info(location_data, click_pos)
         else:
             self.logger.error("[右键菜单] 位置信息面板不存在")
+
+    def _on_context_menu_add_favorite(self, lat: float, lon: float):
+        """右键菜单：收藏此位置"""
+        self.logger.info(f"[右键菜单] 收藏此位置: ({lat}, {lon})")
+
+        # 复用逆地理编码解析名称（双地图源通用），失败时降级为坐标字符串
+        geo = self._resolve_map_click_address(lat, lon)
+        name = geo['name']
+        address = geo.get('address', '')
+        # 右键坐标的坐标系与当前地图源一致，add_favorite 内部统一转为 WGS-84 存储
+        coord_system = geo['coord_system']
+
+        success, message = self.map_manager.add_favorite(
+            lat, lon, name, address=address, coord_system=coord_system)
+
+        if success:
+            self._show_info("收藏成功", f"已收藏：{name}")
+        else:
+            self._show_warning("收藏失败", message)
 
     def _on_context_menu_set_center(self, lat: float, lon: float):
         """右键菜单：设为地图中心点（仅平移，显示箭头标记）"""

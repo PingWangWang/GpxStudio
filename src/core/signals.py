@@ -27,6 +27,12 @@ class SignalManager(QObject):
     map_center_changed = pyqtSignal(float, float)  # 纬度, 经度
     map_right_click = pyqtSignal(float, float)  # 纬度, 经度 - 地图右键点击
 
+    # 收藏点相关信号
+    favorite_delete_requested = pyqtSignal(int)  # 收藏点ID - 地图弹窗内点击删除按钮
+
+    # 定位标识相关信号
+    location_marker_hidden = pyqtSignal()  # 地图弹窗内点击隐藏标识按钮
+
     # 搜索相关信号
     search_results_updated = pyqtSignal(list, str)  # 搜索结果列表, 搜索类型
     search_completed = pyqtSignal()  # 无参数
@@ -75,6 +81,14 @@ class SignalManager(QObject):
             'map_right_click': {
                 'signal': self.map_right_click,
                 'description': '地图右键点击时发射'
+            },
+            'favorite_delete_requested': {
+                'signal': self.favorite_delete_requested,
+                'description': '地图弹窗内点击删除收藏时发射'
+            },
+            'location_marker_hidden': {
+                'signal': self.location_marker_hidden,
+                'description': '地图弹窗内点击隐藏定位标识时发射'
             },
 
             # 搜索相关信号

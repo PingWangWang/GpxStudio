@@ -48,6 +48,11 @@ class MapConfig(IConfigService):
             self._config_data['satellite_show_roads'] = True  # 默认显示路网
             config_updated = True
 
+        # 确保包含收藏点显示开关配置
+        if 'show_favorites' not in self._config_data:
+            self._config_data['show_favorites'] = True  # 默认显示收藏点
+            config_updated = True
+
         # 确保包含关闭动作配置
         if 'close_action' not in self._config_data:
             self._config_data['close_action'] = "exit"  # 默认为直接退出
@@ -394,6 +399,18 @@ class MapConfig(IConfigService):
         try:
             # 只传递需要修改的字段，避免覆盖API Key等其他配置
             return self.save_config({'satellite_show_roads': show})
+        except Exception:
+            return False
+
+    def get_show_favorites(self) -> bool:
+        """获取是否在地图上显示收藏点"""
+        return self._config_data.get('show_favorites', True)
+
+    def set_show_favorites(self, show: bool) -> bool:
+        """设置是否在地图上显示收藏点"""
+        try:
+            # 只传递需要修改的字段，避免覆盖API Key等其他配置
+            return self.save_config({'show_favorites': show})
         except Exception:
             return False
 
