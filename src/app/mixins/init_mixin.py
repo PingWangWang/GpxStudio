@@ -1,4 +1,4 @@
-"""InitMixin — GpxStudio 初始化、信号连接、日志、UI 搭建及窗口事件方法"""
+﻿"""InitMixin — GpxStudio 初始化、信号连接、日志、UI 搭建及窗口事件方法"""
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QApplication, QDialog)
 from PyQt5.QtCore import QTimer, QPoint
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
@@ -217,6 +217,7 @@ class InitMixin:
             self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
             self.route_plan_panel.history_delete_clicked.connect(self._on_history_delete_clicked)
             self.route_plan_panel.history_clear_all_clicked.connect(self._on_history_clear_all_clicked)
+            self.route_plan_panel.history_elevation_fetch_clicked.connect(self._on_history_elevation_fetch_clicked)
         except ImportError as e:
             print(f"无法导入路线规划面板: {e}")
 
@@ -353,6 +354,8 @@ class InitMixin:
             update_map_preview=self._update_map_preview,
             preview_search_result=self._preview_search_result,
             show_location_on_map=self._show_location_on_map,
+            show_elevation_profile=self._show_elevation_profile,
+            elevation_fetch_completed=self._on_elevation_fetch_completed,
             show_route_on_map=self._show_route_on_map,
             load_map_url=self._load_map_url,
             trigger_browser_location=self._trigger_browser_location,
@@ -462,7 +465,19 @@ class InitMixin:
         main_layout.setSpacing(0)
         self._init_hidden_ui_components()
         map_panel = self.create_map_panel()
-        main_layout.addWidget(map_panel)
+        main_layout.addWidget(map_panel, 4)  # 地图占主界面 4/5
+
+        # 海拔剖面图面板（主界面最底部，占 1/5 高度，随窗口缩放自适应；
+        # 初始按设置开关显隐：开启 → 显示空数据占位；关闭 → 隐藏）
+        from ui.widgets.elevation_profile_panel import ElevationProfilePanel
+        self.elevation_profile_panel = ElevationProfilePanel()
+        main_layout.addWidget(self.elevation_profile_panel, 1)  # 海拔面板占主界面 1/5
+        # 折线图悬停联动：地图路线上显示当前位置圆点（悬停/离开）
+        self.elevation_profile_panel.chart.hovered.connect(self._on_elevation_chart_hovered)
+        self.elevation_profile_panel.chart.hover_ended.connect(self._on_elevation_chart_hover_ended)
+        if map_config.get_show_elevation_profile():
+            self.elevation_profile_panel.show_empty()
+
         QTimer.singleShot(MAP_LOAD_DELAY_MS + 2000, self._show_initial_map)
 
     def create_map_panel(self):

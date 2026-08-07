@@ -68,6 +68,11 @@ class MapConfig(IConfigService):
             self._config_data['elevation_optimize'] = True  # 默认启用优化（最多1000点）
             config_updated = True
 
+        # 确保包含海拔剖面图显示开关
+        if 'show_elevation_profile' not in self._config_data:
+            self._config_data['show_elevation_profile'] = True  # 默认显示海拔剖面图
+            config_updated = True
+
         # 确保包含高德地图配置
         if 'gaode' not in self._config_data:
             self._config_data['gaode'] = {
@@ -439,6 +444,17 @@ class MapConfig(IConfigService):
         """设置海拔数据获取优化开关"""
         try:
             return self.save_config({'elevation_optimize': enabled})
+        except Exception:
+            return False
+
+    def get_show_elevation_profile(self) -> bool:
+        """获取是否显示海拔剖面图"""
+        return self._config_data.get('show_elevation_profile', True)
+
+    def set_show_elevation_profile(self, show: bool) -> bool:
+        """设置是否显示海拔剖面图"""
+        try:
+            return self.save_config({'show_elevation_profile': show})
         except Exception:
             return False
 

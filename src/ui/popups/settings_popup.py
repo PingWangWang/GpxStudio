@@ -789,6 +789,28 @@ class MapSettingsPopup(BaseSettingsPopup):
         favorites_row.setStretch(2, 1)
         config_layout.addLayout(favorites_row)
 
+        # 海拔剖面图显示开关
+        self.show_elevation_check = QCheckBox("显示海拔剖面图")
+        self.show_elevation_check.setToolTip("路线渲染时在主界面底部显示海拔剖面图")
+        self.show_elevation_check.setFixedHeight(30)
+        theme.apply_to_sub(self.show_elevation_check, self.show_favorites_check.styleSheet())
+
+        elevation_row = QHBoxLayout()
+        elevation_label = QLabel("海拔剖面图:")
+        theme.apply_to_sub(elevation_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        elevation_label.setFixedWidth(80)
+        elevation_label.setFixedHeight(30)
+        elevation_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        elevation_row.addWidget(elevation_label)
+        elevation_row.addSpacing(10)
+        elevation_row.addWidget(self.show_elevation_check)
+        elevation_row.setContentsMargins(0, 0, 0, 0)
+        elevation_row.setSpacing(0)
+        elevation_row.setStretch(0, 0)
+        elevation_row.setStretch(1, 0)
+        elevation_row.setStretch(2, 1)
+        config_layout.addLayout(elevation_row)
+
         main_layout.addLayout(config_layout)
 
         # 添加分隔线，美化布局并增加与底部按钮的间距
@@ -924,6 +946,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
         # 加载收藏点显示开关
         self.show_favorites_check.setChecked(map_config.get_show_favorites())
+        self.show_elevation_check.setChecked(map_config.get_show_elevation_profile())
 
 
     def on_theme_changed(self, index: int):
@@ -975,7 +998,8 @@ class MapSettingsPopup(BaseSettingsPopup):
             "api_key": api_key,
             "security_key": security_key,
             "elevation_optimize": self.elevation_mode_combo.currentData(),
-            "show_favorites": self.show_favorites_check.isChecked()
+            "show_favorites": self.show_favorites_check.isChecked(),
+            "show_elevation_profile": self.show_elevation_check.isChecked()
         }
 
         if map_config.save_config(config):

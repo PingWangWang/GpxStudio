@@ -1,4 +1,4 @@
-"""GpxExportMixin — GPX 导出功能相关方法"""
+﻿"""GpxExportMixin — GPX 导出功能相关方法"""
 import os
 from modules.gpx import GpxExportService
 from services.config.map_config import map_config
@@ -213,6 +213,8 @@ class GpxExportMixin:
                     self.route_history_storage = route_history_storage
                     self.route_data = route_data
                     self._cancel_check = cancel_check if cancel_check else lambda: False
+                    # 本次导出是否获取了新海拔（run 中更新，主线程完成后读取同步历史列表）
+                    self.elevation_obtained = False
 
                 def run(self):
                     try:
@@ -234,7 +236,9 @@ class GpxExportMixin:
                             if self.route_history_storage and self.route_data:
                                 if self.route_points and len(self.route_points) > 0:
                                     for point in self.route_points:
-                                        if point is not None and len(point) >= 3:
+                                        # 判定与手动获取链路一致：海拔字段存在且非空才视为有缓存，
+                                        # 避免"有字段但无值"的点误判为已获取导致 GPX 无海拔
+                                        if point is not None and len(point) >= 3 and point[2] is not None:
                                             has_cached_elevation = True
                                             self.parent().logger.info(f"[GPX导出] 使用历史记录中缓存的海拔数据")
                                             self.progress_updated.emit(30, "使用缓存的海拔数据...")
@@ -323,25 +327,38 @@ class GpxExportMixin:
                                 end_name = self.route_data.get('end_name') or self.end_name
                                 mode = self.route_data.get('mode', 'driving')
 
-                                self.route_history_storage.add_record(
-                                    start=start_name,
-                                    end=end_name,
-                                    mode=mode,
-                                    waypoints=self.route_data.get('waypoints', []),
-                                    start_coords=self.route_data.get('start_coords'),
-                                    end_coords=self.route_data.get('end_coords'),
-                                    waypoint_coords=self.route_data.get('waypoint_coords', []),
-                                    distance=self.route_data.get('distance'),
-                                    duration=self.route_data.get('duration'),
-                                    route_points=self.route_points,
-                                    start_coord_system=self.route_data.get('start_coord_system'),
-                                    end_coord_system=self.route_data.get('end_coord_system'),
-                                    waypoint_coord_systems=self.route_data.get('waypoint_coord_systems', [])
-                                )
+                                # 优先精准回写已有历史记录（update_route_points 不动搜索计数/排序）；
+                                # 历史中无此记录（如新规划路线导出）则新建
+                                match_data = {
+                                    'start': start_name,
+                                    'end': end_name,
+                                    'mode': mode,
+                                    'waypoints': self.route_data.get('waypoints', []),
+                                }
+                                updated = self.route_history_storage.update_route_points(
+                                    match_data, self.route_points)
+                                if updated is None:
+                                    self.route_history_storage.add_record(
+                                        start=start_name,
+                                        end=end_name,
+                                        mode=mode,
+                                        waypoints=self.route_data.get('waypoints', []),
+                                        start_coords=self.route_data.get('start_coords'),
+                                        end_coords=self.route_data.get('end_coords'),
+                                        waypoint_coords=self.route_data.get('waypoint_coords', []),
+                                        distance=self.route_data.get('distance'),
+                                        duration=self.route_data.get('duration'),
+                                        route_points=self.route_points,
+                                        start_coord_system=self.route_data.get('start_coord_system'),
+                                        end_coord_system=self.route_data.get('end_coord_system'),
+                                        waypoint_coord_systems=self.route_data.get('waypoint_coord_systems', [])
+                                    )
                                 self.parent().logger.info(f"[GPX导出] 已将海拔数据缓存到历史记录: {start_name} → {end_name}")
                             except Exception as e:
                                 self.parent().logger.warning(f"[GPX导出] 缓存海拔数据到历史记录失败: {e}")
 
+                        # 记录本次导出是否获取了新海拔（主线程据此同步历史列表按钮高亮）
+                        self.elevation_obtained = elevation_data_obtained
                         self.progress_updated.emit(100, "导出完成")
                         self.export_completed.emit(success, self.file_path)
                     except Exception as e:
@@ -389,6 +406,9 @@ class GpxExportMixin:
                     if success:
                         progress_popup.set_complete("GPX文件导出成功")
                         self.logger.info(f"[GPX导出] GPX文件导出成功: {result}")
+                        # 导出过程中获取了新海拔：同步历史列表内存数据与获取按钮高亮
+                        if getattr(export_thread, 'elevation_obtained', False):
+                            self._sync_history_elevation_after_export(export_thread)
                     else:
                         progress_popup.set_progress(0, f"导出失败: {result}")
                         progress_popup.cancel_button.setText("确定")
@@ -401,6 +421,42 @@ class GpxExportMixin:
         except Exception as e:
             self.logger.error(f"[GPX导出] 导出过程中发生错误: {e}")
             self._show_warning("导出失败", f"导出过程中发生错误: {str(e)}")
+
+    def _sync_history_elevation_after_export(self, export_thread):
+        """导出获取海拔后同步历史列表：内存数据源 route_points + 获取按钮高亮（主线程）
+
+        导出线程内已持久化到历史存储文件；此处同步面板内存数据
+        （_last_history_list 与条目 widget 同引用），使 ⛰ 按钮立即转高亮、
+        后续点击判定"已有海拔"不再重复获取。
+
+        Args:
+            export_thread: 导出线程（含 route_data 与更新后的 route_points）
+        """
+        try:
+            route_points = list(export_thread.route_points)
+            route_data = export_thread.route_data
+            start = route_data.get('start_name') or export_thread.start_name
+            end = route_data.get('end_name') or export_thread.end_name
+            mode = route_data.get('mode', 'driving')
+            waypoints = route_data.get('waypoints') or []
+
+            if self.route_plan_panel is not None:
+                # 更新面板内存数据源（与条目 widget 同引用，UI 数据同步）
+                last_list = getattr(self.route_plan_panel, '_last_history_list', None)
+                matched = None
+                if last_list:
+                    for rec in last_list:
+                        if (rec.get('start') == start and rec.get('end') == end
+                                and rec.get('mode') == mode
+                                and (rec.get('waypoints') or []) == waypoints):
+                            rec['route_points'] = list(route_points)
+                            matched = rec
+                            break
+                # 按钮高亮（已获取海拔）；matched 与条目 widget.history_data 同引用
+                if matched is not None:
+                    self.route_plan_panel.update_history_elevation_status(matched, True)
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 同步历史列表海拔状态失败: {e}")
 
     def _on_history_export_gpx_clicked(self, history_data: dict, button=None, item=None):
         """历史记录导出GPX按钮点击"""

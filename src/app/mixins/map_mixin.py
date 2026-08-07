@@ -1,4 +1,4 @@
-"""MapMixin — 地图控件交互处理方法（缩放/模式/设置/定位等）"""
+﻿"""MapMixin — 地图控件交互处理方法（缩放/模式/设置/定位等）"""
 import math
 
 from PyQt5.QtCore import QTimer
@@ -29,18 +29,26 @@ class MapMixin:
         if not all_points:
             self.logger.warning("[缩放] 没有找到地图元素，保持现状")
             return
-        lats = [p[0] for p in all_points]
-        lons = [p[1] for p in all_points]
+        # 坐标转换：元素坐标为 WGS-84，地图渲染层统一转 GCJ-02，此处保持一致
+        from modules.geolocation.coordinate_transform import CoordinateTransform as _CT
+        gcj_points = [_CT.convert(lat, lon, 'WGS-84', 'GCJ-02') for lat, lon in all_points]
+        lats = [p[0] for p in gcj_points]
+        lons = [p[1] for p in gcj_points]
         center = [(min(lats)+max(lats))/2, (min(lons)+max(lons))/2]
         diagonal = math.sqrt((max(lats)-min(lats))**2 + (max(lons)-min(lons))**2)
         zoom = 15 if diagonal == 0 else max(2, min(18, int(10 - math.log(diagonal, 2))))
         self.logger.info(f"[缩放] 计算完成：中心点={center}，缩放级别={zoom}")
-        if self.map_manager is not None:
-            # 多点场景传入 fit_points：由 Leaflet fitBounds 精确适配视野（含 padding），
-            # 避免手算缩放级别导致元素出视野或贴边；单点保持手算 zoom
-            self.map_manager.show_map(
-                center=center, zoom=zoom, title="地图",
-                fit_points=all_points if len(all_points) > 1 else None)
+        # JS 侧先判断当前视图是否已包含全部元素：已包含 → 零开销跳过（不刷新界面）；
+        # 未包含 → fitBounds 精确适配（含 padding），不再重建地图 HTML
+        if self.map_view is not None and self.map_view.page() is not None:
+            import json
+            from modules.map.js_bridge import MapJsBridge
+            bounds_json = json.dumps([[min(lats), min(lons)], [max(lats), max(lons)]])
+            self.logger.info(f"[缩放] 调用 fit_bounds JS: {bounds_json}, zoom={zoom}")
+            MapJsBridge.fit_bounds(self.map_view.page(), bounds_json,
+                                   center[0], center[1], zoom)
+        else:
+            self.logger.warning("[缩放] map_view/page 不可用，跳过自动缩放 JS 调用")
 
     def _on_search_history_my_location(self):
         """搜索历史首行"我的位置"点击：触发定位"""
@@ -161,6 +169,9 @@ class MapMixin:
         self.service_manager.initialize_services()
         self.map_manager.reload_map(keep_view=True, keep_route=True, keep_points=True,
                                     keep_search_results=True, keep_location=True)
+        # 海拔剖面图开关即时生效（开启→显示空占位/实际数据，关闭→隐藏）
+        if getattr(self, 'elevation_profile_panel', None) is not None:
+            self._show_elevation_profile()
 
     def _on_map_settings_popup_closed(self):
         if self.logger is not None:
@@ -236,6 +247,14 @@ class MapMixin:
         self.location_manager.handle_browser_location_error(error_msg)
 
     def _on_map_loaded(self):
+        # 挂起的海拔剖面（历史路线点击）：页面加载完成后显示——路线先可见、折线图随后
+        pending = getattr(self, '_pending_history_elevation_show', None)
+        if pending is not None:
+            self._pending_history_elevation_show = None
+            try:
+                self._show_history_elevation_profile(pending[0], pending[1])
+            except Exception as e:
+                self.logger.error(f"[主应用] 挂起的海拔剖面显示失败: {e}")
         self.hide_loading()
         self.logger.debug("[主应用] 地图加载完成，停止加载动画")
 

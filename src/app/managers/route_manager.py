@@ -1,4 +1,4 @@
-"""
+﻿"""
 路线管理器
 负责路线规划和GPX导出
 支持后台线程执行和进度展示
@@ -473,15 +473,20 @@ class RouteManager(QObject):
         self.ui_updater.show_warning("错误", "路线规划失败")
 
     def _fetch_elevation_data_async(self, route_alternatives: list):
-        """在后台异步获取海拔数据
+        """在后台异步获取海拔数据（仅手动触发，不自动调用）
 
-        为每个路线方案的路线点获取海拔数据，并更新路线方案。
+        为选中路线方案的路线点获取海拔数据。任务完成后经
+        on_elevation_task_completed 回调刷新剖面图并回写历史记录。
 
         参数:
             route_alternatives: 路线方案列表
+
+        返回:
+            task_id: 后台任务ID（用于完成回调关联历史记录回写）；
+                     无任务管理器/无服务时返回 None（不做回写）
         """
         if not route_alternatives:
-            return
+            return None
 
         # 获取用户当前选择的路线方案索引（默认选择第一条路线）
         selected_index = 0  # 默认选择第一条路线
@@ -511,13 +516,16 @@ class RouteManager(QObject):
                     )
 
                 self.logger.debug(f"海拔数据获取任务已提交: {task_id}")
+                return task_id
             else:
                 self.logger.warning("未找到路线规划服务，无法获取海拔数据")
+                return None
         else:
-            # 兼容模式：直接执行
+            # 兼容模式：直接执行（无完成回调，不做回写与刷新）
             self.logger.warning("任务管理器不可用，直接执行海拔数据获取")
             # 正确的参数顺序：routing_service, route_alternatives, selected_index, progress_callback, log_callback, cancel_check
             self._fetch_elevation_data_task(None, route_alternatives, selected_index, None, None, lambda: False)
+            return None
 
     def _fetch_elevation_data_task(self, routing_service, route_alternatives, selected_index,
                                   progress_callback, log_callback, cancel_check):
@@ -600,8 +608,16 @@ class RouteManager(QObject):
             self.data_manager.set_route_alternatives(result, self.data_manager.selected_route_index)
 
             self.logger.info(f"已更新 {len(result)} 个路线方案的海拔数据")
+
+            # 海拔数据就绪：通知主界面刷新底部海拔剖面图
+            if hasattr(self.ui_updater, 'show_elevation_profile'):
+                self.ui_updater.show_elevation_profile()
         else:
             self.logger.warning("海拔数据获取失败，未更新路线方案")
+
+        # 手动获取链路：通知主界面回写海拔到历史记录（result 为 None 时也通知，清理待回写状态）
+        if hasattr(self.ui_updater, 'elevation_fetch_completed'):
+            self.ui_updater.elevation_fetch_completed(task_id, result)
 
     def select_route_alternative(self, index: int):
         """选择路线方案
@@ -620,16 +636,10 @@ class RouteManager(QObject):
             # 更新路线时间信息
             self._update_route_times(selected_route['duration'])
 
-            # 检查路线点是否已经有海拔数据
-            route_points = selected_route.get('route_points', [])
-            has_elevation_data = False
-            if route_points:
-                # 检查第一个点是否有海拔数据
-                first_point = route_points[0]
-                if first_point and isinstance(first_point, tuple) and len(first_point) == 3:
-                    has_elevation_data = True
-
-            # 移除自动获取海拔数据的操作，改为在GPX导出时按需获取
+            # 刷新海拔剖面图（不自动获取）：有海拔直接显示，无海拔显示空占位。
+            # 海拔仅在用户手动点击历史/方案条目的"获取海拔"按钮时获取。
+            if hasattr(self.ui_updater, 'show_elevation_profile'):
+                self.ui_updater.show_elevation_profile()
 
         # 在地图上显示选中的路线
         if self.task_manager:

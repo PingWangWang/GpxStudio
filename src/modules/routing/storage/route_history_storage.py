@@ -1,4 +1,4 @@
-"""
+﻿"""
 路线搜索历史存储
 
 保存和加载路线搜索历史记录
@@ -171,6 +171,35 @@ class RouteHistoryStorage:
         print(f"[路线历史存储] 新增记录: {start} → {end}, 坐标: {record.get('start_coords')} → {record.get('end_coords')}, "
               f"距离: {distance}米, 时长: {duration}秒, 路线点数: {len([p for p in (route_points or []) if p is not None])}")
         return self._save_history()
+
+    def update_route_points(self, record: dict, route_points: List[tuple]) -> Optional[dict]:
+        """更新历史记录的海拔路线点（仅替换 route_points，不动搜索计数/排序/时间戳）
+
+        手动获取海拔数据成功后调用：把带海拔的路线点持久化回写，
+        下次点击该历史直接渲染，无需重新获取。
+
+        Args:
+            record: 历史记录（按 start/end/mode/waypoints 匹配）
+            route_points: 带海拔的路线点列表 [(lat, lon, elevation), ...]
+
+        Returns:
+            更新后的历史记录 dict；未匹配到返回 None
+        """
+        for rec in self.history_records:
+            if (rec.get('start') == record.get('start')
+                    and rec.get('end') == record.get('end')
+                    and rec.get('mode') == record.get('mode')
+                    and (rec.get('waypoints') or []) == (record.get('waypoints') or [])):
+                rec['route_points'] = [
+                    list(point) if point is not None else None
+                    for point in route_points
+                ]
+                if self._save_history():
+                    print(f"[路线历史存储] 已回写海拔路线点: {rec.get('start')} → {rec.get('end')}, "
+                          f"点数: {len([p for p in route_points if p is not None])}")
+                    return rec
+                return None
+        return None
 
     def get_history(self, limit: int = 10) -> List[Dict]:
         """

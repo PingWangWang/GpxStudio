@@ -1,4 +1,4 @@
-"""UICallbacksMixin — ui_updater 字典中各回调方法的实现"""
+﻿"""UICallbacksMixin — ui_updater 字典中各回调方法的实现"""
 from typing import Optional
 
 from PyQt5.QtWidgets import QApplication, QMessageBox, QListWidgetItem
@@ -150,6 +150,56 @@ class UICallbacksMixin:
 
     def _preview_search_result(self, coords, name, level=None, type_info=None, radius=None, result_data=None):
         self.map_manager.preview_search_result(coords, name, level, type_info, radius, result_data)
+
+    def _show_elevation_profile(self):
+        """海拔数据就绪回调：更新主界面底部海拔剖面图（受设置开关控制）
+
+        面板显隐由设置开关单一驱动：开关开启时面板恒显示
+        （无路线显示空数据占位，有路线显示实际数据），开关关闭时隐藏。
+        """
+        from services.config.map_config import map_config
+        from ui.widgets.elevation_profile_panel import ElevationProfilePanel
+        panel = getattr(self, 'elevation_profile_panel', None)
+        if panel is None:
+            return
+        # 开关关闭时隐藏面板
+        if not map_config.get_show_elevation_profile():
+            panel.clear_route()
+            return
+        try:
+            selected = self.data_manager.get_selected_route()
+            if not selected:
+                # 历史记录渲染的路线：route_alternatives 已被清空（get_selected_route 取不到），
+                # 但 route_points 数据在——直接用其计算显示折线图（与历史点击链路同款）
+                route_points = getattr(self.data_manager, 'route_points', []) or []
+                if route_points:
+                    self._show_history_elevation_profile(
+                        route_points,
+                        getattr(self.data_manager, 'estimated_duration_seconds', 0) or 0)
+                    return
+                self._profile_route_points = None
+                panel.show_empty()
+                return
+            route_points = selected.get('route_points', [])
+            duration = selected.get('duration', 0)
+            distances, elevations = ElevationProfilePanel.compute_profile(route_points)
+            if distances is None:
+                # 无有效海拔点：清空悬停映射（无剖面数据时圆点不显示）
+                self._profile_route_points = None
+                panel.show_empty()
+                return
+            # 缓存有效路线点序列（与剖面序列一一对应，过滤规则与 compute_profile 一致）：
+            # 折线图悬停索引 → 直取路线坐标，在地图上显示定位圆点
+            self._profile_route_points = [
+                p for p in route_points
+                if p is not None and len(p) >= 3 and p[2] is not None
+            ]
+            # 路线名称：起点 → 终点
+            start = getattr(self.data_manager, 'start_name', '') or '起点'
+            end = getattr(self.data_manager, 'end_name', '') or '终点'
+            panel.show_route(f"{start} → {end}", distances, elevations, duration)
+        except Exception as e:
+            self.logger.error(f"[海拔剖面图] 更新失败: {e}")
 
     def _show_location_on_map(self, lat: float, lon: float, popup_text: str):
         self.logger.debug(f"[UI回调] 收到显示位置请求: {lat}, {lon}")

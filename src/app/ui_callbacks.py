@@ -1,4 +1,4 @@
-"""
+﻿"""
 UICallbacks — 类型化 UI 回调容器
 
 替代之前无类型的 ``ui_updater`` 字典，提供 IDE 自动补全和静态类型检查支持。
@@ -62,6 +62,8 @@ class UICallbacks:
     update_map_preview:         Callable = field(default=_noop)
     preview_search_result:      Callable = field(default=_noop)
     show_location_on_map:       Callable = field(default=_noop)
+    show_elevation_profile:     Callable = field(default=_noop)  # 海拔数据就绪后更新剖面图
+    elevation_fetch_completed:  Callable = field(default=_noop)  # 海拔获取完成（手动链路，回写历史）
 
     # ── 地图操作 ──────────────────────────────────────────────────────────
     show_route_on_map:          Callable = field(default=_noop)

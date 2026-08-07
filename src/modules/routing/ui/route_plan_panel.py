@@ -1,4 +1,4 @@
-"""
+﻿"""
 路线规划面板组件
 
 参考高德地图的路线规划界面设计
@@ -19,12 +19,14 @@ class RouteHistoryItem(QWidget):
 
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
     delete_clicked = pyqtSignal(dict, object, object)  # 删除按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
+    elevation_fetch_clicked = pyqtSignal(dict)  # 获取海拔按钮点击信号：(历史记录数据)
 
     def __init__(self, history_data: dict, parent=None):
         super().__init__(parent)
         self.history_data = history_data
         self.is_selected = False
         self.has_route_data = False  # 是否有完整路线数据
+        self.elevation_available = False  # 是否已获取过海拔数据（按钮高亮状态）
         self._init_ui()
 
     @staticmethod
@@ -103,7 +105,7 @@ class RouteHistoryItem(QWidget):
         # 固定换行宽度（min=max）：wordWrap QLabel 的 sizeHint 在未布局时按首选宽度
         # 计算行数，与实际渲染宽度不一致会导致 QListWidget 行高误差（内容底部空白/
         # 裁剪）；固定宽度后 sizeHint 与实际渲染一致，条目高度精确紧凑
-        route_label.setFixedWidth(200)
+        route_label.setFixedWidth(170)
         text_layout.addWidget(route_label)
 
         # 详情行：路线长度与耗时（distance 米 / duration 秒，无有效数据时隐藏）
@@ -196,6 +198,19 @@ class RouteHistoryItem(QWidget):
         self.export_button.setEnabled(True)
         layout.addWidget(self.export_button, 0, Qt.AlignVCenter)
 
+        # 获取海拔按钮（最右侧）：已有海拔数据 → 高亮；无 → 普通样式
+        self.elevation_button = QPushButton()
+        self.elevation_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
+        self.elevation_button.setText("⛰")
+        self.elevation_button.setToolTip('获取海拔数据')
+        self.elevation_button.clicked.connect(
+            lambda: self.elevation_fetch_clicked.emit(self.history_data))
+        layout.addWidget(self.elevation_button, 0, Qt.AlignVCenter)
+
+        # 按历史数据初始化海拔状态（已含海拔 → 高亮）
+        self.set_elevation_available(
+            self._has_elevation(self.history_data.get('route_points')))
+
         # 加载交通方式图标
         self._load_mode_icon()
 
@@ -245,6 +260,59 @@ class RouteHistoryItem(QWidget):
                 border: 1px solid __BORDER__;
             }
         """)
+
+    @staticmethod
+    def _has_elevation(route_points) -> bool:
+        """路线点是否已含海拔数据（任一点为三元组且第三维非 None）"""
+        return any(
+            p is not None and len(p) >= 3 and p[2] is not None
+            for p in (route_points or []))
+
+    def set_elevation_available(self, available: bool):
+        """设置海拔数据可用状态（有海拔 → 按钮高亮，提示可重新获取）"""
+        self.elevation_available = available
+        self._update_elevation_button_style()
+
+    def _update_elevation_button_style(self):
+        """更新获取海拔按钮样式：高亮（已获取）与普通（未获取）两种"""
+        if self.elevation_available:
+            # 已获取：实心强调蓝底高亮（与灰底未获取状态对比明显），提示可重新获取
+            self.elevation_button.setToolTip('已获取海拔数据，点击重新获取')
+            theme.apply_to_sub(self.elevation_button, """
+                QPushButton {
+                    font-size: 16px;
+                    background-color: #4a90e2;
+                    border: 1px solid #2c5a9c;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #5aa0f0;
+                    border: 1px solid #2c5a9c;
+                }
+                QPushButton:pressed {
+                    background-color: #3a7cc8;
+                    border: 1px solid #2c5a9c;
+                }
+            """)
+        else:
+            # 未获取：普通样式（与导出按钮一致）
+            self.elevation_button.setToolTip('获取海拔数据')
+            theme.apply_to_sub(self.elevation_button, """
+                QPushButton {
+                    font-size: 16px;
+                    background-color: __HOVER__;
+                    border: 1px solid __BORDER__;
+                    border-radius: 4px;
+                }
+                QPushButton:hover:enabled {
+                    background-color: __HOVER_STRONG__;
+                    border: 1px solid __BORDER__;
+                }
+                QPushButton:pressed:enabled {
+                    background-color: __HOVER_STRONG__;
+                    border: 1px solid __BORDER__;
+                }
+            """)
 
     def _load_mode_icon(self):
         """加载交通方式图标"""
@@ -570,6 +638,7 @@ class RoutePlanPanel(QWidget):
     history_export_gpx_clicked = pyqtSignal(dict, object, object)  # 历史记录导出GPX按钮点击：(历史记录数据, 按钮实例, 条目实例)
     history_delete_clicked = pyqtSignal(dict)  # 删除历史记录：(历史记录数据)
     history_clear_all_clicked = pyqtSignal()  # 清空所有历史记录
+    history_elevation_fetch_clicked = pyqtSignal(dict)  # 历史记录获取海拔按钮点击：(历史记录数据)
 
     def __init__(self, parent=None, geo_info_storage=None):
         """初始化路线规划面板
@@ -1864,6 +1933,22 @@ class RoutePlanPanel(QWidget):
                 widget.set_route_data_available(has_route_data)
                 break
 
+    def update_history_elevation_status(self, history_data: dict, available: bool):
+        """更新历史记录的海拔获取状态（获取成功后按钮转高亮）
+
+        Args:
+            history_data: 历史记录数据
+            available: 是否已获取海拔数据
+        """
+        if not hasattr(self, 'history_widgets'):
+            return
+
+        # 根据历史记录数据找到对应的widget并更新海拔按钮状态
+        for widget in self.history_widgets:
+            if widget.history_data == history_data:
+                widget.set_elevation_available(available)
+                break
+
     def set_start_location(self, text: str):
         """设置起点"""
         self.start_input.setText(text)
@@ -1908,6 +1993,8 @@ class RoutePlanPanel(QWidget):
             history_widget.export_gpx_clicked.connect(self.history_export_gpx_clicked.emit)
             # 连接删除按钮信号
             history_widget.delete_clicked.connect(self.history_delete_clicked.emit)
+            # 连接获取海拔按钮信号
+            history_widget.elevation_fetch_clicked.connect(self.history_elevation_fetch_clicked.emit)
 
             # 创建列表项
             item = QListWidgetItem()

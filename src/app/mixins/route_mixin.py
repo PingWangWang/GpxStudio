@@ -1,4 +1,4 @@
-"""RouteMixin — 路线规划面板事件处理方法"""
+﻿"""RouteMixin — 路线规划面板事件处理方法"""
 from modules.geolocation import CoordinateTransform
 from modules.map import MapRenderer
 from services.config.map_config import map_config
@@ -79,6 +79,8 @@ class RouteMixin:
         """路线规划按钮点击"""
         self.logger.info(f"[路线规划] 开始规划路线: {start} → {end}, 方式: {mode}")
         self.logger.info(f"[路线规划] 途径点: {waypoints}")
+        # 新规划开始：清除历史选择的挂起剖面（避免残留显示在新规划之后）
+        self._pending_history_elevation_show = None
 
         if not start or not end:
             self.route_plan_panel.show_route_plan_error("请先设置起点和终点")
@@ -394,8 +396,8 @@ class RouteMixin:
             self.logger.info(f"[路线面板] 起点坐标: {start_coords}, 终点坐标: {end_coords}")
             self.logger.info(f"[路线面板] 路线点数量: {len(route_points)}, 距离: {distance}m, 时长: {duration}s")
 
-            if self.route_plan_panel is not None:
-                self.route_plan_panel.show_loading()
+            # 主窗口工具栏加载指示器（⏳ 旋转动画）：覆盖路线渲染与海拔折线图渲染期间
+            self.show_loading()
 
             self.data_manager.clear_all_route_data()
             self.data_manager.clear_waypoints()
@@ -503,11 +505,12 @@ class RouteMixin:
                         self.map_manager.show_route_on_map()
                         self.logger.info(f"[路线面板] 路线已渲染到地图")
 
-                        if self.route_plan_panel is not None:
-                            self.route_plan_panel.update_history_route_data_status(history_data, True)
+                        # 历史路线海拔剖面：挂起到地图页面加载完成后再显示
+                        # （先渲染路线后显示折线图；页面加载完成后经 _on_map_loaded 显示并关闭加载指示器）
+                        self._pending_history_elevation_show = (converted_route_points, duration)
 
                         if self.route_plan_panel is not None:
-                            self.route_plan_panel.hide_loading()
+                            self.route_plan_panel.update_history_route_data_status(history_data, True)
                 else:
                     self.logger.info(f"[路线面板] 历史记录中没有路线点数据，只显示起点和终点")
 
@@ -517,13 +520,11 @@ class RouteMixin:
                     if self.data_manager.start_coords and self.data_manager.end_coords:
                         self.map_manager.update_map_preview(auto_fit=True)
 
-                    if self.route_plan_panel is not None:
-                        self.route_plan_panel.hide_loading()
+                    self.hide_loading()
 
         except Exception as e:
             self.logger.error(f"[路线面板] 处理历史记录选择时出错: {str(e)}")
-            if self.route_plan_panel is not None:
-                self.route_plan_panel.hide_loading()
+            self.hide_loading()
 
     def _auto_search_history_locations(self, start: str, end: str, mode: str, history_data: dict):
         """自动搜索历史记录中的起点和终点坐标"""
@@ -584,6 +585,164 @@ class RouteMixin:
 
         self.route_plan_panel.hide_loading()
         self.route_manager.select_route_alternative(index)
+
+    def _show_history_elevation_profile(self, route_points, duration):
+        """历史路线海拔剖面显示（仅渲染，不自动获取）
+
+        历史切换时直接从历史 route_points 计算剖面显示（绕开 data_manager，
+        其 route_alternatives 在历史切换时已被清空）：
+        有海拔 → 直接显示剖面；无海拔 → 显示空占位。
+        海拔数据仅在用户手动点击"获取海拔"按钮时获取。
+
+        Args:
+            route_points: 历史路线点列表 [(lat, lon) 或 (lat, lon, elevation), ...]
+            duration: 路线耗时（秒）
+        """
+        try:
+            from services.config.map_config import map_config
+            from ui.widgets.elevation_profile_panel import ElevationProfilePanel
+            panel = getattr(self, 'elevation_profile_panel', None)
+            if panel is None:
+                return
+            # 开关关闭时隐藏面板（与 _show_elevation_profile 三分支一致）
+            if not map_config.get_show_elevation_profile():
+                panel.clear_route()
+                return
+            distances, elevations = ElevationProfilePanel.compute_profile(route_points)
+            if distances is None:
+                # 无有效海拔点：清空悬停映射（无剖面数据时圆点不显示）
+                self._profile_route_points = None
+                panel.show_empty()
+                return
+            # 缓存有效路线点序列（与剖面序列一一对应，过滤规则与 compute_profile 一致）：
+            # 折线图悬停索引 → 直取路线坐标，在地图上显示定位圆点
+            self._profile_route_points = [
+                p for p in route_points
+                if p is not None and len(p) >= 3 and p[2] is not None
+            ]
+            # 路线名称不在面板显示，传空串
+            panel.show_route("", distances, elevations, duration or 0)
+        except Exception as e:
+            self.logger.error(f"[路线面板] 历史路线海拔剖面显示失败: {e}")
+
+    @staticmethod
+    def _history_has_elevation(route_points) -> bool:
+        """历史路线点是否已含海拔数据（任一点为三元组且第三维非 None）"""
+        return any(
+            p is not None and len(p) >= 3 and p[2] is not None
+            for p in (route_points or []))
+
+    def _on_elevation_chart_hovered(self, index: int, distance: float, elevation: float):
+        """海拔折线图悬停：地图路线上显示对应位置的定位圆点
+
+        剖面序列与显示剖面时的有效路线点序列（_profile_route_points）一一对应，
+        索引直取坐标 → 转 GCJ-02（与地图渲染层一致）→ JS 动态更新圆点。
+        """
+        try:
+            points = getattr(self, '_profile_route_points', None)
+            if not points or not (0 <= index < len(points)):
+                return
+            point = points[index]
+            # 路线点为 WGS-84，地图渲染层统一转 GCJ-02，此处保持一致
+            lat, lon = CoordinateTransform.convert(point[0], point[1], 'WGS-84', 'GCJ-02')
+            if self.map_view is not None and self.map_view.page() is not None:
+                from modules.map.js_bridge import MapJsBridge
+                MapJsBridge.update_elevation_dot(self.map_view.page(), lat, lon)
+        except Exception as e:
+            self.logger.debug(f"[海拔悬停] 地图圆点更新失败: {e}")
+
+    def _on_elevation_chart_hover_ended(self):
+        """海拔折线图悬停结束：隐藏地图路线上的定位圆点"""
+        try:
+            if self.map_view is not None and self.map_view.page() is not None:
+                from modules.map.js_bridge import MapJsBridge
+                MapJsBridge.hide_elevation_dot(self.map_view.page())
+        except Exception as e:
+            self.logger.debug(f"[海拔悬停] 地图圆点隐藏失败: {e}")
+
+    def _on_history_elevation_fetch_clicked(self, history_data: dict):
+        """历史条目"获取海拔"按钮点击：手动获取该历史路线的海拔
+
+        无海拔 → 直接获取；已有海拔 → 弹窗确认后重新获取（覆盖原海拔数据）。
+        获取完成后经 on_elevation_task_completed → elevation_fetch_completed
+        回写历史记录并刷新剖面图。
+
+        Args:
+            history_data: 历史记录数据
+        """
+        try:
+            route_points = history_data.get('route_points', [])
+            duration = history_data.get('duration', 0)
+
+            # 已有海拔：弹窗确认是否重新获取（覆盖原数据）
+            if self._history_has_elevation(route_points):
+                from ui.dialogs.custom_message_dialog import CustomMessageDialog
+                dialog = CustomMessageDialog(
+                    self, title="重新获取海拔",
+                    message="该路线已获取过海拔数据。\n是否重新获取？\n重新获取将覆盖原有的海拔数据。",
+                    show_cancel=True, ok_text="重新获取")
+                if not dialog.exec_():
+                    self.logger.info("[路线面板] 用户取消重新获取海拔")
+                    return
+
+            self.logger.info(f"[路线面板] 手动获取历史路线海拔: "
+                             f"{history_data.get('start', '')} → {history_data.get('end', '')}")
+
+            # 构造单方案触发异步获取（选中索引默认 0，即该历史路线）
+            task_id = self.route_manager._fetch_elevation_data_async(
+                [{'route_points': list(route_points), 'duration': duration}])
+            if task_id:
+                # 记录待回写历史（task_id → history_data），完成后回写海拔并持久化
+                pending = getattr(self, '_pending_history_elevation', None)
+                if pending is None:
+                    pending = self._pending_history_elevation = {}
+                pending[task_id] = history_data
+                # 开启主窗口工具栏加载指示器（⏳ 旋转动画），任务完成后自动关闭
+                self.show_loading()
+        except Exception as e:
+            self.logger.error(f"[路线面板] 历史路线海拔获取失败: {e}")
+
+    def _on_elevation_fetch_completed(self, task_id, result):
+        """海拔获取任务完成回调：回写海拔到历史记录并更新按钮高亮
+
+        Args:
+            task_id: 任务ID（与 _pending_history_elevation 关联）
+            result: 更新后的路线方案列表（含海拔），失败时为 None
+        """
+        pending = getattr(self, '_pending_history_elevation', None)
+        if not pending:
+            return
+        history_data = pending.pop(task_id, None)
+        # 所有海拔获取任务完成后关闭加载指示器（并发任务未完成时保持旋转）
+        if not pending:
+            self.hide_loading()
+        if history_data is None or not result:
+            return
+        try:
+            # 取单方案更新后的路线点（带海拔）
+            updated = result[0].get('route_points')
+            if not updated:
+                return
+
+            # 持久化回写历史记录（storage 文件）
+            if self.route_history_storage is not None:
+                self.route_history_storage.update_route_points(history_data, updated)
+
+            # 同步面板内存数据源（_last_history_list 与条目 widget 同引用）
+            if self.route_plan_panel is not None:
+                last_list = getattr(self.route_plan_panel, '_last_history_list', None)
+                if last_list:
+                    for rec in last_list:
+                        if (rec.get('start') == history_data.get('start')
+                                and rec.get('end') == history_data.get('end')
+                                and rec.get('mode') == history_data.get('mode')
+                                and (rec.get('waypoints') or []) == (history_data.get('waypoints') or [])):
+                            rec['route_points'] = list(updated)
+                            break
+                # 更新条目按钮高亮（已获取海拔）
+                self.route_plan_panel.update_history_elevation_status(history_data, True)
+        except Exception as e:
+            self.logger.error(f"[路线面板] 历史路线海拔回写失败: {e}")
 
     def _show_route_alternatives(self, alternatives: list, selected_index: int = 0):
         """显示路线待选列表"""

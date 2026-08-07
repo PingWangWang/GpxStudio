@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 地图 JavaScript 调用封装层
@@ -7,6 +7,7 @@
 JS 代码存放在同目录的 js/ 子目录中，首次加载后缓存到内存。
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Callable, Optional
@@ -75,6 +76,38 @@ class MapJsBridge:
             page.runJavaScript(js, callback)
         else:
             page.runJavaScript(js)
+
+    # ------------------------------------------------------------------
+    # 自动缩放
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def fit_bounds(cls, page, bounds_json: str, center_lat: float, center_lng: float,
+                   zoom: int) -> None:
+        """自动缩放：当前视图已包含目标边界则跳过，否则精确适配（不重建地图）。
+
+        JS 侧用 map.getBounds().contains() 判断是否需要刷新：
+        已包含 → 零开销跳过；未包含 → fitBounds（单点退化 setView）。
+
+        Args:
+            page:        QWebEnginePage 实例。
+            bounds_json: 目标边界 JSON [[min_lat, min_lng], [max_lat, max_lng]]（GCJ-02）。
+            center_lat:  单点回退中心纬度（GCJ-02）。
+            center_lng:  单点回退中心经度（GCJ-02）。
+            zoom:        单点回退缩放级别。
+        """
+        b = json.loads(bounds_json)
+        js = (
+            _load('map_fit_bounds.js')
+            .replace('__MIN_LAT__', str(b[0][0]))
+            .replace('__MIN_LNG__', str(b[0][1]))
+            .replace('__MAX_LAT__', str(b[1][0]))
+            .replace('__MAX_LNG__', str(b[1][1]))
+            .replace('__CENTER_LAT__', str(center_lat))
+            .replace('__CENTER_LNG__', str(center_lng))
+            .replace('__ZOOM__', str(zoom))
+        )
+        page.runJavaScript(js)
 
     # ------------------------------------------------------------------
     # 中心点平移
@@ -174,3 +207,31 @@ class MapJsBridge:
             page.runJavaScript(js, callback)
         else:
             page.runJavaScript(js)
+
+    # ------------------------------------------------------------------
+    # 海拔剖面悬停圆点
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def update_elevation_dot(cls, page, lat: float, lon: float) -> None:
+        """在地图路线上更新/创建海拔悬停定位圆点（不重载页面）。
+
+        折线图悬停时调用：首次创建圆点，后续 setLatLng 移动复用实例，
+        避免高频悬停下反复建删图层。
+
+        Args:
+            page: QWebEnginePage 实例。
+            lat:  纬度（GCJ-02）。
+            lon:  经度（GCJ-02）。
+        """
+        js = (
+            _load('map_elevation_dot.js')
+            .replace('__LAT__', str(lat))
+            .replace('__LON__', str(lon))
+        )
+        page.runJavaScript(js)
+
+    @classmethod
+    def hide_elevation_dot(cls, page) -> None:
+        """隐藏海拔悬停定位圆点（鼠标离开折线图时调用）。"""
+        page.runJavaScript(_load('map_elevation_dot_hide.js'))
