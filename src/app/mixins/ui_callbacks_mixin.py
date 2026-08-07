@@ -164,6 +164,9 @@ class UICallbacksMixin:
                 self.data_manager.set_start_location((lat, lon), name)
             elif search_type == 'end':
                 self.data_manager.set_end_location((lat, lon), name)
+            # 同步会话标志：定位填充同样视为本会话已设置起点/终点，
+            # 避免后续地址选择触发"会话首次设置"清空已设的"我的位置"
+            self._route_plan_session_set = True
         self.map_manager.show_location_on_map(lat, lon, popup_text)
 
     def _show_route_on_map(self):

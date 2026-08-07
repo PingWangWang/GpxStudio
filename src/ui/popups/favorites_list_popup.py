@@ -101,7 +101,7 @@ class FavoritesListPopup(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
-        # 顶部工具按钮行：导入 / 导出 / 清空（三按钮均分整个宽度）
+        # 顶部工具按钮行：导入 / 导出 / 清空 / 关闭（四按钮均分整个宽度）
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(6)
 
@@ -125,6 +125,14 @@ class FavoritesListPopup(QWidget):
         self.clear_btn.clicked.connect(self.clear_clicked.emit)
         self.clear_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         toolbar_layout.addWidget(self.clear_btn, 1)
+
+        # 关闭按钮：hide 经 hideEvent → closed 信号自动恢复工具栏按钮态
+        self.close_btn = QPushButton("关闭")
+        self.close_btn.setObjectName("toolButton")
+        self.close_btn.setToolTip("关闭收藏夹列表")
+        self.close_btn.clicked.connect(self.hide)
+        self.close_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar_layout.addWidget(self.close_btn, 1)
 
         layout.addLayout(toolbar_layout)
 

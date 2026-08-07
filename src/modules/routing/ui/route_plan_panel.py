@@ -27,6 +27,37 @@ class RouteHistoryItem(QWidget):
         self.has_route_data = False  # 是否有完整路线数据
         self._init_ui()
 
+    @staticmethod
+    def _format_route_detail(distance, duration) -> str:
+        """格式化路线详情文本（长度 · 耗时）
+
+        单位换算：distance 米（≥1000 显示公里）、duration 秒（≥3600 显示小时）。
+        数据缺失或为 0 时返回空字符串（调用方据此隐藏详情行，兼容旧历史记录）。
+
+        Args:
+            distance: 路线长度（米），可为 None
+            duration: 耗时（秒），可为 None
+
+        Returns:
+            str: 详情文本，如 "12.5 公里 · 25 分钟"；无有效数据返回 ""
+        """
+        parts = []
+        if distance:
+            if distance >= 1000:
+                parts.append(f"{distance / 1000:.1f} 公里")
+            else:
+                parts.append(f"{distance:.0f} 米")
+        if duration:
+            if duration >= 3600:
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                parts.append(f"{hours} 小时 {minutes} 分钟" if minutes else f"{hours} 小时")
+            elif duration >= 60:
+                parts.append(f"{duration // 60} 分钟")
+            else:
+                parts.append(f"{duration:.0f} 秒")
+        return " · ".join(parts)
+
     def _init_ui(self):
         """初始化UI"""
         layout = QHBoxLayout(self)
@@ -54,6 +85,12 @@ class RouteHistoryItem(QWidget):
             # 没有途径点，格式为：起点 → 终点
             route_text = f"{start} → {end}"
 
+        # 文本列（垂直）：路线文本 + 详情行（长度/耗时）
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
         route_label = QLabel(route_text)
         theme.apply_to_sub(route_label, """
             QLabel {
@@ -63,8 +100,28 @@ class RouteHistoryItem(QWidget):
             }
         """)
         route_label.setWordWrap(True)
-        route_label.setMaximumWidth(200)  # 设置最大宽度，确保文本自动换行
-        layout.addWidget(route_label, 1)
+        # 固定换行宽度（min=max）：wordWrap QLabel 的 sizeHint 在未布局时按首选宽度
+        # 计算行数，与实际渲染宽度不一致会导致 QListWidget 行高误差（内容底部空白/
+        # 裁剪）；固定宽度后 sizeHint 与实际渲染一致，条目高度精确紧凑
+        route_label.setFixedWidth(200)
+        text_layout.addWidget(route_label)
+
+        # 详情行：路线长度与耗时（distance 米 / duration 秒，无有效数据时隐藏）
+        detail_text = self._format_route_detail(
+            self.history_data.get('distance'),
+            self.history_data.get('duration'))
+        if detail_text:
+            detail_label = QLabel(detail_text)
+            theme.apply_to_sub(detail_label, """
+                QLabel {
+                    color: __TEXT_SECONDARY__;
+                    font-size: 11px;
+                    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                }
+            """)
+            text_layout.addWidget(detail_label)
+
+        layout.addWidget(text_container, 1)
 
         # 搜索次数（放在中间）
         search_count = self.history_data.get('search_count', 1)
@@ -1947,6 +2004,10 @@ class RoutePlanPanel(QWidget):
             self.start_coords = (lat, lon)
         elif search_type == 'end':
             self.end_coords = (lat, lon)
+
+        # 定位成功：关闭最近搜索列表（"我的位置"已填入输入框，列表无需保留）
+        if self.location_history_popup is not None and self.location_history_popup.isVisible():
+            self.location_history_popup.hide()
 
     def _on_history_location_selected(self, location_data: dict):
         """从历史记录中选择了地点

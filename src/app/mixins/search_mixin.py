@@ -94,6 +94,11 @@ class SearchMixin:
 
     def on_route_button_clicked(self):
         self.logger.info("[路线] 路线按钮点击")
+        # 再次点击时关闭面板（toggle 行为），复用取消按钮的完整关闭流程
+        # （停止按钮动画 + 恢复历史模式 + 隐藏）
+        if self.route_plan_panel is not None and self.route_plan_panel.isVisible():
+            self._on_route_panel_cancel()
+            return
         if hasattr(self.route_button, 'start_animation'):
             self.route_button.start_animation()
         self._show_route_plan_panel()
@@ -116,25 +121,20 @@ class SearchMixin:
 
         按钮显隐规则（幂等）：
         - route 按钮：恒显示（搜索/路线两槽位固定不变）
-        - 第 3 槽位（favorites/cancel 二选一）：任一弹窗打开时，
-          收藏夹按钮切换为关闭按钮；弹窗全部关闭后恢复收藏夹按钮
-        - cancel 按钮点击优先关闭收藏夹弹窗——search_mixin.on_cancel_button_clicked
+        - favorites 按钮：仅搜索结果弹窗打开时隐藏（收藏夹弹窗打开不隐藏，
+          收藏夹关闭能力在列表顶部"关闭"按钮，工具栏保持 3 按钮稳定）
+        - cancel 按钮：仅搜索结果弹窗打开时显示（叠加时优先关闭收藏夹弹窗
+          ——search_mixin.on_cancel_button_clicked）
         """
         search_results_open = (self.search_results_popup is not None
                                and self.search_results_popup.isVisible())
-        # 收藏夹弹窗为延迟创建（首次点击收藏夹按钮才创建），须 getattr 防护
-        favorites_popup = getattr(self, 'favorites_popup', None)
-        favorites_open = (favorites_popup is not None
-                          and favorites_popup.isVisible())
-
-        cancel_needed = search_results_open or favorites_open
 
         favorites_button = getattr(self, 'favorites_button', None)
         cancel_button = getattr(self, 'cancel_button', None)
 
         if favorites_button is not None:
-            favorites_button.setVisible(not cancel_needed)
+            favorites_button.setVisible(not search_results_open)
         if cancel_button is not None:
-            cancel_button.setVisible(cancel_needed)
-            if cancel_needed:
+            cancel_button.setVisible(search_results_open)
+            if search_results_open:
                 cancel_button.raise_()
