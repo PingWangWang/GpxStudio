@@ -187,6 +187,9 @@ class ContextMenuMixin:
         """右键菜单：设为起点（新版）"""
         self.logger.info(f"[右键菜单] 设为起点: ({lat}, {lon})")
 
+        # 互斥：先关闭收藏夹弹窗（若展开），避免与路线面板重叠显示
+        self._close_favorites_panel()
+
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
             self._update_route_panel_position()
@@ -207,6 +210,9 @@ class ContextMenuMixin:
     def _on_context_menu_add_waypoint_new(self, lat: float, lon: float):
         """右键菜单：设为途经点（新版）"""
         self.logger.info(f"[右键菜单] 设为途经点: ({lat}, {lon})")
+
+        # 互斥：先关闭收藏夹弹窗（若展开），避免与路线面板重叠显示
+        self._close_favorites_panel()
 
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
@@ -241,6 +247,9 @@ class ContextMenuMixin:
     def _on_context_menu_set_end_new(self, lat: float, lon: float):
         """右键菜单：设为终点（新版）"""
         self.logger.info(f"[右键菜单] 设为终点: ({lat}, {lon})")
+
+        # 互斥：先关闭收藏夹弹窗（若展开），避免与路线面板重叠显示
+        self._close_favorites_panel()
 
         if not self.route_plan_panel.isVisible():
             self.route_plan_panel.show()
@@ -367,5 +376,10 @@ class ContextMenuMixin:
         self.data_manager.clear_all_route_data()
         self.route_plan_panel.clear_all_inputs()
         self.map_manager.clear_map_and_keep_view()
+
+        # 同步清空地址搜索框（历史/搜索点击时地址名会回填到搜索框，
+        # 地图标识已清理，搜索框内容一并清空保持一致）
+        if self.search_input is not None:
+            self.search_input.clear()
 
         self.logger.info("[右键菜单] 地图已清空")

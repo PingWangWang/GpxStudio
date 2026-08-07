@@ -24,6 +24,7 @@ ICON_INFO = "info-sign"  # 信息图标
 ICON_SUCCESS = "play"  # 成功图标
 ICON_WARNING = "star"  # 警告图标
 ICON_ERROR = "stop"  # 错误图标
+ICON_DOT = ""  # 纯色气泡（当前选中地址标识，无内部图形，与起点/终点图标区分）
 
 # 定位错误消息
 GEOLOCATION_ERROR_MESSAGES = {

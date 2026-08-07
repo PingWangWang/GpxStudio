@@ -237,7 +237,8 @@ class SearchHistoryPopup(QListWidget):
         favorite_button.clicked.connect(
             lambda checked=False, r=record, btn=favorite_button, fav=is_fav:
                 self._on_favorite_button_clicked(btn, fav, r))
-        row_layout.addWidget(favorite_button, 0, Qt.AlignTop)
+        # 垂直居中：条目高度高于按钮时按钮保持居中，避免贴顶部
+        row_layout.addWidget(favorite_button, 0, Qt.AlignVCenter)
 
         # 将行控件设置为列表项
         self.addItem(item)

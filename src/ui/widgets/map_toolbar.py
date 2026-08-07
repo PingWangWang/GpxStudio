@@ -23,9 +23,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QVBoxLayout,
 )
 from PyQt5.QtCore import QTimer
-from PyQt5.QtSvg import QSvgRenderer
-from PyQt5.QtGui import QPainter
-from PyQt5.QtCore import Qt, QPointF, QRectF
 from ui.theme import theme
 
 
@@ -134,16 +131,8 @@ class MapToolbar:
         self.zoom_fit_button.clicked.connect(self._app.on_zoom_fit_clicked)
         layout.addWidget(self.zoom_fit_button)
 
-        # 加载指示器（占位，paint 在 _setup_loading_button 中覆盖）
-        self.loading_button = QPushButton()
-        self.loading_button.setText("")
-        self.loading_button.setToolTip("加载状态指示器")
-        self.loading_button.setFixedSize(h, h)
-        theme.apply_to_sub(self.loading_button, """
-            QPushButton { background-color: transparent; border: none;
-                border-radius: 4px; padding: 0px; font-size: 18px; }
-            QPushButton:hover { background-color: __HOVER__; }
-        """)
+        # 加载指示器（正常状态显示静态图标，动画文本在 _setup_loading_button 中轮换）
+        self.loading_button = self._make_btn("⏳", "加载状态指示器", h)
         layout.addWidget(self.loading_button)
 
     # ──────────────────────────────────────────────────────────────────
@@ -258,27 +247,11 @@ class MapToolbar:
     def _setup_loading_button(self):
         app = self._app
 
-        def _paint(event):
-            from core.resource_path import resource_path
-            QPushButton.paintEvent(self.loading_button, event)
-            painter = QPainter(self.loading_button)
-            painter.setRenderHint(QPainter.Antialiasing)
-            rect = self.loading_button.rect()
-            painter.save()
-            painter.translate(QPointF(rect.width() / 2.0, rect.height() / 2.0))
-            painter.rotate(app.loading_rotation)
-            svg = QSvgRenderer(resource_path("res/icons/Loading.svg"))
-            size = rect.height() * 0.7
-            svg.render(painter, QRectF(-size / 2, -size / 2, size, size))
-            painter.restore()
-            painter.end()
-
-        self.loading_button.paintEvent = _paint
-
         # 加载动画定时器（存放在 app 上供其他方法访问）
         app.loading_timer = QTimer()
         app.loading_timer.timeout.connect(app._animate_loading)
-        app.loading_rotation = 0
+        # 动画 emoji 轮换状态（与 init_mixin._animate_loading 对齐）
+        app.loading_emoji_index = 0
         app.is_loading = False
 
     # ──────────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ class MapConfig(IConfigService):
 
         # 确保包含卫星地图路网开关配置
         if 'satellite_show_roads' not in self._config_data:
-            self._config_data['satellite_show_roads'] = True  # 默认显示路网
+            self._config_data['satellite_show_roads'] = False  # 默认不显示路网
             config_updated = True
 
         # 确保包含收藏点显示开关配置
@@ -397,7 +397,7 @@ class MapConfig(IConfigService):
 
     def get_satellite_show_roads(self) -> bool:
         """获取卫星地图是否显示路网"""
-        return self._config_data.get('satellite_show_roads', True)
+        return self._config_data.get('satellite_show_roads', False)
 
     def set_satellite_show_roads(self, show: bool) -> bool:
         """设置卫星地图是否显示路网"""

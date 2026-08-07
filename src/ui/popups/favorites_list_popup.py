@@ -9,7 +9,7 @@
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QSizePolicy)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from typing import List, Dict
 from ui.theme import theme
 
@@ -218,6 +218,9 @@ class FavoritesListPopup(QWidget):
         """)
         # 文本穿透鼠标事件，点击行触发条目选择
         name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        # 长名称自动换行，避免地址名称过长时显示不全；
+        # 换行宽度在条目入列后按列表实际宽度动态设置（见条目尾部调整逻辑）
+        name_label.setWordWrap(True)
         text_layout.addWidget(name_label)
 
         address = fav.get('address', '')
@@ -261,10 +264,26 @@ class FavoritesListPopup(QWidget):
         delete_btn.clicked.connect(
             lambda checked=False, fav_id=fav.get('id'):
                 self.favorite_delete_requested.emit(fav_id))
-        row_layout.addWidget(delete_btn, 0, Qt.AlignTop)
+        # 垂直居中：条目高度高于按钮时按钮保持居中，避免贴顶部
+        row_layout.addWidget(delete_btn, 0, Qt.AlignVCenter)
 
         self.favorites_list.addItem(item)
         self.favorites_list.setItemWidget(item, row_widget)
+
+        # 按列表实际宽度设置名称换行宽度并校正行高：
+        # 延迟到事件循环（弹窗已定位、宽度已确定）后执行，
+        # 避免硬编码宽度导致换行过窄、第一行右侧留白
+        def _adjust_name_wrap():
+            try:
+                view_width = self.favorites_list.viewport().width()
+                # 可用宽度 = 列表宽 - 左右边距 - 金星按钮与间距
+                avail_width = max(view_width - 52, 100)
+                name_label.setMaximumWidth(avail_width)
+                item.setSizeHint(QSize(0, row_widget.sizeHint().height()))
+            except RuntimeError:
+                pass  # 条目已被移除（列表刷新），无需调整
+
+        QTimer.singleShot(0, _adjust_name_wrap)
 
     # ── 交互 ────────────────────────────────────────────────────────────
 

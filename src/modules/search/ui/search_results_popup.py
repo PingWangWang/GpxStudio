@@ -20,6 +20,7 @@ class SearchResultsPopup(QListWidget):
     # 信号：用户选择了搜索结果
     result_selected = pyqtSignal(dict)  # 传递完整的搜索结果字典
     favorite_requested = pyqtSignal(dict)  # 用户点击收藏按钮（切换收藏），传递完整的搜索结果字典
+    closed = pyqtSignal()  # 弹窗被 ESC 键关闭，主窗口刷新工具栏按钮态
 
     def __init__(self, parent=None, map_manager=None):
         """初始化搜索结果下拉列表
@@ -211,26 +212,29 @@ class SearchResultsPopup(QListWidget):
         favorite_button.clicked.connect(
             lambda checked=False, r=result, btn=favorite_button, fav=is_fav:
                 self._on_favorite_button_clicked(btn, fav, r))
-        row_layout.addWidget(favorite_button, 0, Qt.AlignTop)
+        # 垂直居中：条目高度高于按钮时按钮保持居中，避免贴顶部
+        row_layout.addWidget(favorite_button, 0, Qt.AlignVCenter)
 
         # 将行控件设置为列表项
         self.addItem(item)
         self.setItemWidget(item, row_widget)
 
     def _on_item_clicked(self, item: QListWidgetItem):
-        """处理项点击事件"""
+        """处理项点击事件
+
+        点击仅发送结果信号（地图缩放等由主窗口处理），不关闭下拉列表；
+        列表由关闭按钮或 ESC 键关闭，支持连续选择多个地址。
+        """
         result = item.data(Qt.UserRole)
         if result:
-            # 发送信号
             self.result_selected.emit(result)
-
-        # 隐藏下拉列表
-        self.hide()
 
     def keyPressEvent(self, event):
         """处理键盘事件"""
         if event.key() == Qt.Key_Escape:
             self.hide()
+            # 通知主窗口刷新工具栏按钮态（ESC 关闭未走关闭按钮路径）
+            self.closed.emit()
             event.accept()
         else:
             super().keyPressEvent(event)

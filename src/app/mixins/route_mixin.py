@@ -12,6 +12,12 @@ class RouteMixin:
         """显示路线规划面板"""
         self.logger.info("[路线面板] 显示路线规划面板")
 
+        # 新会话开始：重置会话设置标志（本会话首次设置起终点时清空上次残留规划数据）
+        self._route_plan_session_set = False
+
+        # 互斥：先关闭收藏夹弹窗（若展开），避免两面板重叠显示
+        self._close_favorites_panel()
+
         if self.search_history_popup is not None:
             self.search_history_popup.hide()
         if self.search_results_popup is not None:
@@ -59,6 +65,15 @@ class RouteMixin:
 
         if self.route_plan_panel is not None:
             self.route_plan_panel.hide()
+
+    def _close_route_plan_panel(self):
+        """互斥：关闭路线规划面板（若可见），供收藏夹等展开入口调用
+
+        复用取消按钮的完整关闭流程（停止按钮动画 + 恢复历史模式 + 隐藏）。
+        """
+        if (self.route_plan_panel is not None
+                and self.route_plan_panel.isVisible()):
+            self._on_route_panel_cancel()
 
     def _on_route_plan_clicked(self, start: str, end: str, mode: str, waypoints: list):
         """路线规划按钮点击"""
@@ -272,6 +287,12 @@ class RouteMixin:
 
             name = address_data.get('name', '')
             level = address_data.get('level')
+
+            # 本会话首次设置起/终/途径点时，清空上一次会话残留的规划数据（重新规划语义）；
+            # 同一会话内继续设置不清空，避免设置终点时误清已设的起点标识
+            if not getattr(self, '_route_plan_session_set', False):
+                self.data_manager.clear_all_route_data()
+                self._route_plan_session_set = True
 
             if location_type == "start":
                 self.data_manager.set_start_location((lat_float, lng_float), name, level)

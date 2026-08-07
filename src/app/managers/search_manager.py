@@ -453,6 +453,11 @@ class SearchManager(QObject):
         # 保存到历史记录
         self._save_to_history(search_text, result)
 
+        # 收敛 search_results 为当前选中项（与 select_history_result 一致），
+        # 避免 _add_search_results_to_map 渲染其他残留结果导致地图出现多个标识
+        self.data_manager.search_results = [result]
+        self.data_manager.selected_search_result_coords = coords
+
         # 在地图上预览并缩放到对应范围，传递完整的result作为result_data
         self.ui_updater.preview_search_result(coords, name, level, type_info, radius, result)
 

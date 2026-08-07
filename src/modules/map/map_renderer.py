@@ -319,42 +319,43 @@ class MapRenderer:
                     
                     // 初始化路网图层的显示状态和缓存
                     var showRoads = """ + str(map_config.get_satellite_show_roads()).lower() + """;
+                    var isSatelliteMode = """ + str(map_type in ('satellite', 'hybrid')).lower() + """;
                     var roadLayersFound = [];
-                    
+
                     // 初始化路网图层缓存
                     if (!map._roadLayers) {
                         map._roadLayers = [];
                     }
-                    
-                    // 遍历所有图层，通过名称和URL识别路网图层
-                    map.eachLayer(function(layer) {
-                        if (layer instanceof L.TileLayer) {
-                            var layerName = layer.options.name || '';
-                            var layerUrl = layer._url || '';
-                            var isOverlay = layer.options.overlay;
-                            
-                            // 识别路网图层：必须是覆盖层（overlay=True），且名称或URL符合特征
-                            // 修复：街道底图（roadmap）虽然URL含style=8，但它是底图（overlay=False），不应被隐藏
-                            if (isOverlay && (layerName.indexOf('标注') !== -1 || 
-                                              layerName.indexOf('Labels') !== -1 ||
-                                              layerUrl.indexOf('style=8') !== -1 ||
-                                              layerUrl.indexOf('voyager_only_labels') !== -1)) {
-                                
-                                roadLayersFound.push(layer);
-                                map._roadLayers.push(layer);
-                                
-                                if (!showRoads) {
-                                    // 如果配置为不显示路网，移除图层
-                                    if (map.hasLayer(layer)) {
-                                        map.removeLayer(layer);
-                                        console.log('[地图] 初始化：路网图层已隐藏 -', layerName || layerUrl);
+
+                    // 仅在卫星/混合模式下识别路网图层，避免误伤街道底图
+                    // 注意：folium 不会将 name/overlay 序列化进图层 options，
+                    // 因此只能通过 URL 特征识别（高德 style=8 标注层、CartoDB labels 层）
+                    if (isSatelliteMode) {
+                        map.eachLayer(function(layer) {
+                            if (layer instanceof L.TileLayer) {
+                                var layerUrl = layer._url || '';
+
+                                // 识别路网图层：URL 含路网标注特征（高德 style=8、CartoDB voyager_only_labels）
+                                // 街道底图虽同样含 style=8，但此处仅在卫星模式下执行，不会误伤
+                                if (layerUrl.indexOf('style=8') !== -1 ||
+                                    layerUrl.indexOf('voyager_only_labels') !== -1) {
+
+                                    roadLayersFound.push(layer);
+                                    map._roadLayers.push(layer);
+
+                                    if (!showRoads) {
+                                        // 如果配置为不显示路网，移除图层（引用保留在缓存中，可随时恢复）
+                                        if (map.hasLayer(layer)) {
+                                            map.removeLayer(layer);
+                                            console.log('[地图] 初始化：路网图层已隐藏 -', layerUrl);
+                                        }
+                                    } else {
+                                        console.log('[地图] 初始化：路网图层已显示 -', layerUrl);
                                     }
-                                } else {
-                                    console.log('[地图] 初始化：路网图层已显示 -', layerName || layerUrl);
                                 }
                             }
-                        }
-                    });
+                        });
+                    }
                     
                     if (roadLayersFound.length === 0) {
                         console.warn('[地图] 初始化：未找到路网图层（可能不是卫星地图模式）');

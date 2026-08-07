@@ -24,7 +24,7 @@ class MapMixin:
         self.logger.info("[缩放] ZOOM按钮点击，开始计算边界框")
         all_points = []
         if self.map_manager is not None:
-            # 元素全集：起终点/途径点/路线点 + 当前位置标识 + 收藏点（受开关控制）
+            # 元素全集：起终点/途径点/路线点 + 当前位置标识（收藏点不参与缩放范围计算）
             all_points = self.map_manager.get_all_visible_element_coords()
         if not all_points:
             self.logger.warning("[缩放] 没有找到地图元素，保持现状")
@@ -36,7 +36,11 @@ class MapMixin:
         zoom = 15 if diagonal == 0 else max(2, min(18, int(10 - math.log(diagonal, 2))))
         self.logger.info(f"[缩放] 计算完成：中心点={center}，缩放级别={zoom}")
         if self.map_manager is not None:
-            self.map_manager.show_map(center=center, zoom=zoom, title="地图")
+            # 多点场景传入 fit_points：由 Leaflet fitBounds 精确适配视野（含 padding），
+            # 避免手算缩放级别导致元素出视野或贴边；单点保持手算 zoom
+            self.map_manager.show_map(
+                center=center, zoom=zoom, title="地图",
+                fit_points=all_points if len(all_points) > 1 else None)
 
     def _on_search_history_my_location(self):
         """搜索历史首行"我的位置"点击：触发定位"""
@@ -277,6 +281,16 @@ class MapMixin:
 
     # ── 收藏夹弹窗 ──────────────────────────────────────────────────────
 
+    def _close_favorites_panel(self):
+        """互斥：关闭收藏夹弹窗（若可见），供路线面板等展开入口调用
+
+        收藏夹弹窗 hide 时经 hideEvent → closed 信号自动刷新工具栏按钮态，
+        调用方无需额外恢复操作。
+        """
+        favorites_popup = getattr(self, 'favorites_popup', None)
+        if favorites_popup is not None and favorites_popup.isVisible():
+            favorites_popup.hide()
+
     def on_favorites_button_clicked(self):
         """工具栏收藏夹按钮：展开/收起收藏夹列表"""
         self.logger.info("[收藏夹] 收藏夹按钮点击")
@@ -298,6 +312,9 @@ class MapMixin:
             self._refresh_toolbar_buttons()
             return
 
+        # 互斥：先关闭路线规划面板（若展开），再展开收藏夹列表，避免两面板重叠显示
+        self._close_route_plan_panel()
+
         self.favorites_popup.refresh()
         # 先 show 再定位：update_search_popups_position 仅处理可见弹窗
         # （isVisible 过滤），show 前调用会跳过导致弹窗落在残留位置
@@ -308,7 +325,7 @@ class MapMixin:
         PopupPositioner.update_search_popups_position(
             None, None, getattr(self, 'search_container', None),
             self.logger, favorites_popup=self.favorites_popup)
-        # 弹窗展开后统一刷新按钮态（收藏夹按钮隐藏、关闭按钮显示）
+        # 弹窗展开后统一刷新按钮态（第 3 按钮切换为关闭按钮，保持 3 按钮稳定）
         self._refresh_toolbar_buttons()
 
     def _on_favorites_selected(self, fav: dict):

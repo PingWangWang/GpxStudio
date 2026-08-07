@@ -173,6 +173,8 @@ class InitMixin:
             self.search_results_popup = SearchResultsPopup(self, map_manager=map_manager)
             self.search_results_popup.result_selected.connect(self._on_result_selected)
             self.search_results_popup.favorite_requested.connect(self._on_favorite_requested)
+            # ESC 关闭列表时刷新工具栏按钮态（关闭按钮路径自带刷新）
+            self.search_results_popup.closed.connect(self._refresh_toolbar_buttons)
         except ImportError as e:
             (self.logger or print)(f"无法导入搜索弹出面板: {e}") if self.logger else print(f"无法导入搜索弹出面板: {e}")
 
@@ -644,7 +646,8 @@ class InitMixin:
     def _do_show_loading(self):
         if not self.is_loading:
             self.is_loading = True
-            self.loading_rotation = 0
+            self.loading_emoji_index = 0
+            self.loading_button.setText("🔄")
             self.loading_timer.start(50)
             self.loading_button.setToolTip("正在加载...")
             self.logger.debug("[加载] 开始加载动画")
@@ -654,14 +657,13 @@ class InitMixin:
         if self.is_loading:
             self.is_loading = False
             self.loading_timer.stop()
-            self.loading_rotation = 0
-            self.loading_button.update()
+            self.loading_emoji_index = 0
+            self.loading_button.setText("⏳")  # 恢复静态图标（正常状态占位）
             self.loading_button.setToolTip("加载状态指示器")
             self.logger.debug("[加载] 停止加载动画")
         else:
             self.loading_timer.stop()
-            self.loading_rotation = 0
-            self.loading_button.update()
+            self.loading_emoji_index = 0
 
     def _reset_loading_icon(self):
         pass
@@ -669,8 +671,10 @@ class InitMixin:
     def _animate_loading(self):
         if not self.is_loading:
             return
-        self.loading_rotation = (self.loading_rotation + 15) % 360
-        self.loading_button.update()
+        # emoji 轮换动画（与其他按钮的 emoji 图标风格一致，对齐路线规划面板加载动画）
+        loading_emojis = ["🔄", "⏳", "⌛"]
+        self.loading_emoji_index = (self.loading_emoji_index + 1) % len(loading_emojis)
+        self.loading_button.setText(loading_emojis[self.loading_emoji_index])
 
     def start_loading_animation(self):
         self.show_loading()

@@ -775,19 +775,61 @@ class MapManager:
             coords.append(self.data_manager.end_coords)
         return coords
 
+    @staticmethod
+    def _to_wgs84_coords(coords, coord_system):
+        """将坐标按其坐标系转换为 WGS-84（自动缩放边界计算统一坐标系用）
+
+        参数:
+            coords: 坐标 (纬度, 经度)
+            coord_system: 坐标系（'WGS-84'/'GCJ-02' 等，None/空按 WGS-84 处理）
+
+        返回:
+            tuple: WGS-84 坐标，或 None（coords 为空）
+        """
+        if not coords:
+            return None
+        if coord_system in (None, '', 'WGS-84'):
+            return (coords[0], coords[1])
+        return CoordinateTransform.convert(coords[0], coords[1], coord_system, 'WGS-84')
+
     def get_all_visible_element_coords(self):
         """获取自动缩放所需的全部可见元素坐标
 
         元素全集：起点/终点/途径点、路线点、当前位置标识（若显示中）、
-        收藏点（若显示开关开启）。全部按 WGS-84 约定返回，不做坐标转换，
-        由调用方（自动缩放）统一参与边界计算。
+        历史/搜索点击的当前地址标识（preview_location，若存在）。
+        起点/终点/途径点/预览标识按其各自保存的坐标系统一转 WGS-84
+        （高德源下路线规划面板设置的起终点为 GCJ-02），路线点为 WGS-84
+        存储约定，统一坐标系后参与边界计算，避免中心点双重转换导致视野偏移。
+        收藏点不参与自动缩放范围计算（地图显示保持原样，仅缩放边界排除）。
 
         返回:
-            list: 坐标点列表 [(lat, lon), ...]
+            list: WGS-84 坐标点列表 [(lat, lon), ...]
         """
-        coords = self._get_all_selected_coords()
+        coords = []
 
-        # 路线点（忽略海拔，仅取前两个元素）
+        # 起点/终点/途径点（按其各自坐标系统一转 WGS-84）
+        if self.data_manager.start_coords:
+            wgs = self._to_wgs84_coords(
+                self.data_manager.start_coords,
+                getattr(self.data_manager, 'start_coord_system', 'WGS-84'))
+            if wgs:
+                coords.append(wgs)
+        for i, wp in enumerate(self.data_manager.waypoints_coords):
+            wp_systems = getattr(self.data_manager, 'waypoint_coord_systems', None)
+            wp_system = 'WGS-84'
+            if wp_systems and i < len(wp_systems):
+                wp_system = wp_systems[i]
+            wgs = self._to_wgs84_coords(wp, wp_system)
+            if wgs:
+                coords.append(wgs)
+        if self.data_manager.end_coords:
+            wgs = self._to_wgs84_coords(
+                self.data_manager.end_coords,
+                getattr(self.data_manager, 'end_coord_system', 'WGS-84'))
+            if wgs:
+                coords.append(wgs)
+
+        # 路线点（WGS-84 存储约定，忽略海拔，仅取前两个元素）
         if self.data_manager.route_points:
             coords.extend([(p[0], p[1]) for p in self.data_manager.route_points if p is not None])
 
@@ -796,10 +838,14 @@ class MapManager:
             coords.append((self.data_manager.location_marker['lat'],
                            self.data_manager.location_marker['lon']))
 
-        # 收藏点（受显示开关控制）
-        if map_config.get_show_favorites():
-            coords.extend([(fav.get('lat', 0), fav.get('lon', 0))
-                           for fav in self.favorites_storage.get_all()])
+        # 历史/搜索点击的当前地址标识（preview_location，按保存的坐标系统一转 WGS-84）
+        preview = getattr(self.data_manager, 'preview_location', None)
+        if preview and preview.get('coords'):
+            wgs = self._to_wgs84_coords(
+                preview['coords'],
+                preview.get('coord_system', 'WGS-84'))
+            if wgs:
+                coords.append(wgs)
 
         return coords
 
@@ -816,7 +862,7 @@ class MapManager:
             result_data: 完整的搜索结果字典，包含coord_system和data_source信息（可选）
         """
         # 导入常量
-        from app.constants import COLOR_SUCCESS, ICON_SUCCESS
+        from app.constants import COLOR_SUCCESS, ICON_DOT
         
         # 提取坐标系统信息（向后兼容：默认为WGS-84）
         coord_system = 'WGS-84'  # 默认值
@@ -871,22 +917,25 @@ class MapManager:
             coord_system=coord_system
         )
 
-        # 添加高亮标记（使用绿色颜色和图标表示选中）
+        # 添加当前选中地址标识（绿色纯气泡，无内部图形，与起点 play / 终点 stop 区分）
         MapRenderer.add_marker(
             m, [coords[0], coords[1]],
             f"<b>已选中: {name}</b>",
-            color=COLOR_SUCCESS, icon=ICON_SUCCESS,
+            color=COLOR_SUCCESS, icon=ICON_DOT,
             map_source=map_source,
             coord_system=coord_system
         )
 
-        # 添加已选择的点（使用普通样式）
+        # 添加已选择的点（起点/终点/途径点）
         self._add_selected_points_to_map(m)
 
         # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
         self._add_favorites_to_map(m)
 
-        # 添加其他搜索结果（使用普通样式，跳过当前预览的结果）
+        # 添加已规划的路线（点击地址后保留已渲染的路线，与路线渲染逻辑互不影响）
+        self._add_route_to_map(m)
+
+        # 添加其他搜索结果（点击选择场景已由 _add_search_results_to_map 内部处理）
         self._add_search_results_to_map(m, preview_coords=coords)
 
         # 保存地图并获取URL
@@ -895,6 +944,7 @@ class MapManager:
         # 在地图视图中加载地图
         try:
             if self.map_view:
+                # setUrl 为原子导航，直接替换当前页面（含旧地图的全部标记）
                 self.map_view.setUrl(url)
                 # 保存当前中心和缩放级别
                 self.current_center = [coords[0], coords[1]]
@@ -953,52 +1003,9 @@ class MapManager:
         self._add_favorites_to_map(m)
         points_add_time = (time.time() - points_add_start) * 1000
 
-        # 添加路线到地图
+        # 添加路线到地图（坐标系转换与渲染统一在 _add_route_to_map 处理）
         route_add_start = time.time()
-
-        # 处理坐标转换：根据地图源和路线来源决定是否需要转换
-        route_points_to_render = self.data_manager.route_points
-
-        # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
-        is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
-
-        if map_source == 'gaode':
-            # 当前地图源是高德地图
-            has_original_gcj02 = False
-            if is_route_planned:
-                # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
-                try:
-                    selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
-                    if selected_route and 'gcj02_route_points' in selected_route:
-                        # 使用原始GCJ-02坐标直接渲染，避免双重转换
-                        route_points_to_render = selected_route['gcj02_route_points']
-                        self.logger.info(f"[路线渲染] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
-                        has_original_gcj02 = True
-                except (IndexError, AttributeError):
-                    # 没有选中的路线方案或索引无效，使用默认转换逻辑
-                    self.logger.warning("[路线渲染] 无法获取选中的路线方案，使用默认坐标转换")
-
-            # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
-            if not has_original_gcj02:
-                transformed_route_points = []
-                for point in route_points_to_render:
-                    if point is not None:
-                        # 提取坐标部分（忽略海拔）
-                        lat, lon = point[0], point[1]
-                        # 转换坐标
-                        gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
-                        # 保留原始格式（可能包含海拔）
-                        if len(point) > 2:
-                            transformed_point = (gcj_lat, gcj_lon, point[2])
-                        else:
-                            transformed_point = (gcj_lat, gcj_lon)
-                        transformed_route_points.append(transformed_point)
-                    else:
-                        transformed_route_points.append(None)
-                route_points_to_render = transformed_route_points
-                self.logger.info(f"[路线渲染] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
-
-        MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
+        self._add_route_to_map(m)
         route_add_time = (time.time() - route_add_start) * 1000
 
         # 调整地图边界以显示完整路线
@@ -1044,6 +1051,64 @@ class MapManager:
 
         total_time = (time.time() - start_time) * 1000
         self.logger.info(f"[路线渲染] 总耗时: {total_time:.2f}ms (创建地图: {map_create_time:.2f}ms, 添加点: {points_add_time:.2f}ms, 添加路线: {route_add_time:.2f}ms, 调整边界: {fit_bounds_time:.2f}ms, 保存地图: {save_map_time:.2f}ms, 加载视图: {view_load_time:.2f}ms)")
+
+    def _add_route_to_map(self, map_obj):
+        """添加路线到地图（内部方法）
+
+        按地图源处理坐标系（高德：优先使用路线方案的原始 GCJ-02 坐标，
+        否则将 WGS-84 转换为 GCJ-02），再渲染路线折线。
+        与 show_route_on_map、preview_search_result 共用，
+        保证任何地图构建路径都完整渲染已规划的路线。
+        """
+        if not self.data_manager.route_points:
+            return
+
+        # 获取当前配置的地图数据源
+        from services.config.map_config import map_config
+        map_source = map_config.get_map_source()
+
+        route_points_to_render = self.data_manager.route_points
+
+        # 检查路线来源：如果存在路线替代方案，说明是通过路线规划服务获取的
+        is_route_planned = hasattr(self.data_manager, 'route_alternatives') and self.data_manager.route_alternatives
+
+        if map_source == 'gaode':
+            # 当前地图源是高德地图
+            has_original_gcj02 = False
+            if is_route_planned:
+                # 路线是通过路线规划服务获取的，检查是否有原始GCJ-02坐标
+                try:
+                    selected_route = self.data_manager.route_alternatives[self.data_manager.selected_route_index]
+                    if selected_route and 'gcj02_route_points' in selected_route:
+                        # 使用原始GCJ-02坐标直接渲染，避免双重转换
+                        route_points_to_render = selected_route['gcj02_route_points']
+                        self.logger.info(f"[路线渲染] 使用原始GCJ-02坐标直接渲染，共{len(route_points_to_render)}个坐标点")
+                        has_original_gcj02 = True
+                except (IndexError, AttributeError):
+                    # 没有选中的路线方案或索引无效，使用默认转换逻辑
+                    self.logger.warning("[路线渲染] 无法获取选中的路线方案，使用默认坐标转换")
+
+            # 如果没有原始GCJ-02坐标，将WGS-84坐标转换为GCJ-02坐标
+            if not has_original_gcj02:
+                transformed_route_points = []
+                for point in route_points_to_render:
+                    if point is not None:
+                        # 提取坐标部分（忽略海拔）
+                        lat, lon = point[0], point[1]
+                        # 转换坐标
+                        gcj_lat, gcj_lon = CoordinateTransform.convert(lat, lon, 'WGS-84', 'GCJ-02')
+                        # 保留原始格式（可能包含海拔）
+                        if len(point) > 2:
+                            transformed_point = (gcj_lat, gcj_lon, point[2])
+                        else:
+                            transformed_point = (gcj_lat, gcj_lon)
+                        transformed_route_points.append(transformed_point)
+                    else:
+                        transformed_route_points.append(None)
+                route_points_to_render = transformed_route_points
+                self.logger.info(f"[路线渲染] 已将{len(transformed_route_points)}个WGS-84坐标转换为GCJ-02坐标")
+
+        MapRenderer.add_route(map_obj, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
 
     def show_location_on_map(self, lat: float, lon: float, popup_text: str):
         """在地图上显示定位结果
@@ -1563,13 +1628,21 @@ class MapManager:
         """
         添加搜索结果到地图（内部方法）
 
+        只渲染"选中的"搜索结果（绿色 ok-sign），非选中结果一律不渲染，
+        保证地图上始终只显示当前选中的地址标识（与预览高亮语义一致）。
+
         参数:
             map_obj: 地图对象
-            preview_coords: 预览坐标（如果指定，则该坐标的标记会被跳过，因为已经用高亮样式显示）
+            preview_coords: 预览坐标（非 None 表示点击选择场景，当前点已由
+                            preview_search_result 高亮为绿色 play，直接跳过整个渲染）
         """
-        # 修改条件：只要有搜索结果就添加，不强制要求 searching_for
-        # 这样历史记录、定位结果等都可以正确保留
+        # 只要有搜索结果就处理，不强制要求 searching_for（历史记录等也可保留）
         if not self.data_manager.search_results:
+            return
+
+        # 点击选择场景（preview_coords 非 None）：当前点已由预览高亮渲染，
+        # 此处不再渲染任何 search_results，避免地图上出现多个地址标识
+        if preview_coords:
             return
 
         for i, location in enumerate(self.data_manager.search_results):
@@ -1585,26 +1658,14 @@ class MapManager:
             def get_address(loc):
                 return loc.get('address', '') if isinstance(loc, dict) else loc.address
 
-            # 如果正在预览某个结果，跳过该结果（避免重复标记）
-            if preview_coords:
-                if (abs(get_lat(location) - preview_coords[0]) < 0.0001 and
-                    abs(get_lon(location) - preview_coords[1]) < 0.0001):
-                    continue
-
-            # 检查是否为选中的结果
+            # 只渲染选中的结果（地图模式切换等非预览场景，保留当前选中标识）
             is_selected = (
                 self.data_manager.selected_search_result_coords and
                 abs(get_lat(location) - self.data_manager.selected_search_result_coords[0]) < 0.0001 and
                 abs(get_lon(location) - self.data_manager.selected_search_result_coords[1]) < 0.0001
             )
-
-            # 根据是否选中选择颜色和图标：选中用绿色，其他用灰色
-            if is_selected:
-                color = "green"
-                icon = "ok-sign"
-            else:
-                color = "gray"
-                icon = "info-sign"
+            if not is_selected:
+                continue
 
             # 获取地图数据源
             from services.config.map_config import map_config
@@ -1613,11 +1674,11 @@ class MapManager:
             # 获取坐标系统（搜索结果若为字典，优先使用其标记）
             coord_system = location.get('coord_system', 'WGS-84') if isinstance(location, dict) else 'WGS-84'
 
-            # 添加搜索结果标记
+            # 添加选中的搜索结果标记（绿色 ok-sign）
             MapRenderer.add_marker(
                 map_obj, [get_lat(location), get_lon(location)],
                 f"{i+1}. {get_address(location)}",
-                color=color, icon=icon,
+                color="green", icon="ok-sign",
                 map_source=map_source,
                 coord_system=coord_system
             )
@@ -1789,7 +1850,7 @@ class MapManager:
         else:
             self.logger.error("[路线重渲染-降级] 地图视图为None")
 
-    def show_map(self, center, zoom=10, title="地图", coord_system='WGS-84'):
+    def show_map(self, center, zoom=10, title="地图", coord_system='WGS-84', fit_points=None):
         """
         显示地图
 
@@ -1798,6 +1859,9 @@ class MapManager:
             zoom: 缩放级别
             title: 地图标题
             coord_system: 传入坐标的坐标系统 ('WGS-84' 或 'GCJ-02')，默认 'WGS-84'
+            fit_points: 可选，WGS-84 坐标点列表；提供时渲染后调用 Leaflet fitBounds
+                        精确适配所有点（含 80px padding），保证点完整处于可视空间内，
+                        替代手算缩放级别的近似（避免元素出视野或贴边）
         """
         from modules.map import MapRenderer
         from services.config.map_config import map_config
@@ -1825,19 +1889,19 @@ class MapManager:
         # 添加收藏点（受 show_favorites 开关控制，双地图源通用）
         self._add_favorites_to_map(m)
         
-        # 如果有预览的地点，添加高亮标记
+        # 如果有预览的地点，添加高亮标记（纯绿色气泡，与起点 play / 终点 stop 区分）
         if hasattr(self.data_manager, 'preview_location') and self.data_manager.preview_location:
-            from app.constants import COLOR_SUCCESS, ICON_SUCCESS
+            from app.constants import COLOR_SUCCESS, ICON_DOT
             preview = self.data_manager.preview_location
             coords = preview['coords']
             name = preview['name']
             coord_system = preview.get('coord_system', 'WGS-84')
-            
+
             # 添加高亮标记
             MapRenderer.add_marker(
                 m, [coords[0], coords[1]],
                 f"<b>已选中: {name}</b>",
-                color=COLOR_SUCCESS, icon=ICON_SUCCESS,
+                color=COLOR_SUCCESS, icon=ICON_DOT,
                 map_source=map_source,
                 coord_system=coord_system
             )
@@ -1886,6 +1950,15 @@ class MapManager:
 
             # 添加路线到地图
             MapRenderer.add_route(m, route_points_to_render, color='#459c50', weight=5, opacity=0.8)
+
+        # 精确适配视野：将指定点转换到地图坐标系后调用 Leaflet fitBounds
+        # （含 80px padding），保证所有点完整处于可视空间内
+        if fit_points:
+            fit_pts = [p for p in fit_points if p is not None]
+            if map_source == 'gaode':
+                fit_pts = [CoordinateTransform.convert(p[0], p[1], 'WGS-84', 'GCJ-02')
+                           for p in fit_pts]
+            MapRenderer.fit_bounds(m, fit_pts)
 
         # 保存地图并获取URL
         url = MapRenderer.save_and_get_url(m)

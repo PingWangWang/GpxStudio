@@ -70,7 +70,7 @@ class SearchMixin:
         if self.search_history_popup is not None:
             self.search_history_popup.hide()
         self.search_manager.select_result_from_dropdown(result, self.current_search_text)
-        # 搜索结果弹窗已自关，刷新工具栏按钮态（恢复路线按钮、隐藏关闭按钮）
+        # 列表保持打开（关闭按钮/ESC 才关闭），刷新按钮态保持「搜索/路线/关闭」
         self._refresh_toolbar_buttons()
 
     def _on_favorite_requested(self, result: dict):
@@ -112,13 +112,13 @@ class SearchMixin:
         self._refresh_toolbar_buttons()
 
     def _refresh_toolbar_buttons(self):
-        """按当前可见弹窗集合统一刷新工具栏按钮态（route/favorites/cancel）
+        """按当前可见弹窗集合统一刷新工具栏第 3 槽位（favorites/cancel）
 
-        按钮显隐由"搜索结果弹窗可见 / 收藏夹弹窗可见"两个状态决定（幂等）：
-        - route 按钮：两个弹窗都关闭时显示
-        - favorites 按钮：收藏夹弹窗关闭时显示（搜索结果弹窗打开时保持）
-        - cancel 按钮：任一弹窗打开时显示（收藏夹关闭后若搜索结果仍开，cancel 保留，
-          保证待选列表可继续关闭——修复多状态叠加时按钮互相覆盖的问题）
+        按钮显隐规则（幂等）：
+        - route 按钮：恒显示（搜索/路线两槽位固定不变）
+        - 第 3 槽位（favorites/cancel 二选一）：任一弹窗打开时，
+          收藏夹按钮切换为关闭按钮；弹窗全部关闭后恢复收藏夹按钮
+        - cancel 按钮点击优先关闭收藏夹弹窗——search_mixin.on_cancel_button_clicked
         """
         search_results_open = (self.search_results_popup is not None
                                and self.search_results_popup.isVisible())
@@ -129,14 +129,11 @@ class SearchMixin:
 
         cancel_needed = search_results_open or favorites_open
 
-        route_button = getattr(self, 'route_button', None)
         favorites_button = getattr(self, 'favorites_button', None)
         cancel_button = getattr(self, 'cancel_button', None)
 
-        if route_button is not None:
-            route_button.setVisible(not cancel_needed)
         if favorites_button is not None:
-            favorites_button.setVisible(not favorites_open)
+            favorites_button.setVisible(not cancel_needed)
         if cancel_button is not None:
             cancel_button.setVisible(cancel_needed)
             if cancel_needed:
