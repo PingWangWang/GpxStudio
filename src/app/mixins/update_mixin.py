@@ -1,4 +1,4 @@
-"""UpdateMixin — 历史记录删除、版本更新检查与安装处理方法"""
+﻿"""UpdateMixin — 历史记录删除、版本更新检查与安装处理方法"""
 import os
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QDialog
@@ -45,33 +45,53 @@ class UpdateMixin:
         task = DeleteTask(self, history_data)
         QThreadPool.globalInstance().start(task)
 
-    def _on_history_clear_all_clicked(self):
-        """清空所有历史记录"""
+    def _on_history_select_all(self):
+        """历史列表全选按钮：toggle 全选/取消全选（按钮高亮随选中状态）"""
+        self.route_plan_panel.toggle_select_all()
+
+    def _on_history_batch_delete_clicked(self):
+        """删除勾选的历史记录（以勾选结果为准）"""
+        records = self.route_plan_panel.get_checked_records()
+        if not records:
+            self._show_warning("提示", "请先勾选要删除的历史记录（点击条目右侧 ☐ 勾选）")
+            return
+
+        # 1. 立即从界面移除勾选记录
+        current_history = []
+        for i in range(self.route_plan_panel.history_list.count()):
+            item = self.route_plan_panel.history_list.item(i)
+            widget = self.route_plan_panel.history_list.itemWidget(item)
+            if widget and hasattr(widget, 'history_data') \
+                    and widget.history_data not in records:
+                current_history.append(widget.history_data)
+        self.route_plan_panel.load_history(current_history)
+
+        # 2. 在后台线程中逐条删除文件
         from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot
         from modules.routing import RouteHistoryStorage
 
-        # 1. 立即清空界面
-        self.route_plan_panel.load_history([])
-
-        # 2. 在后台线程中处理文件清空操作
-        class ClearTask(QRunnable):
-            def __init__(self, app):
+        class DeleteTask(QRunnable):
+            def __init__(self, app, to_delete):
                 super().__init__()
                 self.app = app
+                self.to_delete = to_delete
 
             @pyqtSlot()
             def run(self):
                 try:
                     storage = RouteHistoryStorage()
-                    storage.clear_history()
+                    for rec in self.to_delete:
+                        storage.remove_record(rec)
+                    updated_history = storage.get_history(10)
                     if hasattr(self.app.route_plan_panel, '_last_history_list'):
-                        self.app.route_plan_panel._last_history_list = []
+                        self.app.route_plan_panel._last_history_list = updated_history
                 except Exception as e:
                     if hasattr(self.app, 'logger'):
-                        self.app.logger.error(f"[历史记录] 异步清空失败: {str(e)}")
+                        self.app.logger.error(f"[历史记录] 异步删除失败: {str(e)}")
 
-        task = ClearTask(self)
-        QThreadPool.globalInstance().start(task)
+        QThreadPool.globalInstance().start(DeleteTask(self, records))
+        if hasattr(self, '_show_info'):
+            self._show_info("删除完成", f"已删除 {len(records)} 条历史记录")
 
     def _on_update_available(self, latest_version: str, release_notes: str):
         """发现新版本"""

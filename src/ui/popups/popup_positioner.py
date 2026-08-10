@@ -1,4 +1,4 @@
-"""
+﻿"""
 弹出面板位置计算工具
 
 封装三类位置计算逻辑（均为静态方法，无 Qt 父类）：
@@ -85,7 +85,8 @@ class PopupPositioner:
     @staticmethod
     def update_search_popups_position(search_history_popup, search_results_popup,
                                       search_container, logger=None,
-                                      favorites_popup=None) -> None:
+                                      favorites_popup=None,
+                                      route_manager_popup=None) -> None:
         """主窗口移动/缩放后，按搜索容器锚点重算下拉弹窗的位置与尺寸。
 
         定位公式与弹窗 show 时一致（容器左下角 + 4px 垂直偏移）；
@@ -94,7 +95,7 @@ class PopupPositioner:
         - 最大高度 = 主窗口底部边界 - 弹窗顶部（同一屏幕坐标系，底部留 4px 边距），
           下限为 2 行保证滚动条可用；条目数少时高度随条目数变化，达上限时滚动条生效
         与路线规划面板的跟随机制同构（父窗口事件 → 锚点重算）。
-        搜索历史/搜索结果/收藏夹三个弹窗共用同一公式（锚点均为搜索容器）。
+        搜索历史/搜索结果/收藏夹/路线管理四个弹窗共用同一公式（锚点均为搜索容器）。
 
         参数:
             search_history_popup: SearchHistoryPopup 实例（可为 None）
@@ -102,6 +103,7 @@ class PopupPositioner:
             search_container: 搜索容器 QWidget
             logger: 日志对象（可为 None）
             favorites_popup: FavoritesListPopup 实例（可为 None）
+            route_manager_popup: RouteManagerPopup 实例（可为 None）
         """
         try:
             if search_container is None:
@@ -109,7 +111,8 @@ class PopupPositioner:
 
             container_pos = search_container.mapToGlobal(search_container.rect().bottomLeft())
 
-            for popup in (search_history_popup, search_results_popup, favorites_popup):
+            for popup in (search_history_popup, search_results_popup, favorites_popup,
+                          route_manager_popup):
                 if popup is None or not popup.isVisible():
                     continue
 

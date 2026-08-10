@@ -1,4 +1,4 @@
-"""
+﻿"""
 地图工具栏组件
 
 封装地图面板上所有浮动控件的创建逻辑：
@@ -234,6 +234,11 @@ class MapToolbar:
         self.favorites_button.clicked.connect(self._app.on_favorites_button_clicked)
         layout.addWidget(self.favorites_button)
 
+        # 路线管理按钮（收藏夹右侧，点击展开路线管理列表）
+        self.route_manager_button = self._make_btn("🗂", "路线管理", h)
+        self.route_manager_button.clicked.connect(self._app.on_route_manager_button_clicked)
+        layout.addWidget(self.route_manager_button)
+
         # 关闭按钮（初始隐藏）
         self.cancel_button = self._make_btn("❌", "关闭", h)
         self.cancel_button.clicked.connect(self._app.on_cancel_button_clicked)
@@ -277,6 +282,6 @@ class MapToolbar:
             'zoom_in_button', 'zoom_out_button', 'locate_button', 'zoom_fit_button',
             'loading_button', 'scale_info_label',
             'search_container', 'search_input', 'search_button',
-            'route_button', 'favorites_button', 'cancel_button',
+            'route_button', 'favorites_button', 'route_manager_button', 'cancel_button',
         ):
             setattr(app, attr, getattr(self, attr))

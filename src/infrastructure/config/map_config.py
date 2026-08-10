@@ -1,4 +1,4 @@
-"""
+﻿"""
 地图配置管理
 提供地图数据源配置保存和加载功能
 """
@@ -71,6 +71,11 @@ class MapConfig(IConfigService):
         # 确保包含海拔剖面图显示开关
         if 'show_elevation_profile' not in self._config_data:
             self._config_data['show_elevation_profile'] = True  # 默认显示海拔剖面图
+            config_updated = True
+
+        # 确保包含多路线同时渲染开关
+        if 'multi_route_render' not in self._config_data:
+            self._config_data['multi_route_render'] = False  # 默认关闭（单路线渲染）
             config_updated = True
 
         # 确保包含高德地图配置
@@ -446,6 +451,16 @@ class MapConfig(IConfigService):
             return self.save_config({'elevation_optimize': enabled})
         except Exception:
             return False
+
+    def get_multi_route_render(self) -> bool:
+        """获取多路线同时渲染开关（True=规划方案全部渲染且颜色区分）"""
+        return self._config_data.get('multi_route_render', False)
+
+    def set_multi_route_render(self, enabled: bool) -> bool:
+        """设置多路线同时渲染开关"""
+        if self._config_data.get('multi_route_render') == enabled:
+            return True
+        return self.save_config({'multi_route_render': enabled})
 
     def get_show_elevation_profile(self) -> bool:
         """获取是否显示海拔剖面图"""

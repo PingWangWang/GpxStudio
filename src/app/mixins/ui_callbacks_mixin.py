@@ -177,6 +177,12 @@ class UICallbacksMixin:
                         route_points,
                         getattr(self.data_manager, 'estimated_duration_seconds', 0) or 0)
                     return
+                # 无规划/无 route_points 时：恢复上次显示的剖面路线（库渲染等不写入
+                # data_manager 的路线，开关重开后以此恢复）
+                last_shown = getattr(self, '_last_shown_route', None)
+                if last_shown and last_shown[0]:
+                    self._show_history_elevation_profile(last_shown[0], last_shown[1])
+                    return
                 self._profile_route_points = None
                 panel.show_empty()
                 return
@@ -188,6 +194,8 @@ class UICallbacksMixin:
                 self._profile_route_points = None
                 panel.show_empty()
                 return
+            # 记录当前显示的剖面路线（开关重开时恢复）
+            self._last_shown_route = (list(route_points), duration or 0)
             # 缓存有效路线点序列（与剖面序列一一对应，过滤规则与 compute_profile 一致）：
             # 折线图悬停索引 → 直取路线坐标，在地图上显示定位圆点
             self._profile_route_points = [

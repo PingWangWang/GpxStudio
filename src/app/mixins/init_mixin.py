@@ -214,10 +214,11 @@ class InitMixin:
             self.route_plan_panel.history_selected.connect(self._on_route_history_selected)
             self.route_plan_panel.route_alternative_selected.connect(self._on_route_alternative_selected)
             self.route_plan_panel.export_gpx_clicked.connect(self._on_export_gpx_clicked)
-            self.route_plan_panel.history_export_gpx_clicked.connect(self._on_history_export_gpx_clicked)
-            self.route_plan_panel.history_delete_clicked.connect(self._on_history_delete_clicked)
-            self.route_plan_panel.history_clear_all_clicked.connect(self._on_history_clear_all_clicked)
+            self.route_plan_panel.history_export_clicked.connect(self._on_history_batch_export)
+            self.route_plan_panel.history_select_all_clicked.connect(self._on_history_select_all)
+            self.route_plan_panel.history_batch_delete_clicked.connect(self._on_history_batch_delete_clicked)
             self.route_plan_panel.history_elevation_fetch_clicked.connect(self._on_history_elevation_fetch_clicked)
+            self.route_plan_panel.history_favorite_clicked.connect(self._on_history_favorite_clicked)
         except ImportError as e:
             print(f"无法导入路线规划面板: {e}")
 
@@ -275,6 +276,9 @@ class InitMixin:
         print("开始初始化弹出面板管理")
         self.active_popups = []
         self.installEventFilter(self)
+        # 全局事件过滤器：监听所有控件的鼠标点击（面板外点击自动关闭）
+        from PyQt5.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(self)
         self.last_window_geometry = self.geometry()
         print("弹出面板管理初始化完成")
 
@@ -564,6 +568,7 @@ class InitMixin:
             getattr(self, 'search_container', None),
             self.logger,
             favorites_popup=getattr(self, 'favorites_popup', None),
+            route_manager_popup=getattr(self, 'route_manager_popup', None),
         )
 
     def _update_button_positions(self, container):
@@ -596,16 +601,30 @@ class InitMixin:
                     if hasattr(self.gpx_export_popup, 'picker_popup') and self.gpx_export_popup.picker_popup and self.gpx_export_popup.picker_popup.isVisible():
                         return super().eventFilter(obj, event)
                 self._close_all_popups()
-            elif event.type() == QEvent.WindowActivate:
-                # 收藏夹弹窗展开时，用户点击回主窗口（地图/其他区域）→ 弹窗自动关闭
-                favorites_popup = getattr(self, 'favorites_popup', None)
-                if favorites_popup is not None and favorites_popup.isVisible():
-                    favorites_popup.hide()
             elif event.type() == QEvent.Move:
                 self._update_popup_positions()
             elif event.type() == QEvent.Resize:
                 self._update_popup_positions()
+        # 全局鼠标点击：点击在收藏夹/路线管理面板之外 → 自动关闭面板（失去焦点关闭）
+        elif event.type() == QEvent.MouseButtonPress:
+            self._close_popups_on_outside_click()
         return super().eventFilter(obj, event)
+
+    def _close_popups_on_outside_click(self):
+        """鼠标点击面板外区域时自动关闭收藏夹/路线管理面板
+
+        Tool 面板不抢占焦点，主窗口 WindowActivate 不会随点击触发，
+        故用全局鼠标点击事件判断：点击位置不在面板几何内 → 关闭。
+        """
+        from PyQt5.QtCore import QPoint
+        from PyQt5.QtGui import QCursor
+        cursor_pos = QCursor.pos()
+        for popup_name in ('favorites_popup', 'route_manager_popup'):
+            popup = getattr(self, popup_name, None)
+            if popup is None or not popup.isVisible():
+                continue
+            if not popup.frameGeometry().contains(cursor_pos):
+                popup.hide()
 
     # ------------------------------------------------------------------ #
     #  弹出面板管理                                                        #

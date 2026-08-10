@@ -38,6 +38,10 @@ class RouteMixin:
             fresh_storage = RouteHistoryStorage()
             history_list = fresh_storage.get_history(10)
             self.route_plan_panel.load_history(history_list)
+            # 历史列表重建后同步收藏状态（⭐ 金色/灰色，按路线库查询）：
+            # 必须在 load_history 之后——新记录不含 _favorited 标志，
+            # 需按路线库恢复已收藏条目的高亮
+            self._sync_history_favorite_status()
 
             self.route_plan_panel._switch_transport_mode("driving")
 
@@ -502,12 +506,14 @@ class RouteMixin:
                         self.data_manager.set_route(converted_route_points, duration)
                         self.logger.info(f"[路线面板] 已恢复路线点数据: {len(converted_route_points)} 个点")
 
-                        self.map_manager.show_route_on_map()
-                        self.logger.info(f"[路线面板] 路线已渲染到地图")
+                        # 增量渲染：路线线 + 起终点/途径点标记 + 缩放（不重建页面，避免卡顿）
+                        self._inject_planned_route()
+                        self.logger.info(f"[路线面板] 路线已增量渲染到地图")
 
-                        # 历史路线海拔剖面：挂起到地图页面加载完成后再显示
-                        # （先渲染路线后显示折线图；页面加载完成后经 _on_map_loaded 显示并关闭加载指示器）
-                        self._pending_history_elevation_show = (converted_route_points, duration)
+                        # 页面未重建，直接显示海拔剖面并关闭加载指示器
+                        # （不再挂起到 _on_map_loaded；全量重建路径的挂起机制保留给其它调用）
+                        self._show_history_elevation_profile(converted_route_points, duration)
+                        self.hide_loading()
 
                         if self.route_plan_panel is not None:
                             self.route_plan_panel.update_history_route_data_status(history_data, True)
@@ -620,6 +626,9 @@ class RouteMixin:
                 p for p in route_points
                 if p is not None and len(p) >= 3 and p[2] is not None
             ]
+            # 记录当前显示的剖面路线（开关重开时恢复显示——库渲染等不写入
+            # data_manager 的路线在开关重开后以此恢复）
+            self._last_shown_route = (list(route_points), duration or 0)
             # 路线名称不在面板显示，传空串
             panel.show_route("", distances, elevations, duration or 0)
         except Exception as e:
@@ -659,6 +668,80 @@ class RouteMixin:
                 MapJsBridge.hide_elevation_dot(self.map_view.page())
         except Exception as e:
             self.logger.debug(f"[海拔悬停] 地图圆点隐藏失败: {e}")
+
+    def _get_route_library_storage(self):
+        """获取路线库存储（惰性创建）"""
+        storage = getattr(self, 'route_library_storage', None)
+        if storage is None:
+            from modules.routing.storage.route_library_storage import RouteLibraryStorage
+            storage = self.route_library_storage = RouteLibraryStorage()
+        return storage
+
+    def _sync_history_favorite_status(self):
+        """同步历史列表各条目的收藏状态（⭐ 金色/灰色，按路线库查询）
+
+        遍历 _last_history_list（与条目 widget 同引用）更新收藏标志并写回
+        `_favorited`：即使历史面板不可见（widgets 为空），标志也随记录持久化，
+        下次 load_history 重建条目时按标志恢复高亮。
+        """
+        try:
+            if self.route_plan_panel is None:
+                return
+            storage = self._get_route_library_storage()
+            records = getattr(self.route_plan_panel, '_last_history_list', None)
+            if records is None:
+                records = [w.history_data
+                           for w in getattr(self.route_plan_panel, 'history_widgets', []) or []]
+            widgets = getattr(self.route_plan_panel, 'history_widgets', []) or []
+            for hd in records:
+                favorited = storage.find_by_key(
+                    hd.get('start', ''), hd.get('end', '')) is not None
+                hd['_favorited'] = favorited  # 写回标志（与条目 widget 同引用）
+            # 更新可见条目按钮状态
+            for widget in widgets:
+                hd = widget.history_data
+                widget.set_favorited(bool(hd.get('_favorited', False)))
+        except Exception as e:
+            self.logger.error(f"[路线面板] 同步收藏状态失败: {e}")
+
+    def _on_history_favorite_clicked(self, history_data: dict):
+        """历史条目收藏按钮：收藏到路线管理库 / 从路线库取消收藏（toggle）"""
+        try:
+            storage = self._get_route_library_storage()
+            start = history_data.get('start', '')
+            end = history_data.get('end', '')
+            existing = storage.find_by_key(start, end)
+
+            if existing is not None:
+                # 已收藏 → 取消收藏
+                storage.remove(existing.get('id'))
+                self.logger.info(f"[路线面板] 已取消收藏路线: {start} → {end}")
+            else:
+                # 未收藏 → 收藏入库（经纬度统一 WGS-84 国际标准）
+                storage.add_record(
+                    start=start, end=end,
+                    mode=history_data.get('mode', 'driving'),
+                    waypoints=history_data.get('waypoints', []),
+                    start_coords=history_data.get('start_coords'),
+                    end_coords=history_data.get('end_coords'),
+                    waypoint_coords=history_data.get('waypoint_coords', []),
+                    route_points=history_data.get('route_points', []),
+                    distance=history_data.get('distance'),
+                    duration=history_data.get('duration'),
+                    color_index=len(storage.get_all()))
+                self.logger.info(f"[路线面板] 已收藏路线: {start} → {end}")
+
+            # 更新历史条目按钮状态并写回收藏标志（记录与 _last_history_list/widget 同引用）
+            favorited = existing is None
+            history_data['_favorited'] = favorited
+            if self.route_plan_panel is not None:
+                for widget in getattr(self.route_plan_panel, 'history_widgets', []) or []:
+                    hd = widget.history_data
+                    if hd.get('start') == start and hd.get('end') == end:
+                        widget.set_favorited(favorited)
+                        break
+        except Exception as e:
+            self.logger.error(f"[路线面板] 收藏路线失败: {e}")
 
     def _on_history_elevation_fetch_clicked(self, history_data: dict):
         """历史条目"获取海拔"按钮点击：手动获取该历史路线的海拔
@@ -710,13 +793,15 @@ class RouteMixin:
             result: 更新后的路线方案列表（含海拔），失败时为 None
         """
         pending = getattr(self, '_pending_history_elevation', None)
-        if not pending:
+        pending_lib = getattr(self, '_pending_library_elevation', None)
+        if not pending and not pending_lib:
             return
-        history_data = pending.pop(task_id, None)
+        history_data = pending.pop(task_id, None) if pending else None
+        library_record = pending_lib.pop(task_id, None) if pending_lib else None
         # 所有海拔获取任务完成后关闭加载指示器（并发任务未完成时保持旋转）
-        if not pending:
+        if (pending is None or not pending) and (pending_lib is None or not pending_lib):
             self.hide_loading()
-        if history_data is None or not result:
+        if (history_data is None and library_record is None) or not result:
             return
         try:
             # 取单方案更新后的路线点（带海拔）
@@ -724,25 +809,40 @@ class RouteMixin:
             if not updated:
                 return
 
-            # 持久化回写历史记录（storage 文件）
-            if self.route_history_storage is not None:
-                self.route_history_storage.update_route_points(history_data, updated)
+            # 历史记录回写（storage 文件 + 面板内存 + 按钮高亮）
+            if history_data is not None:
+                self._writeback_history_elevation(history_data, updated)
 
-            # 同步面板内存数据源（_last_history_list 与条目 widget 同引用）
-            if self.route_plan_panel is not None:
-                last_list = getattr(self.route_plan_panel, '_last_history_list', None)
-                if last_list:
-                    for rec in last_list:
-                        if (rec.get('start') == history_data.get('start')
-                                and rec.get('end') == history_data.get('end')
-                                and rec.get('mode') == history_data.get('mode')
-                                and (rec.get('waypoints') or []) == (history_data.get('waypoints') or [])):
-                            rec['route_points'] = list(updated)
-                            break
-                # 更新条目按钮高亮（已获取海拔）
-                self.route_plan_panel.update_history_elevation_status(history_data, True)
+            # 路线管理库回写（库文件 + 面板按钮高亮）
+            if library_record is not None:
+                self._writeback_library_elevation(library_record, updated)
         except Exception as e:
             self.logger.error(f"[路线面板] 历史路线海拔回写失败: {e}")
+
+    def _writeback_history_elevation(self, history_data: dict, updated: list):
+        """回写历史记录的海拔（持久化 + 内存 + 按钮高亮）"""
+        if self.route_history_storage is not None:
+            self.route_history_storage.update_route_points(history_data, updated)
+        if self.route_plan_panel is not None:
+            last_list = getattr(self.route_plan_panel, '_last_history_list', None)
+            if last_list:
+                for rec in last_list:
+                    if (rec.get('start') == history_data.get('start')
+                            and rec.get('end') == history_data.get('end')
+                            and rec.get('mode') == history_data.get('mode')
+                            and (rec.get('waypoints') or []) == (history_data.get('waypoints') or [])):
+                        rec['route_points'] = list(updated)
+                        break
+            self.route_plan_panel.update_history_elevation_status(history_data, True)
+
+    def _writeback_library_elevation(self, record: dict, updated: list):
+        """回写路线管理库的海拔（持久化；popup 列表与 storage 同引用，数据自动同步）"""
+        try:
+            record_id = record.get('id')
+            if record_id:
+                self._get_route_library_storage().update_route_points(record_id, updated)
+        except Exception as e:
+            self.logger.error(f"[路线管理] 海拔回写失败: {e}")
 
     def _show_route_alternatives(self, alternatives: list, selected_index: int = 0):
         """显示路线待选列表"""

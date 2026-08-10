@@ -83,11 +83,12 @@ class MapJsBridge:
 
     @classmethod
     def fit_bounds(cls, page, bounds_json: str, center_lat: float, center_lng: float,
-                   zoom: int) -> None:
-        """自动缩放：当前视图已包含目标边界则跳过，否则精确适配（不重建地图）。
+                   zoom: int, force: bool = False) -> None:
+        """自动缩放：默认当前视图已包含目标边界则跳过，否则精确适配（不重建地图）。
 
         JS 侧用 map.getBounds().contains() 判断是否需要刷新：
-        已包含 → 零开销跳过；未包含 → fitBounds（单点退化 setView）。
+        默认（force=False）→ 已包含跳过 / 未包含 fitBounds；
+        强制（force=True）→ 跳过"已包含"判断，始终 fitBounds（单点退化 setView）。
 
         Args:
             page:        QWebEnginePage 实例。
@@ -95,10 +96,12 @@ class MapJsBridge:
             center_lat:  单点回退中心纬度（GCJ-02）。
             center_lng:  单点回退中心经度（GCJ-02）。
             zoom:        单点回退缩放级别。
+            force:       是否强制适配（渲染/取消渲染后按渲染集合缩放时传 True）。
         """
         b = json.loads(bounds_json)
         js = (
             _load('map_fit_bounds.js')
+            .replace('__FORCE__', 'true' if force else 'false')
             .replace('__MIN_LAT__', str(b[0][0]))
             .replace('__MIN_LNG__', str(b[0][1]))
             .replace('__MAX_LAT__', str(b[1][0]))
@@ -235,3 +238,39 @@ class MapJsBridge:
     def hide_elevation_dot(cls, page) -> None:
         """隐藏海拔悬停定位圆点（鼠标离开折线图时调用）。"""
         page.runJavaScript(_load('map_elevation_dot_hide.js'))
+
+    # ------------------------------------------------------------------
+    # 路线管理库渲染路线（增量注入，不重建页面）
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def update_planned_route(cls, page, route_json: str, markers_json: str) -> None:
+        """增量渲染规划路线（路线线 + 起终点/途径点标记，不重载地图页面）。
+
+        历史条目/路线规划切换时调用：专用 LayerGroup 清空重建规划路线图层，
+        页面其他图层（收藏点/当前位置/库渲染路线）保持不动，避免全量重建卡顿。
+
+        Args:
+            page:         QWebEnginePage 实例。
+            route_json:   路线线段 JSON [[[lat,lng],...], ...]（GCJ-02）。
+            markers_json: 标记 JSON [{lat, lng, type, label?, number?}, ...]。
+        """
+        js = (_load('map_planned_route.js')
+              .replace('__ROUTE_JSON__', route_json)
+              .replace('__MARKERS_JSON__', markers_json))
+        page.runJavaScript(js)
+
+    @classmethod
+    def update_library_routes(cls, page, payload_json: str) -> None:
+        """按路线 id 增量增删路线管理库渲染路线（不重载地图页面）。
+
+        渲染/取消渲染切换仅一次轻量 JS 调用，JS 侧只移除取消的路线、
+        只新增变化的路线，避免全量清空重建（性能随变化量，而非渲染总量）。
+
+        Args:
+            page:         QWebEnginePage 实例。
+            payload_json: JSON 字符串 {add: [{id, coords: [[lat,lng],...]（GCJ-02）,
+                          color}], remove: [id]}。
+        """
+        js = _load('map_library_routes.js').replace('__PAYLOAD_JSON__', payload_json)
+        page.runJavaScript(js)

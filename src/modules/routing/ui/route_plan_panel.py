@@ -5,7 +5,8 @@
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QLineEdit, QLabel, QScrollArea, QListWidget, QListWidgetItem)
+                             QLineEdit, QLabel, QScrollArea, QListWidget, QListWidgetItem,
+                             QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap, QTransform, QColor, QImage, QKeyEvent
 import os
@@ -17,9 +18,9 @@ from ui.theme import theme
 class RouteHistoryItem(QWidget):
     """路线历史记录列表项"""
 
-    export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
-    delete_clicked = pyqtSignal(dict, object, object)  # 删除按钮点击信号：(历史记录数据, 按钮实例, 条目实例)
     elevation_fetch_clicked = pyqtSignal(dict)  # 获取海拔按钮点击信号：(历史记录数据)
+    favorite_clicked = pyqtSignal(dict)  # 收藏按钮点击信号：(历史记录数据)
+    # （删除/导出按钮已移至列表顶部，由顶部按钮按勾选结果统一处理）
 
     def __init__(self, history_data: dict, parent=None):
         super().__init__(parent)
@@ -27,6 +28,9 @@ class RouteHistoryItem(QWidget):
         self.is_selected = False
         self.has_route_data = False  # 是否有完整路线数据
         self.elevation_available = False  # 是否已获取过海拔数据（按钮高亮状态）
+        # 是否已收藏到路线管理库（⭐ 金色高亮）；按记录标志初始化，
+        # 供 load_history 重建条目时恢复（标志由 mixin 写回 history_data）
+        self.is_favorited = bool(history_data.get('_favorited', False))
         self._init_ui()
 
     @staticmethod
@@ -125,80 +129,16 @@ class RouteHistoryItem(QWidget):
 
         layout.addWidget(text_container, 1)
 
-        # 搜索次数（放在中间）
-        search_count = self.history_data.get('search_count', 1)
-        # 无论搜索次数是多少，始终显示搜索次数
-        count_label = QLabel(f"搜索 {search_count} 次")
-        theme.apply_to_sub(count_label, """
-            QLabel {
-                color: __TEXT_SECONDARY__;
-                font-size: 11px;
-                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
-            }
-        """)
-        layout.addWidget(count_label)
+        # 收藏按钮（⭐ toggle：收藏到路线管理库 → 金色；未收藏 → 灰色）
+        self.favorite_button = QPushButton()
+        self.favorite_button.setFixedSize(32, 32)
+        self.favorite_button.setToolTip('收藏到路线管理')
+        self.favorite_button.clicked.connect(
+            lambda: self.favorite_clicked.emit(self.history_data))
+        self._update_favorite_button_style()
+        layout.addWidget(self.favorite_button, 0, Qt.AlignVCenter)
 
-        # 删除按钮
-        self.delete_button = QPushButton()
-        self.delete_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
-        self.delete_button.setText("❌")
-        self.delete_button.setToolTip('删除历史记录')
-        theme.apply_to_sub(self.delete_button, """
-            QPushButton {
-                font-size: 16px;
-                background-color: __HOVER__;
-                border: 1px solid __BORDER__;
-                border-radius: 4px;
-            }
-            QPushButton:hover:enabled {
-                background-color: rgba(255, 87, 34, 0.2);
-                border: 1px solid rgba(255, 87, 34, 0.5);
-            }
-            QPushButton:pressed:enabled {
-                background-color: rgba(255, 87, 34, 0.3);
-                border: 1px solid rgba(255, 87, 34, 0.7);
-            }
-        """)
-        self.delete_button.clicked.connect(lambda: self.delete_clicked.emit(self.history_data, self.delete_button, self))
-        layout.addWidget(self.delete_button, 0, Qt.AlignVCenter)
-
-        # 导出GPX按钮（放在最右侧）
-        from PyQt5.QtGui import QIcon
-        from core.resource_path import resource_path
-
-        self.export_button = QPushButton()
-        self.export_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
-
-        # 初始状态为启用，使用正常图标
-        self._update_export_button_icon()
-
-        self.export_button.setToolTip('导出GPX文件')
-        theme.apply_to_sub(self.export_button, """
-            QPushButton {
-                background-color: __HOVER__;
-                border: 1px solid __BORDER__;
-                border-radius: 4px;
-            }
-            QPushButton:hover:enabled {
-                background-color: __HOVER_STRONG__;
-                border: 1px solid __BORDER__;
-            }
-            QPushButton:pressed:enabled {
-                background-color: __HOVER_STRONG__;
-                border: 1px solid __BORDER__;
-            }
-            QPushButton:disabled {
-                background-color: __HOVER__;
-                border: 1px solid __BORDER__;
-                opacity: 0.5;
-            }
-        """)
-        self.export_button.clicked.connect(lambda: self.export_gpx_clicked.emit(self.history_data, self.export_button, self))
-        # 初始状态为启用
-        self.export_button.setEnabled(True)
-        layout.addWidget(self.export_button, 0, Qt.AlignVCenter)
-
-        # 获取海拔按钮（最右侧）：已有海拔数据 → 高亮；无 → 普通样式
+        # 获取海拔按钮：已有海拔数据 → 高亮；无 → 普通样式
         self.elevation_button = QPushButton()
         self.elevation_button.setFixedSize(32, 32)  # 与地图设置按钮保持一致的大小
         self.elevation_button.setText("⛰")
@@ -206,6 +146,33 @@ class RouteHistoryItem(QWidget):
         self.elevation_button.clicked.connect(
             lambda: self.elevation_fetch_clicked.emit(self.history_data))
         layout.addWidget(self.elevation_button, 0, Qt.AlignVCenter)
+
+        # 勾选按钮（最右侧，方框 + 对号）：选中高亮（导出/删除以勾选结果为准）
+        self.check_button = QPushButton("☐")
+        self.check_button.setFixedSize(32, 32)
+        self.check_button.setCheckable(True)
+        self.check_button.setToolTip("勾选该历史记录（导出/删除以勾选结果为准）")
+        theme.apply_to_sub(self.check_button, """
+            QPushButton {
+                font-size: 15px;
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
+                border-radius: 4px;
+                color: __TEXT__;
+            }
+            QPushButton:hover:enabled {
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
+            }
+            QPushButton:checked {
+                background-color: rgba(69, 156, 80, 0.25);
+                border: 1px solid #459c50;
+                color: #459c50;
+            }
+        """)
+        self.check_button.toggled.connect(
+            lambda checked: self.check_button.setText("☑" if checked else "☐"))
+        layout.addWidget(self.check_button, 0, Qt.AlignVCenter)
 
         # 按历史数据初始化海拔状态（已含海拔 → 高亮）
         self.set_elevation_available(
@@ -215,51 +182,12 @@ class RouteHistoryItem(QWidget):
         self._load_mode_icon()
 
     def set_selected(self, selected: bool):
-        """设置选中状态"""
+        """设置选中状态（保留接口，供历史选中高亮同步）"""
         self.is_selected = selected
-        self._update_export_button_state()
 
     def set_route_data_available(self, available: bool):
-        """设置路线数据是否可用"""
+        """设置路线数据是否可用（保留接口，供导出前校验）"""
         self.has_route_data = available
-        self._update_export_button_state()
-
-    def _update_export_button_state(self):
-        """更新导出按钮状态"""
-        # 始终启用导出按钮，点击后再校验路线数据是否完整
-        should_enable = True
-        self.export_button.setEnabled(should_enable)
-
-        # 更新图标
-        self._update_export_button_icon()
-
-        # 更新工具提示
-        if self.has_route_data:
-            self.export_button.setToolTip("导出GPX文件")
-        else:
-            self.export_button.setToolTip("导出GPX文件")
-
-    def _update_export_button_icon(self):
-        """更新导出按钮图标"""
-        # 使用emoji作为图标，与右键菜单面板保持一致
-        self.export_button.setText("📤")
-        # 始终使用启用状态的样式，因为导出按钮始终可用
-        theme.apply_to_sub(self.export_button, """
-            QPushButton {
-                font-size: 18px;
-                background-color: __HOVER__;
-                border: 1px solid __BORDER__;
-                border-radius: 4px;
-            }
-            QPushButton:hover:enabled {
-                background-color: __HOVER_STRONG__;
-                border: 1px solid __BORDER__;
-            }
-            QPushButton:pressed:enabled {
-                background-color: __HOVER_STRONG__;
-                border: 1px solid __BORDER__;
-            }
-        """)
 
     @staticmethod
     def _has_elevation(route_points) -> bool:
@@ -272,6 +200,43 @@ class RouteHistoryItem(QWidget):
         """设置海拔数据可用状态（有海拔 → 按钮高亮，提示可重新获取）"""
         self.elevation_available = available
         self._update_elevation_button_style()
+
+    def set_favorited(self, favorited: bool):
+        """设置收藏状态（已收藏 → ⭐ 金色高亮，点击取消收藏）"""
+        self.is_favorited = favorited
+        self._update_favorite_button_style()
+
+    def _update_favorite_button_style(self):
+        """更新收藏按钮样式：已收藏金色 / 未收藏灰色"""
+        if self.is_favorited:
+            self.favorite_button.setText("⭐")
+            self.favorite_button.setToolTip('已收藏到路线管理，点击取消收藏')
+            theme.apply_to_sub(self.favorite_button, """
+                QPushButton {
+                    font-size: 16px;
+                    background-color: rgba(255, 215, 0, 0.15);
+                    border: 1px solid rgba(255, 215, 0, 0.5);
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 215, 0, 0.25);
+                }
+            """)
+        else:
+            self.favorite_button.setText("☆")
+            self.favorite_button.setToolTip('收藏到路线管理')
+            theme.apply_to_sub(self.favorite_button, """
+                QPushButton {
+                    font-size: 16px;
+                    background-color: __HOVER__;
+                    border: 1px solid __BORDER__;
+                    border-radius: 4px;
+                }
+                QPushButton:hover:enabled {
+                    background-color: __HOVER_STRONG__;
+                    border: 1px solid __BORDER__;
+                }
+            """)
 
     def _update_elevation_button_style(self):
         """更新获取海拔按钮样式：高亮（已获取）与普通（未获取）两种"""
@@ -635,10 +600,11 @@ class RoutePlanPanel(QWidget):
     switch_start_end_clicked = pyqtSignal()  # 切换起止点按钮点击
     route_alternative_selected = pyqtSignal(int)  # 路线方案选中：(方案索引)
     export_gpx_clicked = pyqtSignal(dict, object, object)  # 导出GPX按钮点击：(路线数据, 按钮实例, 条目实例)
-    history_export_gpx_clicked = pyqtSignal(dict, object, object)  # 历史记录导出GPX按钮点击：(历史记录数据, 按钮实例, 条目实例)
-    history_delete_clicked = pyqtSignal(dict)  # 删除历史记录：(历史记录数据)
-    history_clear_all_clicked = pyqtSignal()  # 清空所有历史记录
+    history_export_clicked = pyqtSignal()  # 顶部导出按钮（以勾选结果为准）
+    history_select_all_clicked = pyqtSignal()  # 顶部全选按钮（toggle 全选/取消）
+    history_batch_delete_clicked = pyqtSignal()  # 顶部删除按钮（删除勾选的历史记录）
     history_elevation_fetch_clicked = pyqtSignal(dict)  # 历史记录获取海拔按钮点击：(历史记录数据)
+    history_favorite_clicked = pyqtSignal(dict)  # 历史记录收藏按钮点击：(历史记录数据)
 
     def __init__(self, parent=None, geo_info_storage=None):
         """初始化路线规划面板
@@ -760,6 +726,42 @@ class RoutePlanPanel(QWidget):
             }
             QListWidget {
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            QPushButton#toolButton {
+                background-color: transparent;
+                border: 1px solid __BORDER__;
+                border-radius: 3px;
+                color: __TEXT__;
+                font-size: 12px;
+                padding: 2px 10px;
+            }
+            QPushButton#toolButton:hover {
+                border-color: __ACCENT__;
+                color: __ACCENT__;
+            }
+            QPushButton#selectButton {
+                background-color: transparent;
+                border: 1px solid __BORDER__;
+                border-radius: 3px;
+                color: __TEXT__;
+                font-size: 12px;
+                padding: 2px 10px;
+            }
+            QPushButton#selectButton:checked {
+                background-color: rgba(74, 144, 226, 0.15);
+                border: 1px solid __ACCENT__;
+                color: __ACCENT__;
+            }
+            QPushButton#clearButton {
+                background-color: transparent;
+                border: 1px solid __DANGER__;
+                border-radius: 3px;
+                color: __DANGER__;
+                font-size: 12px;
+                padding: 2px 10px;
+            }
+            QPushButton#clearButton:hover {
+                background-color: rgba(245, 34, 45, 0.1);
             }
         """)
 
@@ -1109,29 +1111,33 @@ class RoutePlanPanel(QWidget):
         # 添加弹簧，使清空按钮靠右
         history_header_layout.addStretch(1)
 
-        # 清空历史记录按钮
-        self.clear_history_button = QPushButton()
-        self.clear_history_button.setFixedSize(32, 32)
-        self.clear_history_button.setText("🗑")
-        self.clear_history_button.setToolTip('清空历史记录')
-        theme.apply_to_sub(self.clear_history_button, """
-            QPushButton {
-                font-size: 16px;
-                background-color: __HOVER__;
-                border: 1px solid __BORDER__;
-                border-radius: 4px;
-            }
-            QPushButton:hover:enabled {
-                background-color: rgba(255, 87, 34, 0.2);
-                border: 1px solid rgba(255, 87, 34, 0.5);
-            }
-            QPushButton:pressed:enabled {
-                background-color: rgba(255, 87, 34, 0.3);
-                border: 1px solid rgba(255, 87, 34, 0.7);
-            }
-        """)
-        self.clear_history_button.clicked.connect(self._on_clear_all_history_clicked)
-        history_header_layout.addWidget(self.clear_history_button)
+        # 顶部按钮：导出 / 全选 / 删除（导出与删除以勾选结果为准；全选 toggle 高亮联动）
+        history_btn_layout = QHBoxLayout()
+        history_btn_layout.setSpacing(4)
+
+        self.history_export_btn = QPushButton("导出")
+        self.history_export_btn.setObjectName("toolButton")
+        self.history_export_btn.setToolTip("导出勾选的历史记录为 GPX")
+        self.history_export_btn.clicked.connect(self.history_export_clicked.emit)
+        self.history_export_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        history_btn_layout.addWidget(self.history_export_btn, 1)
+
+        self.history_select_all_btn = QPushButton("全选")
+        self.history_select_all_btn.setObjectName("selectButton")
+        self.history_select_all_btn.setToolTip("全选全部历史记录（再次点击取消全选）")
+        self.history_select_all_btn.setCheckable(True)
+        self.history_select_all_btn.clicked.connect(self.history_select_all_clicked.emit)
+        self.history_select_all_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        history_btn_layout.addWidget(self.history_select_all_btn, 1)
+
+        self.history_delete_btn = QPushButton("删除")
+        self.history_delete_btn.setObjectName("clearButton")
+        self.history_delete_btn.setToolTip("删除勾选的历史记录")
+        self.history_delete_btn.clicked.connect(self.history_batch_delete_clicked.emit)
+        self.history_delete_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        history_btn_layout.addWidget(self.history_delete_btn, 1)
+
+        history_header_layout.addLayout(history_btn_layout)
 
         history_container_layout.addLayout(history_header_layout)
 
@@ -1989,12 +1995,12 @@ class RoutePlanPanel(QWidget):
             history_widget.set_selected(False)
             history_widget.set_route_data_available(False)
 
-            # 连接导出GPX信号
-            history_widget.export_gpx_clicked.connect(self.history_export_gpx_clicked.emit)
-            # 连接删除按钮信号
-            history_widget.delete_clicked.connect(self.history_delete_clicked.emit)
             # 连接获取海拔按钮信号
             history_widget.elevation_fetch_clicked.connect(self.history_elevation_fetch_clicked.emit)
+            # 连接收藏按钮信号
+            history_widget.favorite_clicked.connect(self.history_favorite_clicked.emit)
+            # 勾选变化 → 同步顶部全选按钮高亮
+            history_widget.check_button.toggled.connect(self._sync_select_all_state)
 
             # 创建列表项
             item = QListWidgetItem()
@@ -2484,11 +2490,42 @@ class RoutePlanPanel(QWidget):
                 widget.set_selected(False)
                 widget.set_route_data_available(False)
 
-    def _on_clear_all_history_clicked(self):
-        """清空所有历史记录按钮点击事件"""
-        self.history_clear_all_clicked.emit()
+    def get_checked_records(self) -> list:
+        """获取勾选的历史记录（导出/删除以勾选结果为准）"""
+        checked = []
+        if not hasattr(self, 'history_widgets'):
+            return checked
+        for widget in self.history_widgets:
+            if widget.check_button.isChecked():
+                checked.append(widget.history_data)
+        return checked
 
-    def _on_history_delete_clicked(self, history_data: dict, button: object, item: object):
-        """删除历史记录按钮点击事件"""
-        self.history_delete_clicked.emit(history_data)
+    def toggle_select_all(self):
+        """全选按钮 toggle：全选全部条目（按钮高亮）↔ 取消全部选中（按钮取消高亮）"""
+        if self.history_select_all_btn.isChecked():
+            self.select_all()
+        else:
+            self.deselect_all()
+
+    def select_all(self):
+        """全选：勾选当前列表中的全部历史记录"""
+        if not hasattr(self, 'history_widgets'):
+            return
+        for widget in self.history_widgets:
+            if not widget.check_button.isChecked():
+                widget.check_button.setChecked(True)
+
+    def deselect_all(self):
+        """取消全选：取消当前列表中全部历史记录的勾选"""
+        if not hasattr(self, 'history_widgets'):
+            return
+        for widget in self.history_widgets:
+            if widget.check_button.isChecked():
+                widget.check_button.setChecked(False)
+
+    def _sync_select_all_state(self):
+        """同步全选按钮高亮：全部条目均已勾选 → 高亮；否则取消高亮"""
+        total = len(getattr(self, 'history_widgets', []) or [])
+        checked = len(self.get_checked_records())
+        self.history_select_all_btn.setChecked(total > 0 and checked == total)
 

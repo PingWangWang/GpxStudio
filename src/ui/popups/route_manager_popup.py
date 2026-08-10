@@ -1,59 +1,48 @@
-﻿"""
-收藏夹列表弹出面板
+﻿# -*- coding: utf-8 -*-
+"""
+路线管理列表弹出面板
 
-工具栏"收藏夹"按钮触发，提供收藏地点的管理能力：
-- 条目点击：选择该收藏点（地图缩放定位，由主窗口处理）
-- 条目右侧 ☐/☑ 勾选按钮：方框对号样式（与路线管理一致），删除以勾选结果为准
-- 顶部导入/导出/全选/删除/关闭按钮：JSON 文件导入导出、全选 toggle、删除勾选
+工具栏"路线管理"按钮触发，提供路线库的管理能力：
+- 顶部 5 按钮：导入 / 导出 / 选择 / 清空 / 关闭（均分宽度）
+- 条目：路线名称（起点→终点）+ 里程·耗时详情 + 右侧海拔获取按钮
+- "选择"按钮切换多选模式（多选时条目点击不渲染，导出多条独立 GPX）
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QListWidget, QListWidgetItem, QPushButton, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
-from typing import List, Dict
 from ui.theme import theme
 
 
-class FavoritesListPopup(QWidget):
-    """收藏夹列表弹出面板"""
+class RouteManagerPopup(QWidget):
+    """路线管理列表弹出面板"""
 
     # 每行高度（PopupPositioner 计算弹窗最大高度时引用）
     ITEM_HEIGHT = 50
 
-    # 顶部按钮行高度（导入/导出/清空 + 边距），高度公式计入总高
+    # 顶部按钮行高度（导入/导出/选择/清空/关闭 + 边距）
     HEADER_HEIGHT = 59
 
     # 信号
-    favorite_selected = pyqtSignal(dict)  # 条目点击（选择收藏点），携带收藏记录
     import_clicked = pyqtSignal()  # 导入按钮
     export_clicked = pyqtSignal()  # 导出按钮
     select_all_clicked = pyqtSignal()  # 全选按钮（勾选当前列表全部条目）
     delete_clicked = pyqtSignal()  # 删除按钮（删除勾选的条目）
-    closed = pyqtSignal()  # 弹窗被关闭（含失去焦点自动关闭），主窗口恢复工具栏按钮态
+    render_clicked = pyqtSignal(dict)  # 条目渲染按钮（单条目 toggle 渲染，携带路线记录）
+    item_render_clicked = pyqtSignal(dict)  # 条目点击（仅渲染该路线，不取消；取消需点渲染按钮）
+    elevation_fetch_clicked = pyqtSignal(dict)  # 条目海拔按钮（单条目获取海拔，携带路线记录）
+    closed = pyqtSignal()  # 弹窗关闭（含失去焦点自动关闭），主窗口恢复工具栏按钮态
 
-    def __init__(self, parent=None, map_manager=None):
-        """初始化收藏夹列表
-
-        Args:
-            parent: 父窗口（主窗口）
-            map_manager: MapManager 实例（可选，读取收藏数据；
-                         未注入时渲染阶段从父窗口实时获取）
-        """
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._map_manager = map_manager
-
-        # 设置窗口标志 - 使用Qt.Tool随主窗口移动（与搜索弹窗一致）
-        # 不加 WindowStaysOnTopHint：置顶会使其在切换其他软件时仍浮于最上层，
-        # Tool 子窗口层级随主窗口，切后台时自然下沉
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-
         self._init_ui()
 
     def _init_ui(self):
         """初始化UI"""
         theme.set_theme_stylesheet(self, """
-            FavoritesListPopup {
+            RouteManagerPopup {
                 background-color: __PANEL_BG__;
                 border: 1px solid __BORDER__;
                 border-radius: 4px;
@@ -106,7 +95,7 @@ class FavoritesListPopup(QWidget):
                 background-color: __HOVER__;
             }
             QListWidget::item:selected {
-                background-color: __ACCENT__;
+                background-color: rgba(74, 144, 226, 0.2);
             }
         """)
 
@@ -114,20 +103,20 @@ class FavoritesListPopup(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
-        # 顶部工具按钮行：导入 / 导出 / 全选 / 删除 / 关闭（五按钮均分，与路线管理一致）
+        # 顶部工具按钮行：导入 / 导出 / 清空 / 关闭（四按钮均分；多选由条目勾选驱动）
         toolbar_layout = QHBoxLayout()
-        toolbar_layout.setSpacing(6)
+        toolbar_layout.setSpacing(4)
 
         self.import_btn = QPushButton("导入")
         self.import_btn.setObjectName("toolButton")
-        self.import_btn.setToolTip("从 JSON 文件导入收藏")
+        self.import_btn.setToolTip("导入 GPX 文件（支持多选，每个文件独立条目）")
         self.import_btn.clicked.connect(self.import_clicked.emit)
         self.import_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         toolbar_layout.addWidget(self.import_btn, 1)
 
         self.export_btn = QPushButton("导出")
         self.export_btn.setObjectName("toolButton")
-        self.export_btn.setToolTip("导出收藏到 JSON 文件")
+        self.export_btn.setToolTip("导出选中路线为 GPX（多选时逐条导出独立文件）")
         self.export_btn.clicked.connect(self.export_clicked.emit)
         self.export_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         toolbar_layout.addWidget(self.export_btn, 1)
@@ -135,33 +124,33 @@ class FavoritesListPopup(QWidget):
         # 全选按钮（toggle）：首次点击全选全部条目并高亮；再次点击取消全部选中并取消高亮
         self.select_all_btn = QPushButton("全选")
         self.select_all_btn.setObjectName("selectButton")
-        self.select_all_btn.setToolTip("全选全部收藏（再次点击取消全选）")
+        self.select_all_btn.setToolTip("全选全部路线（再次点击取消全选）")
         self.select_all_btn.setCheckable(True)
         self.select_all_btn.clicked.connect(self.select_all_clicked.emit)
         self.select_all_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         toolbar_layout.addWidget(self.select_all_btn, 1)
 
-        # 删除按钮：删除勾选的收藏（危险样式）
+        # 删除按钮：删除勾选的条目（危险样式）
         self.delete_btn = QPushButton("删除")
         self.delete_btn.setObjectName("clearButton")
-        self.delete_btn.setToolTip("删除勾选的收藏")
+        self.delete_btn.setToolTip("删除勾选的路线")
         self.delete_btn.clicked.connect(self.delete_clicked.emit)
         self.delete_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         toolbar_layout.addWidget(self.delete_btn, 1)
 
-        # （无关闭按钮：再次点击工具栏收藏夹按钮 / 点击面板外区域自动关闭）
+        # （无关闭按钮：再次点击工具栏路线管理按钮 / 点击面板外区域自动关闭）
         layout.addLayout(toolbar_layout)
 
-        # 收藏列表
-        self.favorites_list = QListWidget()
-        self.favorites_list.setSelectionMode(QListWidget.NoSelection)
-        self.favorites_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.favorites_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.favorites_list.itemClicked.connect(self._on_item_clicked)
-        layout.addWidget(self.favorites_list)
+        # 路线列表
+        self.routes_list = QListWidget()
+        self.routes_list.setSelectionMode(QListWidget.NoSelection)
+        self.routes_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.routes_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.routes_list.itemClicked.connect(self._on_item_clicked)
+        layout.addWidget(self.routes_list)
 
         # 空状态提示
-        self.empty_label = QLabel("暂无收藏地点")
+        self.empty_label = QLabel("暂无路线\n可通过导入 GPX 或收藏历史路线添加")
         self.empty_label.setAlignment(Qt.AlignCenter)
         theme.apply_to_sub(self.empty_label, """
             QLabel {
@@ -176,62 +165,46 @@ class FavoritesListPopup(QWidget):
     # ── 数据 ────────────────────────────────────────────────────────────
 
     def count(self) -> int:
-        """列表条目数
+        """列表条目数（供 PopupPositioner 高度公式调用）"""
+        return self.routes_list.count()
 
-        与 QListWidget 弹窗（搜索历史/结果）的 count() 接口对齐，
-        供 PopupPositioner 高度公式统一调用（QWidget 本身无 count()）。
+    def refresh(self, records: list):
+        """重建列表
+
+        Args:
+            records: 路线库记录列表（RouteLibraryStorage.get_all()）
         """
-        return self.favorites_list.count()
+        self.routes_list.clear()
 
-    def _get_map_manager(self):
-        """获取 MapManager（构造注入优先，否则从父窗口实时获取）"""
-        if self._map_manager is not None:
-            return self._map_manager
-        parent = self.parent()
-        return getattr(parent, 'map_manager', None) if parent is not None else None
-
-    def refresh(self):
-        """从收藏存储重新拉取列表（删除/导入/清空后调用）"""
-        self.favorites_list.clear()
-
-        map_manager = self._get_map_manager()
-        if map_manager is None:
-            favorites = []
-        else:
-            favorites = map_manager.favorites_storage.get_all()
-
-        if not favorites:
-            self.favorites_list.setVisible(False)
+        if not records:
+            self.routes_list.setVisible(False)
             self.empty_label.setVisible(True)
             return
 
-        self.favorites_list.setVisible(True)
+        self.routes_list.setVisible(True)
         self.empty_label.setVisible(False)
 
-        for fav in favorites:
-            self._add_favorite_item(fav)
+        for rec in records:
+            self._add_route_item(rec)
 
-    def _add_favorite_item(self, fav: dict):
-        """添加单个收藏条目（名称/地址 + 金色★删除按钮）"""
+    def _add_route_item(self, rec: dict):
+        """添加单个路线条目（名称+详情 + 海拔获取按钮）"""
         item = QListWidgetItem()
         item.setSizeHint(QSize(0, self.ITEM_HEIGHT))
-        item.setData(Qt.UserRole, fav)
+        item.setData(Qt.UserRole, rec)
 
-        # 行控件：左侧名称/地址，右侧金星删除按钮
         row_widget = QWidget()
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(10, 4, 8, 4)
         row_layout.setSpacing(8)
 
+        # 文本列：路线名称 + 里程·耗时详情
         text_container = QWidget()
         text_layout = QVBoxLayout(text_container)
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(2)
 
-        # 左侧图标按地址类型分类（搜索/历史/收藏夹三处图标一致；名称兜底推断类型）
-        from modules.search.type_icons import get_type_emoji
-        name_label = QLabel(
-            f"{get_type_emoji(fav.get('type', ''), fav.get('name', ''))} {fav.get('name', '收藏点')}")
+        name_label = QLabel(f"{rec.get('start', '起点')} → {rec.get('end', '终点')}")
         theme.apply_to_sub(name_label, """
             QLabel {
                 color: __TEXT__;
@@ -240,40 +213,92 @@ class FavoritesListPopup(QWidget):
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
         """)
-        # 文本穿透鼠标事件，点击行触发条目选择
         name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        # 长名称自动换行，避免地址名称过长时显示不全；
-        # 换行宽度在条目入列后按列表实际宽度动态设置（见条目尾部调整逻辑）
         name_label.setWordWrap(True)
         text_layout.addWidget(name_label)
 
-        address = fav.get('address', '')
-        if address:
-            address_label = QLabel(address)
-            theme.apply_to_sub(address_label, """
+        detail_text = self._format_detail(rec)
+        if detail_text:
+            detail_label = QLabel(detail_text)
+            theme.apply_to_sub(detail_label, """
                 QLabel {
                     color: __TEXT_SECONDARY__;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 }
             """)
-            address_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-            # 地址文字过长显示不全时，悬停显示完整地址（tooltip）
-            # 可用宽度估算：弹窗宽 280 - 左右边距(18) - 金星按钮与间距(34)
-            from PyQt5.QtGui import QFontMetrics
-            available_width = 280 - 18 - 34
-            if QFontMetrics(address_label.font()).horizontalAdvance(address) > available_width:
-                address_label.setToolTip(address)
-            text_layout.addWidget(address_label)
+            detail_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            text_layout.addWidget(detail_label)
 
         row_layout.addWidget(text_container, 1)
 
-        # 勾选按钮（最右侧，方框 + 对号，与路线管理条目勾选同款样式）：
-        # 未勾选显示空方框 ☐，勾选后显示对号 ☑ 并绿色高亮（删除以勾选结果为准）
+        # 渲染按钮（单条目控制，样式与海拔按钮一致：emoji + 32px + 实心高亮）
+        render_btn = QPushButton("🚩")
+        render_btn.setFixedSize(32, 30)
+        render_btn.setCheckable(True)
+        render_btn.setToolTip("渲染该路线到地图（再次点击取消渲染）")
+        render_btn.clicked.connect(
+            lambda checked=False, r=rec: self.render_clicked.emit(r))
+        theme.apply_to_sub(render_btn, """
+            QPushButton {
+                font-size: 15px;
+                background-color: __HOVER__;
+                border: 1px solid __BORDER__;
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled {
+                background-color: __HOVER_STRONG__;
+                border: 1px solid __BORDER__;
+            }
+            QPushButton:checked {
+                background-color: #459c50;
+                border: 1px solid #2e6b37;
+            }
+        """)
+        row_layout.addWidget(render_btn, 0, Qt.AlignVCenter)
+
+        # 海拔获取按钮（单条目控制，已含海拔 → 高亮，逻辑与历史列表 ⛰ 一致）
+        elevation_btn = QPushButton("⛰")
+        elevation_btn.setFixedSize(32, 30)
+        elevation_btn.setToolTip('获取海拔数据')
+        elevation_btn.clicked.connect(
+            lambda checked=False, r=rec: self.elevation_fetch_clicked.emit(r))
+        has_elevation = any(
+            p is not None and len(p) >= 3 and p[2] is not None
+            for p in (rec.get('route_points') or []))
+        if has_elevation:
+            elevation_btn.setToolTip('已获取海拔数据，点击重新获取')
+            theme.apply_to_sub(elevation_btn, """
+                QPushButton {
+                    font-size: 15px;
+                    background-color: #4a90e2;
+                    border: 1px solid #2c5a9c;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #5aa0f0;
+                }
+            """)
+        else:
+            theme.apply_to_sub(elevation_btn, """
+                QPushButton {
+                    font-size: 15px;
+                    background-color: __HOVER__;
+                    border: 1px solid __BORDER__;
+                    border-radius: 4px;
+                }
+                QPushButton:hover:enabled {
+                    background-color: __HOVER_STRONG__;
+                    border: 1px solid __BORDER__;
+                }
+            """)
+        row_layout.addWidget(elevation_btn, 0, Qt.AlignVCenter)
+
+        # 勾选按钮（最右侧）：点击 → 方框内显示对勾并高亮；再点取消（导出以勾选为准）
         check_btn = QPushButton("☐")
         check_btn.setFixedSize(32, 30)
         check_btn.setCheckable(True)
-        check_btn.setToolTip("勾选该收藏（删除时以勾选结果为准）")
+        check_btn.setToolTip("勾选该路线（导出时以勾选结果为准）")
         theme.apply_to_sub(check_btn, """
             QPushButton {
                 font-size: 15px;
@@ -296,33 +321,69 @@ class FavoritesListPopup(QWidget):
             lambda checked: check_btn.setText("☑" if checked else "☐"))
         # 勾选状态变化时同步全选按钮高亮（全部勾选 → 高亮；否则取消高亮）
         check_btn.toggled.connect(lambda checked: self._sync_select_all_state())
-        # 垂直居中：条目高度高于按钮时按钮保持居中，避免贴顶部
         row_layout.addWidget(check_btn, 0, Qt.AlignVCenter)
 
-        self.favorites_list.addItem(item)
-        self.favorites_list.setItemWidget(item, row_widget)
+        self.routes_list.addItem(item)
+        self.routes_list.setItemWidget(item, row_widget)
 
-        # 按列表实际宽度设置名称换行宽度并校正行高：
-        # 延迟到事件循环（弹窗已定位、宽度已确定）后执行，
-        # 避免硬编码宽度导致换行过窄、第一行右侧留白
+        # 按列表实际宽度设置名称换行宽度并校正行高
         def _adjust_name_wrap():
             try:
-                view_width = self.favorites_list.viewport().width()
-                # 可用宽度 = 列表宽 - 左右边距 - 金星按钮与间距
+                view_width = self.routes_list.viewport().width()
                 avail_width = max(view_width - 52, 100)
                 name_label.setMaximumWidth(avail_width)
                 item.setSizeHint(QSize(0, row_widget.sizeHint().height()))
             except RuntimeError:
-                pass  # 条目已被移除（列表刷新），无需调整
+                pass
 
         QTimer.singleShot(0, _adjust_name_wrap)
 
+    @staticmethod
+    def _format_detail(rec: dict) -> str:
+        """格式化里程·耗时详情文本（无数据返回空串）"""
+        parts = []
+        distance = rec.get('distance')
+        if distance:
+            parts.append(f"{distance / 1000:.1f} 公里" if distance >= 1000
+                         else f"{distance:.0f} 米")
+        duration = rec.get('duration')
+        if duration:
+            if duration >= 3600:
+                h, m = divmod(duration, 3600)
+                parts.append(f"{h} 小时 {m // 60} 分钟" if m // 60 else f"{h} 小时")
+            elif duration >= 60:
+                parts.append(f"{duration // 60} 分钟")
+            else:
+                parts.append(f"{duration:.0f} 秒")
+        return " · ".join(parts)
+
+    def set_rendered_ids(self, rendered_ids: set):
+        """更新各条目渲染按钮的高亮状态（已渲染 → 绿色高亮）
+
+        Args:
+            rendered_ids: 当前已渲染的路线记录 id 集合
+        """
+        for i in range(self.routes_list.count()):
+            item = self.routes_list.item(i)
+            rec = item.data(Qt.UserRole)
+            row = self.routes_list.itemWidget(item)
+            if row is None:
+                continue
+            for btn in row.findChildren(QPushButton):
+                if btn.text() == "🚩":
+                    btn.setChecked(bool(rec) and rec.get('id') in rendered_ids)
+                    break
+
+    def get_export_records(self) -> list:
+        """获取勾选的路线记录（导出/删除以勾选结果为准）"""
+        return self.get_checked_records()
+
     def get_checked_records(self) -> list:
-        """获取当前勾选的收藏记录列表"""
+        """获取当前勾选的路线记录列表"""
         checked = []
-        for i in range(self.favorites_list.count()):
-            item = self.favorites_list.item(i)
-            row = self.favorites_list.itemWidget(item)
+        for i in range(self.routes_list.count()):
+            item = self.routes_list.item(i)
+            row = self.routes_list.itemWidget(item)
             if row is None:
                 continue
             for btn in row.findChildren(QPushButton):
@@ -332,7 +393,10 @@ class FavoritesListPopup(QWidget):
         return checked
 
     def toggle_select_all(self):
-        """全选按钮 toggle：全选全部条目（按钮高亮）↔ 取消全部选中（按钮取消高亮）"""
+        """全选按钮 toggle：全选全部条目（按钮高亮）↔ 取消全部选中（按钮取消高亮）
+
+        按钮 checked 状态由点击自动切换，此处按状态执行条目勾选同步。
+        """
         if self.select_all_btn.isChecked():
             self.select_all()
         else:
@@ -340,9 +404,9 @@ class FavoritesListPopup(QWidget):
 
     def select_all(self):
         """全选：勾选当前列表中的全部条目"""
-        for i in range(self.favorites_list.count()):
-            item = self.favorites_list.item(i)
-            row = self.favorites_list.itemWidget(item)
+        for i in range(self.routes_list.count()):
+            item = self.routes_list.item(i)
+            row = self.routes_list.itemWidget(item)
             if row is None:
                 continue
             for btn in row.findChildren(QPushButton):
@@ -352,9 +416,9 @@ class FavoritesListPopup(QWidget):
 
     def deselect_all(self):
         """取消全选：取消当前列表中全部条目的勾选"""
-        for i in range(self.favorites_list.count()):
-            item = self.favorites_list.item(i)
-            row = self.favorites_list.itemWidget(item)
+        for i in range(self.routes_list.count()):
+            item = self.routes_list.item(i)
+            row = self.routes_list.itemWidget(item)
             if row is None:
                 continue
             for btn in row.findChildren(QPushButton):
@@ -367,17 +431,17 @@ class FavoritesListPopup(QWidget):
 
         用户在列表中勾选/取消勾选条目时自动联动。
         """
-        total = self.favorites_list.count()
+        total = self.routes_list.count()
         checked = len(self.get_checked_records())
         self.select_all_btn.setChecked(total > 0 and checked == total)
 
     # ── 交互 ────────────────────────────────────────────────────────────
 
     def _on_item_clicked(self, item: QListWidgetItem):
-        """条目点击：选择该收藏点（地图缩放定位由主窗口处理），弹窗保持展开"""
-        fav = item.data(Qt.UserRole)
-        if fav:
-            self.favorite_selected.emit(fav)
+        """条目点击：请求渲染该路线（已渲染时无操作，取消渲染需点击条目右侧渲染按钮）"""
+        rec = item.data(Qt.UserRole)
+        if rec:
+            self.item_render_clicked.emit(rec)
 
     def keyPressEvent(self, event):
         """处理键盘事件：ESC 关闭"""
@@ -390,5 +454,5 @@ class FavoritesListPopup(QWidget):
     def hideEvent(self, event):
         """窗口隐藏事件：通知主窗口恢复工具栏按钮态"""
         super().hideEvent(event)
-        self.favorites_list.clearSelection()
+        self.routes_list.clearSelection()
         self.closed.emit()

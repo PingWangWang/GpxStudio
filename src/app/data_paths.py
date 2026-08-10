@@ -1,4 +1,4 @@
-"""
+﻿"""
 数据路径管理模块
 
 管理应用程序的所有数据文件路径，包括：
@@ -88,6 +88,11 @@ def get_geo_info_file():
 def get_route_history_file():
     """获取路线历史文件路径"""
     return os.path.join(get_data_root(), 'RouteHistoryList.json')
+
+
+def get_route_library_file():
+    """获取路线管理库文件路径（导入 GPX / 历史收藏的路线）"""
+    return os.path.join(get_data_root(), 'RouteLibrary.json')
 
 
 def get_favorites_file():

@@ -458,6 +458,32 @@ class GpxExportMixin:
         except Exception as e:
             self.logger.error(f"[GPX导出] 同步历史列表海拔状态失败: {e}")
 
+    def _on_history_batch_export(self):
+        """历史列表顶部导出：以勾选结果为准（1 条 → 保存对话框；多条 → 目录逐条导出）"""
+        try:
+            records = self.route_plan_panel.get_checked_records()
+            if not records:
+                self._show_warning("提示", "请先勾选要导出的历史记录（点击条目右侧 ☐ 勾选）")
+                return
+            if len(records) == 1:
+                self._on_history_export_gpx_clicked(records[0])
+                return
+            from PyQt5.QtWidgets import QFileDialog
+            export_dir = QFileDialog.getExistingDirectory(self, "选择保存目录")
+            if not export_dir:
+                return
+            self.show_loading()
+            ok_count = 0
+            for rec in records:
+                if self._export_record_to_dir(rec, export_dir):
+                    ok_count += 1
+            self.hide_loading()
+            self._show_info("导出完成", f"已导出 {ok_count}/{len(records)} 条到:\n{export_dir}")
+        except Exception as e:
+            self.logger.error(f"[GPX导出] 批量导出失败: {e}")
+            self.hide_loading()
+            self._show_warning("导出失败", f"导出出错: {e}")
+
     def _on_history_export_gpx_clicked(self, history_data: dict, button=None, item=None):
         """历史记录导出GPX按钮点击"""
         self.logger.info(f"[GPX导出] 用户点击历史记录导出GPX按钮")

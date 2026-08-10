@@ -1,4 +1,4 @@
-"""
+﻿"""
 设置弹出面板组件
 
 包含地图设置、日志设置和关于信息的弹出面板
@@ -258,7 +258,7 @@ class MapSettingsPopup(BaseSettingsPopup):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 345)  # 容纳主题下拉框、海拔获取下拉框与收藏点开关
+        self.setFixedSize(300, 375)  # 容纳主题下拉框、海拔获取下拉框、收藏点/海拔剖面/多路线开关
         # 保存用户输入的API Key和安全密钥
         self.saved_api_key = ""
         self.saved_security_key = ""
@@ -811,6 +811,28 @@ class MapSettingsPopup(BaseSettingsPopup):
         elevation_row.setStretch(2, 1)
         config_layout.addLayout(elevation_row)
 
+        # 多路线同时渲染开关
+        self.multi_route_check = QCheckBox("多路线同时渲染")
+        self.multi_route_check.setToolTip("启用后同时渲染规划的全部路线方案（每条路线颜色区分）")
+        self.multi_route_check.setFixedHeight(30)
+        theme.apply_to_sub(self.multi_route_check, self.show_favorites_check.styleSheet())
+
+        multi_route_row = QHBoxLayout()
+        multi_route_label = QLabel("多路线渲染:")
+        theme.apply_to_sub(multi_route_label, "font-weight: bold; font-size: 12px; color: __TEXT__; font-family: 'Microsoft YaHei'; margin: 0px; padding: 0px;")
+        multi_route_label.setFixedWidth(80)
+        multi_route_label.setFixedHeight(30)
+        multi_route_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        multi_route_row.addWidget(multi_route_label)
+        multi_route_row.addSpacing(10)
+        multi_route_row.addWidget(self.multi_route_check)
+        multi_route_row.setContentsMargins(0, 0, 0, 0)
+        multi_route_row.setSpacing(0)
+        multi_route_row.setStretch(0, 0)
+        multi_route_row.setStretch(1, 0)
+        multi_route_row.setStretch(2, 1)
+        config_layout.addLayout(multi_route_row)
+
         main_layout.addLayout(config_layout)
 
         # 添加分隔线，美化布局并增加与底部按钮的间距
@@ -947,6 +969,8 @@ class MapSettingsPopup(BaseSettingsPopup):
         # 加载收藏点显示开关
         self.show_favorites_check.setChecked(map_config.get_show_favorites())
         self.show_elevation_check.setChecked(map_config.get_show_elevation_profile())
+        # 加载多路线同时渲染开关
+        self.multi_route_check.setChecked(map_config.get_multi_route_render())
 
 
     def on_theme_changed(self, index: int):
@@ -999,7 +1023,8 @@ class MapSettingsPopup(BaseSettingsPopup):
             "security_key": security_key,
             "elevation_optimize": self.elevation_mode_combo.currentData(),
             "show_favorites": self.show_favorites_check.isChecked(),
-            "show_elevation_profile": self.show_elevation_check.isChecked()
+            "show_elevation_profile": self.show_elevation_check.isChecked(),
+            "multi_route_render": self.multi_route_check.isChecked()
         }
 
         if map_config.save_config(config):

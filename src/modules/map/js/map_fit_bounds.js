@@ -2,9 +2,11 @@
  * 自动缩放：先判断当前视图是否已包含目标元素边界，未包含才执行适配
  * 占位符：__MIN_LAT__/__MIN_LNG__/__MAX_LAT__/__MAX_LNG__ — 目标边界（GCJ-02）
  *         __CENTER_LAT__/__CENTER_LNG__/__ZOOM__          — 单点回退中心/缩放
+ *         __FORCE__                                        — 是否强制适配（true/false）
  *
- * 已包含 → 返回 'skip'（零开销，不刷新界面）；
- * 未包含 → fitBounds 精确适配（单点退化 setView 固定缩放），返回 'fitted'。
+ * 默认（__FORCE__=false）：已包含 → 返回 'skip'（零开销，不刷新界面）；
+ * 强制（__FORCE__=true）：跳过"已包含"判断，始终 fitBounds 精确适配
+ * （单点退化 setView 固定缩放），返回 'fitted'。
  */
 (function () {
     function getMap() {
@@ -43,9 +45,10 @@
         // 判断是否需要刷新：仅"包含"不足——用户缩小视图后元素仍完整在视野内
         // （contains 恒真）会导致永远跳过；追加面积占比阈值：
         // 目标边界面积占当前视野 < 50% 说明视图被过度缩小，需重新适配放大
+        // 强制模式（__FORCE__=true）：跳过"已包含即跳过"判断，每次渲染后始终缩放
         var ratio = areaOf(target) / Math.max(areaOf(current), 1e-9);
         console.log('[自动缩放] 面积占比: ' + ratio.toFixed(3) + ', contains: ' + current.contains(target));
-        if (current.contains(target) && ratio > 0.5) {
+        if (!__FORCE__ && current.contains(target) && ratio > 0.5) {
             console.log('[自动缩放] 视图已适配，跳过刷新');
             return 'skip';
         }

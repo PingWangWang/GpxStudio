@@ -255,6 +255,11 @@ class MapMixin:
                 self._show_history_elevation_profile(pending[0], pending[1])
             except Exception as e:
                 self.logger.error(f"[主应用] 挂起的海拔剖面显示失败: {e}")
+        # 页面重建后恢复路线管理库渲染路线（HTML 不含库路线，重新 JS 注入）
+        if getattr(self, '_library_rendered_ids', None):
+            # 新页面无任何 polyline，重置上一状态强制全量注入
+            self._prev_library_rendered_ids = None
+            self._inject_library_routes()
         self.hide_loading()
         self.logger.debug("[主应用] 地图加载完成，停止加载动画")
 
@@ -319,10 +324,11 @@ class MapMixin:
             self.favorites_popup = FavoritesListPopup(
                 self, map_manager=getattr(self, 'map_manager', None))
             self.favorites_popup.favorite_selected.connect(self._on_favorites_selected)
-            self.favorites_popup.favorite_delete_requested.connect(self._on_favorites_delete)
             self.favorites_popup.import_clicked.connect(self._on_favorites_import)
             self.favorites_popup.export_clicked.connect(self._on_favorites_export)
-            self.favorites_popup.clear_clicked.connect(self._on_favorites_clear)
+            self.favorites_popup.select_all_clicked.connect(
+                self._on_favorites_select_all)
+            self.favorites_popup.delete_clicked.connect(self._on_favorites_delete)
             # 弹窗关闭（含失去焦点自动关闭）时统一刷新工具栏按钮态
             self.favorites_popup.closed.connect(self._refresh_toolbar_buttons)
 
@@ -347,6 +353,497 @@ class MapMixin:
         # 弹窗展开后统一刷新按钮态（第 3 按钮切换为关闭按钮，保持 3 按钮稳定）
         self._refresh_toolbar_buttons()
 
+    def on_route_manager_button_clicked(self):
+        """工具栏路线管理按钮：展开/收起路线管理列表"""
+        self.logger.info("[路线管理] 路线管理按钮点击")
+
+        if not hasattr(self, 'route_manager_popup') or self.route_manager_popup is None:
+            from ui.popups.route_manager_popup import RouteManagerPopup
+            self.route_manager_popup = RouteManagerPopup(self)
+            self.route_manager_popup.import_clicked.connect(self._on_route_manager_import)
+            self.route_manager_popup.export_clicked.connect(self._on_route_manager_export)
+            self.route_manager_popup.select_all_clicked.connect(
+                self._on_route_manager_select_all)
+            self.route_manager_popup.delete_clicked.connect(
+                self._on_route_manager_delete)
+            self.route_manager_popup.render_clicked.connect(
+                self._on_route_manager_render_clicked)
+            self.route_manager_popup.item_render_clicked.connect(
+                self._on_route_manager_item_render)
+            self.route_manager_popup.elevation_fetch_clicked.connect(
+                self._fetch_route_library_elevation)
+            self.route_manager_popup.closed.connect(self._refresh_toolbar_buttons)
+
+        if self.route_manager_popup.isVisible():
+            self.route_manager_popup.hide()
+            self._refresh_toolbar_buttons()
+            return
+
+        # 互斥：先关闭路线规划面板/收藏夹列表（若展开），避免面板重叠显示
+        self._close_route_plan_panel()
+        if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
+            self.favorites_popup.hide()
+
+        self._refresh_route_manager_popup()
+        self.route_manager_popup.show()
+        self.route_manager_popup.raise_()
+        # 刷新各条目渲染按钮高亮（按当前渲染集合）
+        self.route_manager_popup.set_rendered_ids(
+            getattr(self, '_library_rendered_ids', set()))
+        # 位置/宽度/高度与搜索历史列表一致（锚定搜索容器，宽度=整个工具条）
+        from ui.popups.popup_positioner import PopupPositioner
+        PopupPositioner.update_search_popups_position(
+            None, None, getattr(self, 'search_container', None),
+            self.logger, favorites_popup=self.route_manager_popup)
+        self._refresh_toolbar_buttons()
+
+    def _refresh_route_manager_popup(self):
+        """从路线库存储重新加载路线管理列表（并按条目数重算面板高度）"""
+        try:
+            from modules.routing.storage.route_library_storage import RouteLibraryStorage
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                storage = self.route_library_storage = RouteLibraryStorage()
+            self.route_manager_popup.refresh(storage.get_all())
+            # 删除/导入/清空后条目数变化：若面板可见则复用定位公式重算高度
+            # （min(条目高度和, 主窗口底部边界)，避免高度残留旧值）
+            if self.route_manager_popup.isVisible():
+                from ui.popups.popup_positioner import PopupPositioner
+                PopupPositioner.update_search_popups_position(
+                    None, None, getattr(self, 'search_container', None),
+                    self.logger, route_manager_popup=self.route_manager_popup)
+        except Exception as e:
+            self.logger.error(f"[路线管理] 刷新列表失败: {e}")
+
+    def _on_route_manager_render_clicked(self, record: dict):
+        """条目渲染按钮：单条 toggle 渲染（再点隐藏），全量重建地图"""
+        rid = record.get('id')
+        if not rid:
+            return
+        rendered_ids = set(getattr(self, '_library_rendered_ids', set()))
+        self._apply_route_render(record, rid not in rendered_ids)
+
+    def _on_route_manager_item_render(self, record: dict):
+        """条目点击：仅渲染该路线（已渲染时无操作，取消渲染需点击渲染按钮）"""
+        rid = record.get('id')
+        if not rid:
+            return
+        if rid in getattr(self, '_library_rendered_ids', set()):
+            return  # 已渲染：点击不取消
+        self._apply_route_render(record, True)
+
+    def _apply_route_render(self, record: dict, render: bool):
+        """设置单条路线的渲染状态并全量重建（render=True 渲染 / False 取消）
+
+        同步渲染集合 → map_manager 渲染记录 → 重建地图 → 海拔剖面联动 → 按钮高亮刷新。
+        """
+        try:
+            rid = record.get('id')
+            if not rid:
+                return
+            rendered_ids = set(getattr(self, '_library_rendered_ids', set()))
+            if render:
+                rendered_ids.add(rid)
+            else:
+                rendered_ids.discard(rid)
+            self._library_rendered_ids = rendered_ids
+            # 同步渲染记录到 map_manager（全量重建时叠加）
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                from modules.routing.storage.route_library_storage import RouteLibraryStorage
+                storage = self.route_library_storage = RouteLibraryStorage()
+            self.map_manager.set_library_rendered_records(
+                [r for r in storage.get_all() if r.get('id') in rendered_ids])
+            # 增量注入库渲染路线（JS LayerGroup，不重建页面避免卡顿）
+            self._inject_library_routes()
+            # 渲染/取消后按当前渲染的所有路线缩放：
+            # 开启多路线渲染 → 按渲染集合全部路线缩放；关闭 → 渲染时按该条缩放、
+            # 取消时不缩放
+            if render or map_config.get_multi_route_render():
+                self._fit_library_routes()
+            # 海拔剖面图联动：渲染 → 显示其海拔剖面（有海拔直接显示，无则空占位）；
+            # 取消渲染 → 恢复当前选中路线的剖面状态
+            if render:
+                self._show_history_elevation_profile(
+                    record.get('route_points', []), record.get('duration') or 0)
+            else:
+                self._show_elevation_profile()
+            self.logger.info(f"[路线管理] 渲染切换: {len(rendered_ids)} 条")
+            # 刷新各条目渲染按钮高亮
+            popup = getattr(self, 'route_manager_popup', None)
+            if popup is not None:
+                popup.set_rendered_ids(rendered_ids)
+        except Exception as e:
+            self.logger.error(f"[路线管理] 渲染切换失败: {e}")
+
+    def _inject_library_routes(self):
+        """按 id 增量更新渲染集合的库路线地图图层（GCJ-02，不重建页面）
+
+        与上一状态 diff 出新增/删除路线，只向 JS 传变化量：
+        首次调用（页面刚重建，prev=None）→ 全量新增；后续切换仅增删变化的路线。
+        """
+        try:
+            if self.map_view is None or self.map_view.page() is None:
+                return
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                return
+            from modules.geolocation.coordinate_transform import CoordinateTransform as _CT
+            from modules.map.js_bridge import MapJsBridge
+            import json
+            rendered_ids = getattr(self, '_library_rendered_ids', set())
+            prev_ids = getattr(self, '_prev_library_rendered_ids', None)
+
+            def _gcj(c):
+                """WGS-84 → GCJ-02（无坐标返回 None）"""
+                if not c or len(c) < 2:
+                    return None
+                lat, lon = _CT.convert(c[0], c[1], 'WGS-84', 'GCJ-02')
+                return [lat, lon]
+
+            to_add = []
+            for rec in storage.get_all():
+                if rec.get('id') not in rendered_ids:
+                    continue
+                if prev_ids is not None and rec.get('id') in prev_ids:
+                    continue  # 已在页面，无需重复绘制
+                coords = []
+                for p in (rec.get('route_points') or []):
+                    if p is None:
+                        continue
+                    gcj_lat, gcj_lon = _CT.convert(p[0], p[1], 'WGS-84', 'GCJ-02')
+                    coords.append([gcj_lat, gcj_lon])
+                if len(coords) >= 2:
+                    # 起终点/途径点小圆点：优先取显式坐标，缺失时回退路线首尾点
+                    start = _gcj(rec.get('start_coords')) or coords[0]
+                    end = _gcj(rec.get('end_coords')) or coords[-1]
+                    waypoints = []
+                    for w in (rec.get('waypoint_coords') or []):
+                        wc = _gcj(w)
+                        if wc:
+                            waypoints.append(wc)
+                    to_add.append({
+                        'id': rec.get('id'),
+                        'coords': coords,
+                        'color': self.map_manager.ROUTE_COLORS[
+                            (rec.get('color_index') or 0)
+                            % len(self.map_manager.ROUTE_COLORS)],
+                        'start': start,
+                        'end': end,
+                        'waypoints': waypoints,
+                    })
+            to_remove = sorted(prev_ids - rendered_ids) if prev_ids is not None else []
+            payload = {'add': to_add, 'remove': to_remove}
+            MapJsBridge.update_library_routes(self.map_view.page(), json.dumps(payload))
+            self._prev_library_rendered_ids = set(rendered_ids)
+        except Exception as e:
+            self.logger.error(f"[路线管理] 库路线注入失败: {e}")
+
+    def _fit_library_routes(self):
+        """按当前渲染集合的全部路线缩放地图（fitBounds，GCJ-02）
+
+        渲染/取消渲染后调用：始终以渲染集合整体为边界，而非单条路线。
+        无渲染路线时直接返回，不打断当前视图。
+        """
+        try:
+            if self.map_view is None or self.map_view.page() is None:
+                return
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                return
+            from modules.geolocation.coordinate_transform import CoordinateTransform as _CT
+            rendered_ids = getattr(self, '_library_rendered_ids', set())
+            pts = []
+            for rec in storage.get_all():
+                if rec.get('id') not in rendered_ids:
+                    continue
+                for p in (rec.get('route_points') or []):
+                    if p is not None:
+                        pts.append(p)
+            if not pts:
+                return
+            # WGS-84 → GCJ-02（与地图渲染层一致）；route_points 可能带海拔
+            # （3 元素 [lat, lon, ele]），显式取前两个坐标，避免解包异常
+            gcj = [_CT.convert(p[0], p[1], 'WGS-84', 'GCJ-02') for p in pts]
+            self._fit_gcj_points(gcj, f"[路线管理] 按渲染集合缩放: {len(rendered_ids)} 条")
+        except Exception as e:
+            self.logger.error(f"[路线管理] 渲染集合缩放失败: {e}")
+
+    def _fit_gcj_points(self, gcj_points: list, log_tag: str = ""):
+        """对 GCJ-02 坐标点集执行强制缩放（fitBounds，单点退化 setView）
+
+        复用自动缩放 JS，force=True 跳过"已包含即跳过"判断，始终精确适配。
+        """
+        try:
+            if not gcj_points or self.map_view is None or self.map_view.page() is None:
+                return
+            from modules.map.js_bridge import MapJsBridge
+            import json
+            lats = [p[0] for p in gcj_points]
+            lons = [p[1] for p in gcj_points]
+            bounds_json = json.dumps([[min(lats), min(lons)], [max(lats), max(lons)]])
+            center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
+            diagonal = math.sqrt((max(lats) - min(lats)) ** 2 + (max(lons) - min(lons)) ** 2)
+            zoom = 15 if diagonal == 0 else max(2, min(18, int(10 - math.log(diagonal, 2))))
+            MapJsBridge.fit_bounds(self.map_view.page(), bounds_json,
+                                   center[0], center[1], zoom, force=True)
+            if log_tag:
+                self.logger.info(f"{log_tag}, zoom={zoom}")
+        except Exception as e:
+            self.logger.error(f"[缩放] 强制缩放失败: {e}")
+
+    def _inject_planned_route(self):
+        """将当前规划路线增量渲染到地图（路线线 + 起终点/途径点标记 + 缩放）
+
+        历史条目/路线规划切换复用：页面其他图层（收藏点/当前位置/库渲染路线）
+        保持不动，仅更新专用规划路线图层，避免全量重建 HTML 卡顿。
+        """
+        try:
+            if self.map_view is None or self.map_view.page() is None:
+                return
+            from modules.geolocation.coordinate_transform import CoordinateTransform as _CT
+            from modules.map.js_bridge import MapJsBridge
+            import json
+            from services.config.map_config import map_config
+            is_gcj = (map_config.get_map_source() == 'gaode')
+
+            # 路线线：data_manager.route_points 为 WGS-84，高德源转 GCJ-02（保留分段结构）
+            route_segments = []
+            current = []
+            for p in (getattr(self.data_manager, 'route_points', None) or []):
+                if p is None:
+                    if len(current) >= 2:
+                        route_segments.append(current)
+                    current = []
+                    continue
+                if is_gcj:
+                    lat, lon = _CT.convert(p[0], p[1], 'WGS-84', 'GCJ-02')
+                else:
+                    lat, lon = p[0], p[1]
+                current.append([lat, lon])
+            if len(current) >= 2:
+                route_segments.append(current)
+
+            # 起终点/途径点标记：坐标已按当前地图坐标系存储（gaode=GCJ-02，其他=WGS-84）
+            dm = getattr(self, 'data_manager', None)
+            markers = []
+            if dm is not None:
+                start = getattr(dm, 'start_coords', None)
+                if start and len(start) >= 2:
+                    markers.append({'lat': start[0], 'lng': start[1], 'type': 'start',
+                                    'label': getattr(dm, 'start_name', None) or '起'})
+                for i, wpt in enumerate(getattr(dm, 'waypoints_coords', None) or []):
+                    if wpt and len(wpt) >= 2:
+                        markers.append({'lat': wpt[0], 'lng': wpt[1], 'type': 'waypoint',
+                                        'number': i + 1})
+                end = getattr(dm, 'end_coords', None)
+                if end and len(end) >= 2:
+                    markers.append({'lat': end[0], 'lng': end[1], 'type': 'end',
+                                    'label': getattr(dm, 'end_name', None) or '终'})
+
+            MapJsBridge.update_planned_route(
+                self.map_view.page(),
+                json.dumps(route_segments),
+                json.dumps(markers))
+
+            # 缩放：以路线线 + 标记整体为边界（强制适配）
+            all_pts = [p for seg in route_segments for p in seg]
+            all_pts += [[m['lat'], m['lng']] for m in markers]
+            self._fit_gcj_points(all_pts, "[路线面板] 规划路线缩放")
+        except Exception as e:
+            self.logger.error(f"[路线面板] 规划路线增量渲染失败: {e}")
+
+    def _fetch_route_library_elevation(self, record: dict):
+        """获取单条库路线的海拔（复用历史海拔链路：task_id 关联回写）
+        已有海拔时弹窗确认是否重新获取（覆盖原数据，与历史列表一致）。"""
+        try:
+            route_points = record.get('route_points', [])
+            duration = record.get('duration') or 0
+            has_elevation = any(
+                p is not None and len(p) >= 3 and p[2] is not None
+                for p in (route_points or []))
+            if has_elevation:
+                from ui.dialogs.custom_message_dialog import CustomMessageDialog
+                dialog = CustomMessageDialog(
+                    self, title="重新获取海拔",
+                    message="该路线已获取过海拔数据。\n是否重新获取？\n重新获取将覆盖原有的海拔数据。",
+                    show_cancel=True, ok_text="重新获取")
+                if not dialog.exec_():
+                    return
+            task_id = self.route_manager._fetch_elevation_data_async(
+                [{'route_points': list(route_points), 'duration': duration}])
+            if task_id:
+                pending = getattr(self, '_pending_library_elevation', None)
+                if pending is None:
+                    pending = self._pending_library_elevation = {}
+                pending[task_id] = record
+                self.show_loading()
+        except Exception as e:
+            self.logger.error(f"[路线管理] 海拔获取失败: {e}")
+
+    def _on_route_manager_import(self):
+        """路线管理导入：多选 GPX 文件 → 逐文件解析 → 确认面板 → 入库"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            file_paths, _ = QFileDialog.getOpenFileNames(
+                self, "选择 GPX 文件（可多选）", "", "GPX文件 (*.gpx);;所有文件 (*)")
+            if not file_paths:
+                return
+
+            from modules.gpx.gpx_import import GpxImportParser
+            from ui.popups.gpx_import_confirm_popup import GpxImportConfirmPopup
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                from modules.routing.storage.route_library_storage import RouteLibraryStorage
+                storage = self.route_library_storage = RouteLibraryStorage()
+
+            imported = 0
+            for path in file_paths:
+                try:
+                    parsed = GpxImportParser.parse(path)
+                except Exception as e:
+                    self._show_warning("导入失败", f"{path}\n解析失败: {e}")
+                    continue
+                # 解析成功 → 信息确认面板（用户手动确认后入库）
+                import os
+                confirm = GpxImportConfirmPopup(self, parsed, os.path.basename(path))
+                if not confirm.exec_():
+                    continue
+                storage.add_record(
+                    start=parsed['start'], end=parsed['end'],
+                    route_points=parsed['route_points'],
+                    distance=parsed['distance'], duration=parsed['duration'],
+                    color_index=len(storage.get_all()))
+                imported += 1
+
+            if imported > 0:
+                self._refresh_route_manager_popup()
+                self._show_info("导入完成", f"成功导入 {imported} 条路线")
+        except Exception as e:
+            self.logger.error(f"[路线管理] 导入失败: {e}")
+            self._show_warning("导入失败", f"导入出错: {e}")
+
+    def _on_route_manager_export(self):
+        """路线管理导出：单条 → 保存对话框；多条（多选）→ 选目录逐条导出独立 GPX"""
+        try:
+            if getattr(self, 'route_manager_popup', None) is None:
+                return
+            records = self.route_manager_popup.get_export_records()
+            if not records:
+                self._show_warning("导出", "请先选择要导出的路线（点击条目，或多选模式勾选多条）")
+                return
+
+            from PyQt5.QtWidgets import QFileDialog
+            if len(records) == 1:
+                self._export_single_record(records[0])
+                return
+
+            # 多条：选择保存目录，逐条导出独立 GPX 文件（自动命名 起点_终点.gpx）
+            export_dir = QFileDialog.getExistingDirectory(self, "选择保存目录")
+            if not export_dir:
+                return
+            self.show_loading()
+            ok_count = 0
+            for rec in records:
+                if self._export_record_to_dir(rec, export_dir):
+                    ok_count += 1
+            self.hide_loading()
+            self._show_info("导出完成", f"已导出 {ok_count}/{len(records)} 条路线到:\n{export_dir}")
+        except Exception as e:
+            self.logger.error(f"[路线管理] 导出失败: {e}")
+            self.hide_loading()
+            self._show_warning("导出失败", f"导出出错: {e}")
+
+    def _export_single_record(self, record: dict):
+        """单条路线导出（复用 GPX 导出弹窗/线程链路）"""
+        from PyQt5.QtCore import QDateTime
+        route_data = {
+            'route_points': record.get('route_points', []),
+            'start_name': record.get('start', '起点'),
+            'end_name': record.get('end', '终点'),
+            'mode': record.get('mode', 'driving'),
+            'waypoints': record.get('waypoints', []),
+            'distance': record.get('distance'),
+            'duration': record.get('duration'),
+            'start_coords': record.get('start_coords'),
+            'end_coords': record.get('end_coords'),
+            'waypoint_coords': record.get('waypoint_coords', []),
+            'start_coord_system': 'WGS-84',
+            'end_coord_system': 'WGS-84',
+        }
+        self._export_gpx_file(route_data, QDateTime.currentDateTime(), export_elevation=False)
+
+    def _export_record_to_dir(self, record: dict, export_dir: str) -> bool:
+        """将单条路线导出到指定目录（自动命名，同步执行）"""
+        try:
+            import os
+            from modules.gpx import GpxExportService
+            from PyQt5.QtCore import QDateTime
+            start = record.get('start', '起点')
+            end = record.get('end', '终点')
+            import re
+            safe_start = re.sub(r'[\\/:*?"<>|]', '', start)
+            safe_end = re.sub(r'[\\/:*?"<>|]', '', end)
+            file_path = os.path.join(
+                export_dir, f"{safe_start}_{safe_end}.gpx")
+            # 重名时追加序号
+            counter = 1
+            while os.path.exists(file_path):
+                file_path = os.path.join(
+                    export_dir, f"{safe_start}_{safe_end}_{counter}.gpx")
+                counter += 1
+            service = GpxExportService(logger=lambda *a, **k: None)
+            return service.export_to_gpx(
+                route_points=record.get('route_points', []),
+                start_datetime=QDateTime.currentDateTime(),
+                file_path=file_path,
+                start_name=start, end_name=end,
+                export_elevation=False,
+                total_duration_seconds=record.get('duration'),
+                total_distance_meters=record.get('distance'))
+        except Exception as e:
+            self.logger.error(f"[路线管理] 导出 {record.get('start')} 失败: {e}")
+            return False
+
+    def _on_route_manager_select_all(self):
+        """路线管理全选按钮：toggle 全选/取消全选（按钮高亮随选中状态）"""
+        popup = getattr(self, 'route_manager_popup', None)
+        if popup is not None:
+            popup.toggle_select_all()
+
+    def _on_route_manager_delete(self):
+        """路线管理删除：删除勾选的条目（以勾选结果为准）"""
+        try:
+            popup = getattr(self, 'route_manager_popup', None)
+            if popup is None:
+                return
+            records = popup.get_checked_records()
+            if not records:
+                self._show_warning("提示", "请先勾选要删除的路线（点击条目右侧 ☐ 勾选）")
+                return
+            storage = getattr(self, 'route_library_storage', None)
+            if storage is None:
+                from modules.routing.storage.route_library_storage import RouteLibraryStorage
+                storage = self.route_library_storage = RouteLibraryStorage()
+            deleted_ids = set()
+            for rec in records:
+                rid = rec.get('id')
+                if rid and storage.remove(rid):
+                    deleted_ids.add(rid)
+            # 渲染集合中移除被删条目（地图上的库渲染层同步）
+            if deleted_ids:
+                rendered_ids = set(getattr(self, '_library_rendered_ids', set()))
+                rendered_ids -= deleted_ids
+                self._library_rendered_ids = rendered_ids
+                self.map_manager.set_library_rendered_records(
+                    [r for r in storage.get_all() if r.get('id') in rendered_ids])
+            self._refresh_route_manager_popup()
+            # 同步历史列表收藏按钮状态（被删路线取消收藏）
+            self._sync_history_favorite_status()
+            self._show_info("删除完成", f"已删除 {len(deleted_ids)} 条路线")
+        except Exception as e:
+            self.logger.error(f"[路线管理] 删除失败: {e}")
+
     def _on_favorites_selected(self, fav: dict):
         """收藏夹条目点击：仅将地图缩放定位到该收藏点（不添加额外标记）
 
@@ -364,16 +861,31 @@ class MapMixin:
         except Exception as e:
             self.logger.error(f"处理收藏点选择出错: {e}")
 
-    def _on_favorites_delete(self, fav_id: int):
-        """收藏夹金星按钮：删除收藏（列表与地图同步）"""
-        self.logger.info(f"[收藏夹] 删除收藏: id={fav_id}")
-        try:
-            if self.map_manager is not None:
-                self.map_manager.delete_favorite(fav_id)
-            if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
-                self.favorites_popup.refresh()
-        except Exception as e:
-            self.logger.error(f"处理收藏删除出错: {e}")
+    def _on_favorites_select_all(self):
+        """收藏夹全选按钮：toggle 全选/取消全选（按钮高亮随选中状态）"""
+        popup = getattr(self, 'favorites_popup', None)
+        if popup is not None:
+            popup.toggle_select_all()
+
+    def _on_favorites_delete(self):
+        """收藏夹删除：删除勾选的收藏（列表与地图同步）"""
+        popup = getattr(self, 'favorites_popup', None)
+        if popup is None:
+            return
+        records = popup.get_checked_records()
+        if not records:
+            self._show_warning("提示", "请先勾选要删除的收藏（点击条目右侧 ☐ 勾选）")
+            return
+        deleted = 0
+        for fav in records:
+            fav_id = fav.get('id')
+            if fav_id is not None and self.map_manager is not None:
+                if self.map_manager.delete_favorite(fav_id):
+                    deleted += 1
+        self.logger.info(f"[收藏夹] 删除 {deleted} 个收藏")
+        popup.refresh()
+        if deleted:
+            self._show_info("删除完成", f"已删除 {deleted} 个收藏")
 
     def _on_favorites_import(self):
         """收藏夹导入：选择 JSON 文件合并导入"""
@@ -416,24 +928,6 @@ class MapMixin:
         except Exception as e:
             self.logger.error(f"处理收藏导出出错: {e}")
 
-    def _on_favorites_clear(self):
-        """收藏夹清空（二次确认后执行，确认面板与项目其他弹窗风格一致）"""
-        self.logger.info("[收藏夹] 清空收藏")
-        try:
-            from PyQt5.QtWidgets import QDialog
-            from ui.dialogs.custom_message_dialog import CustomMessageDialog
-            reply = CustomMessageDialog(
-                self, title="确认清空", message="确定要清空全部收藏吗？此操作不可恢复。",
-                show_cancel=True, ok_text="清空", cancel_text="取消").exec_()
-            if reply != QDialog.Accepted:
-                return
-
-            self.map_manager.favorites_storage.clear_all()
-            self.map_manager.reload_map()
-            if hasattr(self, 'favorites_popup') and self.favorites_popup is not None:
-                self.favorites_popup.refresh()
-        except Exception as e:
-            self.logger.error(f"处理收藏清空出错: {e}")
 
     def _on_location_favorite_requested(self, lat: float, lon: float, name: str):
         """定位 popup 内点击收藏按钮时的处理方法（切换收藏，成功不弹窗）
